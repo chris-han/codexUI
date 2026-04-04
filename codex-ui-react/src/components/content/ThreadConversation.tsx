@@ -28,9 +28,9 @@ function ThreadConversation() {
     if (!threadId) return [];
     return state.messagesByThreadId.get(threadId) || [];
   }, [threadId]));
-  const optimisticMessages = useCodexStore(useCallback((state) => {
-    if (!threadId) return [];
-    return state.optimisticMessagesByThreadId.get(threadId) || [];
+  const pendingTurnRequest = useCodexStore(useCallback((state) => {
+    if (!threadId) return null;
+    return state.pendingTurnRequestsByThreadId.get(threadId) || null;
   }, [threadId]));
   const liveMessage = useCodexStore(useCallback((state) => {
     if (!threadId) return '';
@@ -83,7 +83,7 @@ function ThreadConversation() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, optimisticMessages, liveMessage, liveReasoning, scrollToBottom]);
+  }, [messages, pendingTurnRequest, liveMessage, liveReasoning, scrollToBottom]);
 
   const handleSendMessage = async (payload: ThreadComposerSubmitPayload) => {
     await sendMessage(payload);
@@ -200,7 +200,7 @@ function ThreadConversation() {
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto p-4 space-y-4"
           >
-            {messages.length === 0 && optimisticMessages.length === 0 && !liveMessage && !liveReasoning && (
+            {messages.length === 0 && !pendingTurnRequest && !liveMessage && !liveReasoning && (
               <div className="text-center text-gray-400 py-12">
                 No messages yet. Start the conversation!
               </div>
@@ -294,15 +294,15 @@ function ThreadConversation() {
               </div>
             ))}
 
-            {optimisticMessages.map((message) => (
+            {pendingTurnRequest && (
               <div
-                key={message.id}
+                key={`${threadId}-pending-turn`}
                 className="flex justify-end"
               >
                 <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-white opacity-90">
-                  {message.images && message.images.length > 0 && (
+                  {pendingTurnRequest.imageUrls.length > 0 && (
                     <div className="mb-3 grid gap-2 sm:grid-cols-2">
-                      {message.images.map((imageUrl) => (
+                      {pendingTurnRequest.imageUrls.map((imageUrl) => (
                         <button
                           key={imageUrl}
                           type="button"
@@ -319,22 +319,30 @@ function ThreadConversation() {
                       ))}
                     </div>
                   )}
-                  <MessageContent text={message.text} />
-                  {message.fileAttachments && message.fileAttachments.length > 0 && (
+                  <MessageContent text={pendingTurnRequest.text} />
+                  {(pendingTurnRequest.fileAttachments.length > 0 || pendingTurnRequest.skills.length > 0) && (
                     <div className="mt-2 space-y-1">
-                      {message.fileAttachments.map((attachment) => (
+                      {pendingTurnRequest.fileAttachments.map((attachment) => (
                         <div
-                          key={`${message.id}-${attachment.path}`}
+                          key={`pending-file-${attachment.path}`}
                           className="rounded bg-white/10 px-2 py-1 text-xs text-white/90"
                         >
                           {attachment.label}
+                        </div>
+                      ))}
+                      {pendingTurnRequest.skills.map((skill) => (
+                        <div
+                          key={`pending-skill-${skill.path}`}
+                          className="rounded bg-white/10 px-2 py-1 text-xs text-white/90"
+                        >
+                          @{skill.name}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-            ))}
+            )}
 
             {/* Live reasoning */}
             {liveReasoning && (

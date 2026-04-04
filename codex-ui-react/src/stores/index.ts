@@ -101,13 +101,14 @@ export interface CodexState {
 
   // Message state
   messagesByThreadId: Map<string, UiMessage[]>;
-  optimisticMessagesByThreadId: Map<string, UiMessage[]>;
+  pendingTurnRequestsByThreadId: Map<string, PendingTurnRequest>;
   hydratedThreadIds: Set<string>;
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
   liveActivityLabelByThreadId: Map<string, string>;
   liveCommandOutputByThreadId: Map<string, string>;
   inProgressByThreadId: Map<string, boolean>;
+  activeTurnIdByThreadId: Map<string, string>;
   isLoadingMessages: boolean;
   isSendingMessage: boolean;
   isInterruptingTurn: boolean;
@@ -211,13 +212,14 @@ const getInitialState = (): CodexState => ({
   isLoadingThreads: false,
 
   messagesByThreadId: new Map(),
-  optimisticMessagesByThreadId: new Map(),
+  pendingTurnRequestsByThreadId: new Map(),
   hydratedThreadIds: new Set(),
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
   liveActivityLabelByThreadId: new Map(),
   liveCommandOutputByThreadId: new Map(),
   inProgressByThreadId: new Map(),
+  activeTurnIdByThreadId: new Map(),
   isLoadingMessages: false,
   isSendingMessage: false,
   isInterruptingTurn: false,
@@ -274,36 +276,47 @@ function normalizeComposerPayload(
   };
 }
 
-function createOptimisticUserMessage(params: {
-  threadId: string;
+type PendingTurnRequest = {
   text: string;
   imageUrls: string[];
   fileAttachments: ComposerFileAttachment[];
   skills: ComposerSkillSelection[];
-}): UiMessage {
+  modelId: string;
+  reasoningEffort: ReasoningEffort;
+  collaborationMode: CollaborationModeKind;
+  submittedAtIso: string;
+};
+
+function createPendingTurnRequest(params: {
+  text: string;
+  imageUrls: string[];
+  fileAttachments: ComposerFileAttachment[];
+  skills: ComposerSkillSelection[];
+  modelId: string;
+  reasoningEffort: ReasoningEffort;
+  collaborationMode: CollaborationModeKind;
+}): PendingTurnRequest {
   return {
-    id: `optimistic-user-${params.threadId}-${Date.now()}`,
-    role: 'user',
     text: params.text,
-    images: params.imageUrls,
-    fileAttachments: [
-      ...params.fileAttachments.map((attachment) => ({
-        label: attachment.label,
-        path: attachment.path,
-      })),
-      ...params.skills.map((skill) => ({
-        label: `@${skill.name}`,
-        path: skill.path,
-      })),
-    ],
-    messageType: 'optimistic',
+    imageUrls: params.imageUrls,
+    fileAttachments: params.fileAttachments,
+    skills: params.skills,
+    modelId: params.modelId,
+    reasoningEffort: params.reasoningEffort,
+    collaborationMode: params.collaborationMode,
+    submittedAtIso: new Date().toISOString(),
   };
 }
 
-function pushOptimisticMessage(
+function setPendingTurnRequest(
   state: CodexState,
   threadId: string,
-  payload: ThreadComposerSubmitPayload
+  payload: ThreadComposerSubmitPayload,
+  config: {
+    modelId: string;
+    reasoningEffort: ReasoningEffort;
+    collaborationMode: CollaborationModeKind;
+  }
 ): void {
   const hasVisibleContent =
     payload.text.trim().length > 0 ||
@@ -313,19 +326,28 @@ function pushOptimisticMessage(
 
   if (!hasVisibleContent) return;
 
-  const nextMessage = createOptimisticUserMessage({
-    threadId,
+  state.pendingTurnRequestsByThreadId.set(threadId, createPendingTurnRequest({
     text: payload.text,
     imageUrls: payload.imageUrls,
     fileAttachments: payload.fileAttachments,
     skills: payload.skills,
-  });
-  const existing = state.optimisticMessagesByThreadId.get(threadId) || [];
-  state.optimisticMessagesByThreadId.set(threadId, [...existing, nextMessage]);
+    modelId: config.modelId,
+    reasoningEffort: config.reasoningEffort,
+    collaborationMode: config.collaborationMode,
+  }));
 }
 
-function clearOptimisticMessages(state: CodexState, threadId: string): void {
-  state.optimisticMessagesByThreadId.delete(threadId);
+function clearPendingTurnRequest(state: CodexState, threadId: string): void {
+  state.pendingTurnRequestsByThreadId.delete(threadId);
+}
+
+function setActiveTurnId(state: CodexState, threadId: string, turnId?: string | null): void {
+  const normalizedTurnId = turnId?.trim() || '';
+  if (normalizedTurnId) {
+    state.activeTurnIdByThreadId.set(threadId, normalizedTurnId);
+  } else {
+    state.activeTurnIdByThreadId.delete(threadId);
+  }
 }
 
 function upsertThreadIntoGroups(state: CodexState, thread: UiThread): void {
@@ -461,10 +483,11 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 return;
               }
               state.messagesByThreadId.delete(threadId);
-              state.optimisticMessagesByThreadId.delete(threadId);
+              state.pendingTurnRequestsByThreadId.delete(threadId);
               state.hydratedThreadIds.delete(threadId);
               state.liveMessagesByThreadId.delete(threadId);
               state.liveReasoningByThreadId.delete(threadId);
+              state.activeTurnIdByThreadId.delete(threadId);
               state.inProgressByThreadId.delete(threadId);
               state.pendingServerRequestsByThreadId.delete(threadId);
               if (state.selectedThreadId === threadId) {
@@ -475,7 +498,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             upsertThreadIntoGroups(state, thread);
             state.threadShellsById.delete(threadId);
             state.messagesByThreadId.set(threadId, messages);
-            clearOptimisticMessages(state, threadId);
+            clearPendingTurnRequest(state, threadId);
             state.hydratedThreadIds.add(threadId);
           });
         } catch (error) {
@@ -524,16 +547,23 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           // Send initial message if provided
           if (submitPayload.text || submitPayload.skills.length > 0 || submitPayload.fileAttachments.length > 0 || submitPayload.imageUrls.length > 0) {
             set((state) => {
-              pushOptimisticMessage(state, threadId, submitPayload);
+              setPendingTurnRequest(state, threadId, submitPayload, {
+                modelId: get().selectedModelId,
+                reasoningEffort: get().selectedReasoningEffort,
+                collaborationMode: get().selectedCollaborationMode,
+              });
               state.inProgressByThreadId.set(threadId, true);
             });
-            await api.startThreadTurn(threadId, submitPayload.text, {
+            const turnId = await api.startThreadTurn(threadId, submitPayload.text, {
               model: get().selectedModelId,
               reasoningEffort: get().selectedReasoningEffort,
               imageUrls: submitPayload.imageUrls,
               fileAttachments: submitPayload.fileAttachments,
               skills: submitPayload.skills,
               collaborationMode: get().selectedCollaborationMode,
+            });
+            set((state) => {
+              setActiveTurnId(state, threadId, turnId);
             });
           }
 
@@ -559,7 +589,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           set((state) => {
             state.hydratedThreadIds.delete(threadId);
             state.threadShellsById.delete(threadId);
-            state.optimisticMessagesByThreadId.delete(threadId);
+            state.pendingTurnRequestsByThreadId.delete(threadId);
+            state.activeTurnIdByThreadId.delete(threadId);
             state.projectGroups = state.projectGroups
               .map((group) => ({
                 ...group,
@@ -622,11 +653,12 @@ export const useCodexStore = create<CodexState & CodexActions>()(
       interruptSelectedThreadTurn: async () => {
         const threadId = get().selectedThreadId;
         if (!threadId) return;
+        const activeTurnId = get().activeTurnIdByThreadId.get(threadId);
         set((state) => {
           state.isInterruptingTurn = true;
         });
         try {
-          await api.interruptThreadTurn(threadId);
+          await api.interruptThreadTurn(threadId, activeTurnId);
           set((state) => {
             state.inProgressByThreadId.set(threadId, false);
           });
@@ -662,10 +694,14 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           }
 
           set((state) => {
-            pushOptimisticMessage(state, threadId, submitPayload);
+            setPendingTurnRequest(state, threadId, submitPayload, {
+              modelId: refreshedState.selectedModelId,
+              reasoningEffort: refreshedState.selectedReasoningEffort,
+              collaborationMode: refreshedState.selectedCollaborationMode,
+            });
             state.inProgressByThreadId.set(threadId, true);
           });
-          await api.startThreadTurn(threadId, submitPayload.text, {
+          const turnId = await api.startThreadTurn(threadId, submitPayload.text, {
             model: refreshedState.selectedModelId,
             reasoningEffort: refreshedState.selectedReasoningEffort,
             imageUrls: submitPayload.imageUrls,
@@ -675,11 +711,13 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           });
           set((state) => {
             state.inProgressByThreadId.set(threadId, true);
+            setActiveTurnId(state, threadId, turnId);
           });
         } catch (error) {
           console.error('Failed to send message:', error);
           set((state) => {
-            clearOptimisticMessages(state, threadId);
+            clearPendingTurnRequest(state, threadId);
+            setActiveTurnId(state, threadId, null);
             state.inProgressByThreadId.delete(threadId);
             state.error = 'Failed to send message';
           });
@@ -874,6 +912,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             if (threadId) {
               set((state) => {
                 state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, true);
+                setActiveTurnId(state, threadId, (params as { threadId: string; turnId?: string }).turnId);
               });
               get().loadThreads();
             }
@@ -885,7 +924,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             if (threadId) {
               set((state) => {
                 state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, false);
-                clearOptimisticMessages(state, threadId);
+                clearPendingTurnRequest(state, threadId);
+                setActiveTurnId(state, threadId, null);
                 // Clear live content
                 const liveMessagesByThreadId = new Map(state.liveMessagesByThreadId);
                 liveMessagesByThreadId.delete(threadId);

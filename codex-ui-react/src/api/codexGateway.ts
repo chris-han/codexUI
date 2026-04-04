@@ -304,7 +304,7 @@ export async function startThreadTurn(
     fileAttachments?: ComposerFileAttachment[];
     collaborationMode?: CollaborationModeKind;
   }
-): Promise<void> {
+): Promise<string> {
   const normalizedModel = options?.model?.trim() ?? '';
   const normalizedText = buildTextWithAttachments(
     message,
@@ -347,13 +347,14 @@ export async function startThreadTurn(
   };
 
   try {
-    await rpcCall('turn/start', request);
+    const result = await rpcCall<{ turn?: { id?: string } }>('turn/start', request);
+    return result.turn?.id?.trim() || '';
   } catch (error: unknown) {
     if (isThreadNotLoadedError(error) || isThreadNotFoundError(error)) {
       try {
         await resumeThread(threadId);
-        await rpcCall('turn/start', request);
-        return;
+        const result = await rpcCall<{ turn?: { id?: string } }>('turn/start', request);
+        return result.turn?.id?.trim() || '';
       } catch (resumeError: unknown) {
         if (isMissingRolloutError(resumeError)) {
           throw new Error(`Thread has no resumable rollout: ${threadId}`);
@@ -443,8 +444,8 @@ async function resolveCollaborationModeSettings(
   throw new Error(`${mode === 'plan' ? 'Plan' : 'Default'} mode requires an available model. Wait for models to load and try again.`);
 }
 
-export async function interruptThreadTurn(threadId: string): Promise<void> {
-  await rpcCall('turn/interrupt', { threadId });
+export async function interruptThreadTurn(threadId: string, turnId?: string): Promise<void> {
+  await rpcCall('turn/interrupt', { threadId, turnId: turnId?.trim() || undefined });
 }
 
 // Model and configuration

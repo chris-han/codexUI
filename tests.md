@@ -1524,3 +1524,25 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React thread context tracks pending turns and active turn ids
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- An existing thread is open in the React UI.
+- The selected model supports multi-second responses so the turn remains active briefly.
+
+#### Steps
+1. Open an existing thread in `codex-ui-react`.
+2. Send a prompt that takes long enough to show a visible in-progress state.
+3. Confirm the submitted user input appears immediately and the thread header switches to an in-progress badge.
+4. While the turn is running, click `Stop`.
+5. Wait for the turn state to settle, then send a second prompt in the same thread.
+
+#### Expected Results
+- The thread keeps a single in-flight pending turn state while the response is running.
+- Stopping the turn clears the in-progress badge and removes the temporary pending-turn user row.
+- Sending the next prompt works normally and produces a fresh pending-turn state instead of reusing stale context from the interrupted turn.
+
+#### Rollback/Cleanup
+- No cleanup required.
