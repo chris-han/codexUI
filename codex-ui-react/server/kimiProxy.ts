@@ -26,6 +26,12 @@ type KimiHttpResponse = {
   bodyText: string;
 };
 
+type StreamingSink = {
+  websocketMode?: boolean;
+  writeEvent: (payload: Record<string, unknown>) => void;
+  close: () => void;
+};
+
 type UpstreamTarget =
   | {
       provider: 'kimi';
@@ -326,6 +332,7 @@ function buildAzureUrl(model: string): string {
 
 function buildUpstreamTarget(chatBody: Record<string, unknown>): UpstreamTarget {
   const model = typeof chatBody.model === 'string' ? chatBody.model : 'kimi-for-coding';
+  const requestedStream = chatBody.stream !== false;
 
   if (isAzureModel(model)) {
     const requestedMaxTokens =
@@ -336,7 +343,7 @@ function buildUpstreamTarget(chatBody: Record<string, unknown>): UpstreamTarget 
       messages: chatBody.messages,
       temperature: chatBody.temperature,
       max_tokens: Math.min(requestedMaxTokens, AZURE_MAX_TOKENS),
-      stream: false,
+      stream: requestedStream,
       tools: chatBody.tools,
       tool_choice: chatBody.tool_choice,
     };
@@ -365,7 +372,7 @@ function buildUpstreamTarget(chatBody: Record<string, unknown>): UpstreamTarget 
     ],
     body: {
       ...chatBody,
-      stream: false,
+      stream: requestedStream,
     },
   };
 }
@@ -411,11 +418,7 @@ function buildResponseOutput(message: any, requestId: string, toolMapping: KimiT
 
 function emitStreamingResponseFromChatData(
   chatResponse: any,
-  sink: {
-    websocketMode?: boolean;
-    writeEvent: (payload: Record<string, unknown>) => void;
-    close: () => void;
-  },
+  sink: StreamingSink,
   toolMapping: KimiToolMapping
 ) {
   const requestId = Date.now().toString();
@@ -542,6 +545,482 @@ function emitStreamingResponseFromChatData(
       response: completedResponse,
     });
   }
+
+  sink.close();
+}
+
+function createResponseStreamEmitter(
+  sink: StreamingSink,
+  toolMapping: KimiToolMapping,
+  model: string
+) {
+  const requestId = Date.now().toString();
+  const responseId = `resp_${requestId}`;
+  const messageId = `msg_${requestId}`;
+  const reasoningItemId = `rs_${requestId}`;
+  const fullTextParts: string[] = [];
+  const reasoningParts: string[] = [];
+  let messageOpened = false;
+  let reasoningOpened = false;
+  let closed = false;
+  let usage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+  };
+
+  const writeEvent = (payload: Record<string, unknown>) => {
+    if (closed) return;
+    if (!sink.websocketMode) {
+      sink.writeEvent(payload);
+      return;
+    }
+
+    const realtimePayload: Record<string, unknown> = {
+      event_id: `event_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      ...payload,
+    };
+
+    if ('response' in payload || payload.type === 'response.done') {
+      sink.writeEvent(realtimePayload);
+      return;
+    }
+
+    realtimePayload.response_id = responseId;
+    sink.writeEvent(realtimePayload);
+  };
+
+  const inProgressResponse = {
+    id: responseId,
+    object: 'response',
+    created_at: Math.floor(Date.now() / 1000),
+    status: 'in_progress',
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    max_output_tokens: null,
+    model,
+    output: [],
+    parallel_tool_calls: true,
+    previous_response_id: null,
+    reasoning: { effort: 'medium', generate_summary: null },
+    store: true,
+    temperature: 0,
+    text: { format: { type: 'text' } },
+    tool_choice: 'auto',
+    tools: [],
+    truncation: 'disabled',
+    usage,
+    user: null,
+    metadata: {},
+  };
+
+  writeEvent({
+    type: 'response.created',
+    response: inProgressResponse,
+  });
+
+  writeEvent({
+    type: 'response.in_progress',
+    response: inProgressResponse,
+  });
+
+  const ensureMessageStarted = () => {
+    if (messageOpened) return;
+    messageOpened = true;
+    writeEvent({
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: {
+        type: 'message',
+        id: messageId,
+        status: 'in_progress',
+        role: 'assistant',
+        content: [],
+      },
+    });
+    writeEvent({
+      type: 'response.content_part.added',
+      item_id: messageId,
+      output_index: 0,
+      content_index: 0,
+      part: {
+        type: 'output_text',
+        text: '',
+        annotations: [],
+      },
+    });
+  };
+
+  const ensureReasoningStarted = () => {
+    if (reasoningOpened) return;
+    reasoningOpened = true;
+    writeEvent({
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: {
+        type: 'reasoning',
+        id: reasoningItemId,
+        status: 'in_progress',
+        summary: [],
+      },
+    });
+    writeEvent({
+      type: 'response.reasoning_summary_part.added',
+      item_id: reasoningItemId,
+      output_index: 0,
+      summary_index: 0,
+      part: {
+        type: 'summary_text',
+        text: '',
+      },
+    });
+  };
+
+  return {
+    addTextDelta(delta: string) {
+      if (!delta) return;
+      ensureMessageStarted();
+      fullTextParts.push(delta);
+      writeEvent({
+        type: 'response.output_text.delta',
+        item_id: messageId,
+        output_index: 0,
+        content_index: 0,
+        delta,
+      });
+    },
+    addReasoningDelta(delta: string) {
+      if (!delta) return;
+      ensureReasoningStarted();
+      reasoningParts.push(delta);
+      writeEvent({
+        type: 'response.reasoning_summary_text.delta',
+        item_id: reasoningItemId,
+        output_index: 0,
+        summary_index: 0,
+        delta,
+      });
+    },
+    setUsage(nextUsage: { input_tokens?: number; output_tokens?: number; total_tokens?: number } | undefined) {
+      usage = {
+        input_tokens: nextUsage?.input_tokens || 0,
+        output_tokens: nextUsage?.output_tokens || 0,
+        total_tokens: nextUsage?.total_tokens || 0,
+      };
+    },
+    complete(finalMessage: any) {
+      if (closed) return;
+
+      const finalText = fullTextParts.join('');
+      const finalReasoning = reasoningParts.join('');
+      const finalOutput = buildResponseOutput(finalMessage, requestId, toolMapping);
+
+      if (messageOpened) {
+        writeEvent({
+          type: 'response.output_text.done',
+          item_id: messageId,
+          output_index: 0,
+          content_index: 0,
+          text: finalText,
+        });
+        writeEvent({
+          type: 'response.content_part.done',
+          item_id: messageId,
+          output_index: 0,
+          content_index: 0,
+          part: {
+            type: 'output_text',
+            text: finalText,
+            annotations: [],
+          },
+        });
+        writeEvent({
+          type: 'response.output_item.done',
+          output_index: 0,
+          item: {
+            type: 'message',
+            id: messageId,
+            status: 'completed',
+            role: typeof finalMessage?.role === 'string' ? finalMessage.role : 'assistant',
+            content: [{ type: 'output_text', text: finalText, annotations: [] }],
+          },
+        });
+      }
+
+      if (reasoningOpened) {
+        writeEvent({
+          type: 'response.reasoning_summary_text.done',
+          item_id: reasoningItemId,
+          output_index: 0,
+          summary_index: 0,
+          text: finalReasoning,
+        });
+        writeEvent({
+          type: 'response.reasoning_summary_part.done',
+          item_id: reasoningItemId,
+          output_index: 0,
+          summary_index: 0,
+          part: {
+            type: 'summary_text',
+            text: finalReasoning,
+          },
+        });
+        writeEvent({
+          type: 'response.output_item.done',
+          output_index: 0,
+          item: {
+            type: 'reasoning',
+            id: reasoningItemId,
+            status: 'completed',
+            summary: [{ type: 'summary_text', text: finalReasoning }],
+          },
+        });
+      }
+
+      const completedResponse = {
+        id: responseId,
+        object: 'response',
+        created_at: Math.floor(Date.now() / 1000),
+        status: 'completed',
+        error: null,
+        incomplete_details: null,
+        instructions: null,
+        max_output_tokens: null,
+        model,
+        output: finalOutput,
+        parallel_tool_calls: true,
+        previous_response_id: null,
+        reasoning: { effort: 'medium', generate_summary: null },
+        store: true,
+        temperature: 0,
+        text: { format: { type: 'text' } },
+        tool_choice: 'auto',
+        tools: [],
+        truncation: 'disabled',
+        usage,
+        user: null,
+        metadata: {},
+      };
+
+      writeEvent({
+        type: 'response.completed',
+        response: completedResponse,
+      });
+
+      if (sink.websocketMode) {
+        sink.writeEvent({
+          event_id: `event_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          type: 'response.done',
+          response: completedResponse,
+        });
+      }
+
+      closed = true;
+      sink.close();
+    },
+    fail(message: string) {
+      if (closed) return;
+      closed = true;
+      writeEvent({
+        type: 'response.failed',
+        error: {
+          message,
+        },
+      });
+      sink.close();
+    },
+  };
+}
+
+function parseToolCallsDelta(deltaToolCalls: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(deltaToolCalls)) {
+    return [];
+  }
+  return deltaToolCalls.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'));
+}
+
+async function postToUpstreamStream(
+  chatBody: Record<string, unknown>,
+  handlers: {
+    onSseEvent: (payload: string) => void;
+    onDone: () => void;
+  }
+): Promise<void> {
+  const target = buildUpstreamTarget(chatBody);
+  console.log('[proxy] upstream streaming request', {
+    provider: target.provider,
+    model: target.model,
+    url: target.url,
+    hasTools: Array.isArray(target.body.tools) && target.body.tools.length > 0,
+  });
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '--silent',
+      '--show-error',
+      '--no-buffer',
+      '--location',
+      '--max-time',
+      '120',
+      '-X',
+      'POST',
+      target.url,
+      '--data',
+      JSON.stringify(target.body),
+    ];
+
+    for (const header of target.headers) {
+      args.splice(args.length - 2, 0, '-H', header);
+    }
+
+    const child = spawn('curl', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdoutBuffer = '';
+    let stderr = '';
+
+    const flushBuffer = () => {
+      let boundaryIndex = stdoutBuffer.indexOf('\n\n');
+      while (boundaryIndex !== -1) {
+        const rawEvent = stdoutBuffer.slice(0, boundaryIndex);
+        stdoutBuffer = stdoutBuffer.slice(boundaryIndex + 2);
+        const dataLines = rawEvent
+          .split(/\r?\n/u)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim());
+        if (dataLines.length > 0) {
+          handlers.onSseEvent(dataLines.join('\n'));
+        }
+        boundaryIndex = stdoutBuffer.indexOf('\n\n');
+      }
+    };
+
+    child.stdout.on('data', (chunk) => {
+      stdoutBuffer += chunk.toString();
+      flushBuffer();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', (error) => {
+      reject(error);
+    });
+
+    child.on('close', (code) => {
+      flushBuffer();
+
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `curl exited with code ${code}`));
+        return;
+      }
+
+      handlers.onDone();
+      resolve();
+    });
+  });
+}
+
+async function streamChatCompletionsAsResponses(
+  chatBody: Record<string, unknown>,
+  sink: StreamingSink,
+  toolMapping: KimiToolMapping
+): Promise<void> {
+  const model = typeof chatBody.model === 'string' ? chatBody.model : 'kimi-for-coding';
+  const emitter = createResponseStreamEmitter(sink, toolMapping, model);
+  const toolCallsByIndex = new Map<number, Record<string, unknown>>();
+  const finalMessage: Record<string, unknown> = { role: 'assistant', content: '', tool_calls: [] };
+
+  try {
+    await postToUpstreamStream(chatBody, {
+      onSseEvent: (payload) => {
+        if (!payload || payload === '[DONE]') {
+          return;
+        }
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          return;
+        }
+
+        const choice = parsed?.choices?.[0];
+        const delta = choice?.delta ?? {};
+
+        if (typeof parsed?.usage === 'object' && parsed.usage) {
+          emitter.setUsage({
+            input_tokens: parsed.usage.prompt_tokens,
+            output_tokens: parsed.usage.completion_tokens,
+            total_tokens: parsed.usage.total_tokens,
+          });
+        }
+
+        if (typeof delta?.role === 'string') {
+          finalMessage.role = delta.role;
+        }
+
+        if (typeof delta?.content === 'string' && delta.content.length > 0) {
+          finalMessage.content = `${typeof finalMessage.content === 'string' ? finalMessage.content : ''}${delta.content}`;
+          emitter.addTextDelta(delta.content);
+        }
+
+        const reasoningDelta =
+          typeof delta?.reasoning_content === 'string'
+            ? delta.reasoning_content
+            : typeof delta?.reasoning === 'string'
+              ? delta.reasoning
+              : typeof parsed?.reasoning_content === 'string'
+                ? parsed.reasoning_content
+                : '';
+        if (reasoningDelta) {
+          emitter.addReasoningDelta(reasoningDelta);
+        }
+
+        const toolCallDeltas = parseToolCallsDelta(delta?.tool_calls);
+        for (const entry of toolCallDeltas) {
+          const index = typeof entry.index === 'number' ? entry.index : 0;
+          const current = toolCallsByIndex.get(index) || {};
+          const functionDelta =
+            entry.function && typeof entry.function === 'object'
+              ? (entry.function as Record<string, unknown>)
+              : {};
+          const currentFunction =
+            current.function && typeof current.function === 'object'
+              ? (current.function as Record<string, unknown>)
+              : {};
+
+          const next = {
+            ...current,
+            ...entry,
+            function: {
+              ...currentFunction,
+              ...functionDelta,
+              name:
+                typeof functionDelta.name === 'string'
+                  ? functionDelta.name
+                  : currentFunction.name,
+              arguments: `${typeof currentFunction.arguments === 'string' ? currentFunction.arguments : ''}${typeof functionDelta.arguments === 'string' ? functionDelta.arguments : ''}`,
+            },
+          };
+
+          toolCallsByIndex.set(index, next);
+        }
+      },
+      onDone: () => {
+        finalMessage.tool_calls = Array.from(toolCallsByIndex.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([, value]) => value);
+      },
+    });
+
+    emitter.complete(finalMessage);
+  } catch (error) {
+    emitter.fail(error instanceof Error ? error.message : String(error));
+  }
 }
 
 // Convert Chat Completions response to Responses API format
@@ -661,6 +1140,29 @@ app.post('/v1/responses', async (req, res) => {
       toolCount: Array.isArray(req.body?.tools) ? req.body.tools.length : 0,
     });
     const { chatBody, toolMapping } = convertToChatFormat(req.body);
+    if (chatBody.stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      await streamChatCompletionsAsResponses(
+        chatBody,
+        {
+          websocketMode: false,
+          writeEvent: (payload) => {
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
+          },
+          close: () => {
+            if (!res.writableEnded) {
+              res.write('data: [DONE]\n\n');
+              res.end();
+            }
+          },
+        },
+        toolMapping
+      );
+      return;
+    }
+
     const { status, bodyText } = await postToUpstream(chatBody);
     console.log('[proxy] upstream response', {
       status,
@@ -674,32 +1176,8 @@ app.post('/v1/responses', async (req, res) => {
       return;
     }
 
-    const chatData = JSON.parse(bodyText);
-    if (chatBody.stream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      emitStreamingResponseFromChatData(
-        chatData,
-        {
-          websocketMode: false,
-          writeEvent: (payload) => {
-            res.write(`data: ${JSON.stringify(payload)}\n\n`);
-          },
-          close: () => {
-            res.write('data: [DONE]\n\n');
-            res.end();
-          },
-        },
-        toolMapping
-      );
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    }
-
     const requestId = Date.now().toString();
-    const responseData = convertToResponseFormat(chatData, requestId, toolMapping);
+    const responseData = convertToResponseFormat(JSON.parse(bodyText), requestId, toolMapping);
 
     res.json(responseData);
   } catch (error) {
@@ -720,6 +1198,21 @@ async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('w
     });
 
     const { chatBody, toolMapping } = convertToChatFormat(body);
+    if (chatBody.stream) {
+      await streamChatCompletionsAsResponses(
+        chatBody,
+        {
+          websocketMode: true,
+          writeEvent: (payload) => {
+            ws.send(JSON.stringify(payload));
+          },
+          close: () => {},
+        },
+        toolMapping
+      );
+      return;
+    }
+
     const { status, bodyText } = await postToUpstream(chatBody);
     console.log('[proxy] ws upstream response', {
       status,
@@ -740,24 +1233,8 @@ async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('w
       return;
     }
 
-    const chatData = JSON.parse(bodyText);
-    if (chatBody.stream) {
-      emitStreamingResponseFromChatData(
-        chatData,
-        {
-          websocketMode: true,
-          writeEvent: (payload) => {
-            ws.send(JSON.stringify(payload));
-          },
-          close: () => {},
-        },
-        toolMapping
-      );
-      return;
-    }
-
     const requestId = Date.now().toString();
-    ws.send(JSON.stringify(convertToResponseFormat(chatData, requestId, toolMapping)));
+    ws.send(JSON.stringify(convertToResponseFormat(JSON.parse(bodyText), requestId, toolMapping)));
   } catch (error) {
     console.error('[proxy] ws error', error);
     ws.send(

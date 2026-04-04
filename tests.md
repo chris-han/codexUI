@@ -263,6 +263,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup required beyond deleting the test thread if it was created only for verification.
 
+### Feature: codex-ui-react assistant output streams incrementally during turn execution
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- `KIMI_API_KEY` is configured so `server/kimiProxy.ts` can reach the upstream API.
+- A thread can be created or selected in the UI.
+
+#### Steps
+1. Send a prompt that takes long enough to stream multiple chunks, for example: `Explain how HTTP chunked transfer works in 8 short bullets, thinking step by step first.`
+2. Watch the conversation immediately after submit instead of waiting for the turn to finish.
+3. Confirm the assistant bubble text grows over time while the turn is still marked in progress.
+4. If the selected model exposes reasoning text, confirm the `Thinking` panel also updates before the final answer completes.
+5. After the turn finishes, refresh the thread and confirm the final assistant message still matches the completed streamed content.
+
+#### Expected Results
+- Assistant text appears incrementally during the turn instead of rendering only once at completion.
+- The typing/thinking indicators are visible while streaming is active.
+- Final persisted message content matches what was streamed live.
+
+#### Rollback/Cleanup
+- No cleanup is required beyond deleting the test thread if it was created only for verification.
+
 ### Feature: codex-ui-react proxy startup clears stale port 3456 listeners
 
 #### Prerequisites
