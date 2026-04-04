@@ -6,6 +6,7 @@ import DesktopLayout from './components/layout/DesktopLayout';
 
 const ThreadConversation = lazy(() => import('./components/content/ThreadConversation'));
 const SkillsHub = lazy(() => import('./components/content/SkillsHub'));
+const HomeScreen = lazy(() => import('./components/content/HomeScreen'));
 
 function App() {
   const store = useCodexStore();
@@ -58,7 +59,14 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<DesktopLayout />}>
-        <Route index element={<div className="p-8 text-gray-500">Select a thread to start</div>} />
+        <Route
+          index
+          element={(
+            <Suspense fallback={<div className="p-8 text-gray-500">Loading home…</div>}>
+              <HomeScreen />
+            </Suspense>
+          )}
+        />
         <Route
           path="thread/:threadId"
           element={(

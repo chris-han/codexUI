@@ -1372,3 +1372,23 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - If rollback is triggered during testing, resume or continue the thread as needed afterward.
+
+### Feature: React home route matches Vue new-thread entry flow
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- The sidebar already contains one or more project/thread groups.
+
+#### Steps
+1. Open the app root route `/`.
+2. Confirm the page shows a `New thread` heading and centered `Let's build` hero.
+3. Select a project from the inline project dropdown.
+4. Send a message from the inline composer.
+
+#### Expected Results
+- The index route is no longer a plain placeholder.
+- The home route offers an inline new-thread composer similar to the Vue UI.
+- Sending from the home route creates a thread for the selected project and navigates into it.
+
+#### Rollback/Cleanup
+- No cleanup required.
