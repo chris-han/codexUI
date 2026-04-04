@@ -1310,3 +1310,22 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React message renderer formats markdown tables like the Vue app
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- A thread contains an assistant message with a markdown table.
+
+#### Steps
+1. Open a thread with a markdown table in an assistant response.
+2. Inspect the rendered message block in the conversation view.
+3. Confirm header cells, body rows, and inline markdown inside cells are rendered.
+
+#### Expected Results
+- Markdown table syntax renders as an HTML table instead of plain paragraph text.
+- Table headers and cells have visible borders and alignment.
+- Inline markdown inside cells, such as bold text, inline code, and links, still renders correctly.
+
+#### Rollback/Cleanup
+- No cleanup required.

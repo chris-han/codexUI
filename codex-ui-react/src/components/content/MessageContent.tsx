@@ -10,7 +10,68 @@ type Block =
   | { kind: 'paragraph'; value: string }
   | { kind: 'heading'; level: number; value: string }
   | { kind: 'list'; items: string[] }
+  | { kind: 'table'; headers: string[]; rows: string[][]; alignments: Array<'left' | 'center' | 'right'> }
   | { kind: 'code'; language: string; value: string };
+
+function splitMarkdownTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|')) return null;
+
+  const normalized = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed;
+  const withoutTrailing = normalized.endsWith('|') ? normalized.slice(0, -1) : normalized;
+  const cells = withoutTrailing.split('|').map((cell) => cell.trim());
+  return cells.length > 1 ? cells : null;
+}
+
+function parseTableAlignments(line: string): Array<'left' | 'center' | 'right'> | null {
+  const cells = splitMarkdownTableRow(line);
+  if (!cells || cells.length === 0) return null;
+
+  const alignments: Array<'left' | 'center' | 'right'> = [];
+  for (const cell of cells) {
+    if (!/^:?-{3,}:?$/u.test(cell)) return null;
+    if (cell.startsWith(':') && cell.endsWith(':')) alignments.push('center');
+    else if (cell.endsWith(':')) alignments.push('right');
+    else alignments.push('left');
+  }
+  return alignments;
+}
+
+function normalizeTableCells(cells: string[], width: number): string[] {
+  const normalized = cells.slice(0, width);
+  while (normalized.length < width) normalized.push('');
+  return normalized;
+}
+
+function readTableBlock(lines: string[], startIndex: number): Extract<Block, { kind: 'table' }> | null {
+  if (startIndex + 1 >= lines.length) return null;
+
+  const headers = splitMarkdownTableRow(lines[startIndex] ?? '');
+  const alignments = parseTableAlignments(lines[startIndex + 1] ?? '');
+  if (!headers || !alignments || headers.length !== alignments.length) return null;
+
+  const trimmedHeader = (lines[startIndex] ?? '').trim();
+  if (!trimmedHeader.startsWith('|') && (trimmedHeader.match(/\|/gu)?.length ?? 0) < 2) return null;
+
+  const width = headers.length;
+  const rows: string[][] = [];
+  let index = startIndex + 2;
+  while (index < lines.length) {
+    const line = lines[index] ?? '';
+    if (!line.trim()) break;
+    const row = splitMarkdownTableRow(line);
+    if (!row) break;
+    rows.push(normalizeTableCells(row, width));
+    index += 1;
+  }
+
+  return {
+    kind: 'table',
+    headers: normalizeTableCells(headers, width),
+    rows,
+    alignments,
+  };
+}
 
 function parseInlineTokens(text: string): InlineToken[] {
   const tokens: InlineToken[] = [];
@@ -60,6 +121,14 @@ function parseBlocks(text: string): Block[] {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
+
+    const table = readTableBlock(lines, index);
+    if (table) {
+      flushParagraph(paragraphLines, blocks);
+      blocks.push(table);
+      index += 1 + table.rows.length;
+      continue;
+    }
 
     if (line.startsWith('```')) {
       flushParagraph(paragraphLines, blocks);
@@ -198,6 +267,45 @@ function MessageContent({ text }: MessageContentProps) {
               <pre className="overflow-x-auto px-4 py-3 text-xs leading-6">
                 <code>{block.value}</code>
               </pre>
+            </div>
+          );
+        }
+
+        if (block.kind === 'table') {
+          return (
+            <div key={`table:${blockIndex}`} className="w-full overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-slate-200 bg-white text-sm text-slate-800">
+                <thead>
+                  <tr>
+                    {block.headers.map((cell, cellIndex) => (
+                      <th
+                        key={`table:${blockIndex}:head:${cellIndex}`}
+                        className={`border-b border-l border-slate-200 bg-slate-100 px-3 py-2 text-left align-top font-semibold text-slate-900 whitespace-pre-wrap break-words ${cellIndex === 0 ? 'border-l-0' : ''}`}
+                        style={{ overflowWrap: 'anywhere', textAlign: block.alignments[cellIndex] }}
+                      >
+                        {renderInline(cell, `table:${blockIndex}:head:${cellIndex}`)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                {block.rows.length > 0 ? (
+                  <tbody>
+                    {block.rows.map((row, rowIndex) => (
+                      <tr key={`table:${blockIndex}:row:${rowIndex}`}>
+                        {row.map((cell, cellIndex) => (
+                          <td
+                            key={`table:${blockIndex}:row:${rowIndex}:cell:${cellIndex}`}
+                            className={`border-b border-l border-slate-200 px-3 py-2 align-top whitespace-pre-wrap break-words ${cellIndex === 0 ? 'border-l-0' : ''} ${rowIndex === block.rows.length - 1 ? 'border-b-0' : ''}`}
+                            style={{ overflowWrap: 'anywhere', textAlign: block.alignments[cellIndex] }}
+                          >
+                            {renderInline(cell, `table:${blockIndex}:row:${rowIndex}:cell:${cellIndex}`)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                ) : null}
+              </table>
             </div>
           );
         }
