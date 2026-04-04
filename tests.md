@@ -1489,6 +1489,7 @@ This file tracks manual regression and feature verification steps.
 - A `+` action menu is present instead, matching the Codex web interaction model more closely.
 - The `+` button shows a centered plus glyph at rest, and its circular background appears only on hover.
 - The `+` glyph is visually large enough to read clearly at a glance.
+- The `+` glyph does not dominate the row and stays proportionate to the nearby text controls.
 - `Plan` in the menu toggles the underlying collaboration mode state.
 - The `Plan` action uses the spline-pointer style icon instead of a generic text glyph.
 - When plan mode is active, the composer shows a small `Plan` state chip above the input.
@@ -1496,6 +1497,7 @@ This file tracks manual regression and feature verification steps.
 - The `+`, model, skills, and reasoning menus all use the same light page-matched surface and rounded shape instead of mismatched native dropdown styling.
 - Those menu surfaces use the same smaller corner radius as the surrounding card treatment instead of oversized pill-like rounding.
 - Long item lists in any of those menus stay within a bounded height and expose a scrollbar instead of overflowing off-screen.
+- The model, skills, and reasoning triggers sit as a compact left-side cluster instead of stretching apart across the full composer width.
 
 #### Rollback/Cleanup
 - Remove any temporary attachment chips before leaving the thread if desired.
