@@ -9,6 +9,7 @@ interface SkillCardProps {
 }
 
 function SkillCard({ skill, onClick }: SkillCardProps) {
+  const title = skill.name || 'Unnamed skill';
   return (
     <button
       onClick={onClick}
@@ -16,7 +17,7 @@ function SkillCard({ skill, onClick }: SkillCardProps) {
     >
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-semibold text-gray-800">{skill.name}</h3>
+          <h3 className="font-semibold text-gray-800">{title}</h3>
           {skill.description && (
             <p className="text-sm text-gray-500 mt-1 line-clamp-2">
               {skill.description}
@@ -40,12 +41,13 @@ interface SkillDetailModalProps {
 
 function SkillDetailModal({ skill, onClose }: SkillDetailModalProps) {
   if (!skill) return null;
+  const title = skill.name || 'Unnamed skill';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">{skill.name}</h2>
+          <h2 className="text-xl font-semibold">{title}</h2>
           <button
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -101,10 +103,13 @@ function SkillsHub() {
     loadSkills();
   }, [loadSkills]);
 
+  const normalizedQuery = searchQuery.toLowerCase();
   const filteredSkills = installedSkills.filter(
-    (skill) =>
-      skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      skill.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    (skill) => {
+      const name = typeof skill.name === 'string' ? skill.name.toLowerCase() : '';
+      const description = typeof skill.description === 'string' ? skill.description.toLowerCase() : '';
+      return name.includes(normalizedQuery) || description.includes(normalizedQuery);
+    }
   );
 
   return (
@@ -141,7 +146,7 @@ function SkillsHub() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredSkills.map((skill) => (
               <SkillCard
-                key={skill.id}
+                key={skill.id || skill.path || skill.name}
                 skill={skill}
                 onClick={() => setSelectedSkill(skill)}
               />

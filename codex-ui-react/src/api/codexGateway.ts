@@ -45,6 +45,19 @@ type WorkspaceRootsState = {
   active: string[];
 };
 
+type SkillsListResponseEntry = {
+  cwd?: string;
+  skills?: Array<{
+    name?: string;
+    description?: string;
+    shortDescription?: string;
+    path?: string;
+    scope?: string;
+    enabled?: boolean;
+  }>;
+  errors?: unknown[];
+};
+
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
 function getErrorMessage(error: unknown): string {
@@ -318,8 +331,8 @@ export async function setCodexSpeedMode(speedMode: SpeedMode): Promise<void> {
 // Skills
 export async function getSkillsList(): Promise<SkillInfo[]> {
   try {
-    const result = await rpcCall<{ data: SkillInfo[] }>('skills/list', {});
-    return result.data || [];
+    const result = await rpcCall<{ data?: unknown }>('skills/list', {});
+    return normalizeSkillsList(result.data);
   } catch {
     return [];
   }
@@ -794,6 +807,66 @@ function normalizeServerRequest(request: unknown): UiServerRequest | null {
     receivedAtIso: new Date().toISOString(),
     params: r.params,
   };
+}
+
+function normalizeSkillsList(data: unknown): SkillInfo[] {
+  if (!Array.isArray(data)) return [];
+
+  const flattened: SkillInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of data) {
+    if (!entry || typeof entry !== 'object') continue;
+
+    const grouped = entry as SkillsListResponseEntry;
+    if (Array.isArray(grouped.skills)) {
+      for (const skill of grouped.skills) {
+        if (!skill || typeof skill !== 'object') continue;
+        const name = typeof skill.name === 'string' ? skill.name.trim() : '';
+        const path = typeof skill.path === 'string' ? skill.path.trim() : '';
+        const id = path || name;
+        if (!id || !name || seen.has(id)) continue;
+        seen.add(id);
+        flattened.push({
+          id,
+          name,
+          description:
+            (typeof skill.shortDescription === 'string' && skill.shortDescription.trim()) ||
+            (typeof skill.description === 'string' && skill.description.trim()) ||
+            '',
+          isInstalled: true,
+          path: path || undefined,
+          scope: typeof skill.scope === 'string' ? skill.scope : undefined,
+          enabled: typeof skill.enabled === 'boolean' ? skill.enabled : undefined,
+        });
+      }
+      continue;
+    }
+
+    const record = entry as Record<string, unknown>;
+    const id =
+      (typeof record.id === 'string' && record.id.trim()) ||
+      (typeof record.path === 'string' && record.path.trim()) ||
+      (typeof record.name === 'string' && record.name.trim()) ||
+      '';
+    const name = typeof record.name === 'string' ? record.name.trim() : '';
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    flattened.push({
+      id,
+      name,
+      description: typeof record.description === 'string' ? record.description.trim() : '',
+      isInstalled:
+        typeof record.isInstalled === 'boolean'
+          ? record.isInstalled
+          : true,
+      path: typeof record.path === 'string' ? record.path : undefined,
+      scope: typeof record.scope === 'string' ? record.scope : undefined,
+      enabled: typeof record.enabled === 'boolean' ? record.enabled : undefined,
+    });
+  }
+
+  return flattened;
 }
 
 function extractProjectName(cwd: string): string {

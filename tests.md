@@ -451,6 +451,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete the temporary test thread if it was created only for verification.
 
+### Feature: codex-ui-react Skills Hub payload normalization
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- `skills/list` may return upstream-style grouped entries with nested `skills` arrays.
+
+#### Steps
+1. Navigate to the Skills Hub route in the React UI.
+2. Confirm the page loads without throwing `Cannot read properties of undefined (reading 'toLowerCase')`.
+3. Verify installed skills from a nested `skills/list` payload appear as flat cards in the grid.
+4. Enter a search query and confirm filtering works for both skill names and descriptions.
+5. Confirm malformed or nameless skill rows are ignored instead of crashing the page.
+
+#### Expected Results
+- The React Skills Hub no longer crashes when `skills/list` returns grouped entries instead of flat rows.
+- The gateway flattens nested skill payloads into stable React `SkillInfo` items.
+- Missing or malformed skills are skipped safely.
+
+#### Rollback/Cleanup
+- No cleanup is required beyond leaving the Skills Hub route.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).

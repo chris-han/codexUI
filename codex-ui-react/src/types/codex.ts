@@ -308,4 +308,7 @@ export type SkillInfo = {
   name: string
   description?: string
   isInstalled?: boolean
+  path?: string
+  scope?: string
+  enabled?: boolean
 }
