@@ -81,6 +81,12 @@ type ResolvedCollaborationModeSettings = {
   reasoningEffort: ReasoningEffort | null;
 };
 
+type FsReadFileResponse = {
+  dataBase64?: string;
+};
+
+const ATTACHMENT_TEXT_CHAR_LIMIT = 16_000;
+
 function normalizePlanModeReasoningEffort(
   value: ReasoningEffort | '' | null | undefined
 ): ReasoningEffort | null {
@@ -95,14 +101,71 @@ function normalizeCollaborationModeReasoningEffort(
 
 function buildTextWithAttachments(
   prompt: string,
-  files: ComposerFileAttachment[]
+  files: Array<ComposerFileAttachment & { content?: string | null; contentError?: string | null }>
 ): string {
   if (files.length === 0) return prompt;
   let prefix = '# Files mentioned by the user:\n';
   for (const file of files) {
     prefix += `\n## ${file.label}: ${file.path}\n`;
+    if (file.content && file.content.trim()) {
+      prefix += `\n### Attached file contents\n\`\`\`\n${file.content}\n\`\`\`\n`;
+    } else if (file.contentError) {
+      prefix += `\n### Attached file contents\n(unavailable: ${file.contentError})\n`;
+    }
   }
   return `${prefix}\n## My request for Codex:\n\n${prompt}\n`;
+}
+
+function resolveAttachmentPath(path: string, cwd?: string): string {
+  const normalizedPath = path.trim().replace(/\\/g, '/');
+  if (!normalizedPath) return '';
+  if (normalizedPath.startsWith('/')) return normalizedPath;
+  const normalizedCwd = cwd?.trim().replace(/\\/g, '/').replace(/\/+$/, '') ?? '';
+  if (!normalizedCwd.startsWith('/')) return '';
+  const relativePath = normalizedPath.replace(/^\.\/+/, '').replace(/^\/+/, '');
+  return `${normalizedCwd}/${relativePath}`;
+}
+
+function decodeBase64Utf8(dataBase64: string): string {
+  const binary = atob(dataBase64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function hydrateAttachmentContents(
+  files: ComposerFileAttachment[],
+  cwd?: string
+): Promise<Array<ComposerFileAttachment & { content?: string | null; contentError?: string | null }>> {
+  return await Promise.all(files.map(async (file) => {
+    const resolvedPath = resolveAttachmentPath(file.fsPath || file.path, cwd);
+    if (!resolvedPath) {
+      return {
+        ...file,
+        contentError: 'path is not readable from the app server',
+      };
+    }
+    try {
+      const result = await rpcCall<FsReadFileResponse>('fs/readFile', { path: resolvedPath });
+      const rawText = typeof result.dataBase64 === 'string' ? decodeBase64Utf8(result.dataBase64) : '';
+      const sanitizedText = rawText.replace(/\0/g, '');
+      const content = sanitizedText.length > ATTACHMENT_TEXT_CHAR_LIMIT
+        ? `${sanitizedText.slice(0, ATTACHMENT_TEXT_CHAR_LIMIT)}\n\n[truncated]`
+        : sanitizedText;
+      return {
+        ...file,
+        path: resolvedPath,
+        fsPath: resolvedPath,
+        content,
+      };
+    } catch (error) {
+      return {
+        ...file,
+        path: resolvedPath,
+        fsPath: resolvedPath,
+        contentError: error instanceof Error ? error.message : 'failed to read file',
+      };
+    }
+  }));
 }
 
 function getErrorMessage(error: unknown): string {
@@ -303,12 +366,14 @@ export async function startThreadTurn(
     skills?: ComposerSkillSelection[];
     fileAttachments?: ComposerFileAttachment[];
     collaborationMode?: CollaborationModeKind;
+    cwd?: string;
   }
 ): Promise<string> {
   const normalizedModel = options?.model?.trim() ?? '';
+  const hydratedAttachments = await hydrateAttachmentContents(options?.fileAttachments ?? [], options?.cwd);
   const normalizedText = buildTextWithAttachments(
     message,
-    options?.fileAttachments ?? []
+    hydratedAttachments
   );
   const input: Array<Record<string, unknown>> = [
     {
@@ -339,6 +404,11 @@ export async function startThreadTurn(
   const request = {
     threadId,
     input,
+    attachments: hydratedAttachments.map((file) => ({
+      label: file.label,
+      path: file.path,
+      fsPath: file.fsPath,
+    })),
     model: normalizedModel || undefined,
     effort: options?.reasoningEffort,
     collaborationMode: options?.collaborationMode

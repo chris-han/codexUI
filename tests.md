@@ -1546,3 +1546,24 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React attached files are pre-read into turn context when path is resolvable
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- An existing thread is open in the React UI.
+- A readable text file exists inside the thread working directory, for example `<cwd>/attachment-read-check.txt`.
+
+#### Steps
+1. Create a small text file in the active thread working directory with distinctive content, for example `attachment-read-check-001`.
+2. In the React composer, attach that file using `@` file mention search so the attachment path is absolute and server-resolvable.
+3. Send a prompt asking the model to quote or summarize the attached file contents.
+4. Repeat with a file-picker attachment whose path is not resolvable by the app server.
+
+#### Expected Results
+- For the `@`-attached file, the gateway reads the file before `turn/start` and the model can answer using the file contents immediately.
+- Large attached files are truncated before being inlined into the prompt.
+- For attachments that are not readable by server path, the request still sends successfully and falls back to path-reference behavior instead of crashing.
+
+#### Rollback/Cleanup
+- Remove any temporary verification files created for the test.

@@ -375,6 +375,14 @@ function upsertThreadIntoGroups(state: CodexState, thread: UiThread): void {
   );
 }
 
+function getThreadCwd(state: CodexState, threadId: string): string {
+  for (const group of state.projectGroups) {
+    const thread = group.threads.find((candidate) => candidate.id === threadId);
+    if (thread) return thread.cwd;
+  }
+  return state.threadShellsById.get(threadId)?.cwd ?? '';
+}
+
 // ==================== Store Creation ====================
 
 export const useCodexStore = create<CodexState & CodexActions>()(
@@ -555,6 +563,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               state.inProgressByThreadId.set(threadId, true);
             });
             const turnId = await api.startThreadTurn(threadId, submitPayload.text, {
+              cwd,
               model: get().selectedModelId,
               reasoningEffort: get().selectedReasoningEffort,
               imageUrls: submitPayload.imageUrls,
@@ -702,6 +711,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             state.inProgressByThreadId.set(threadId, true);
           });
           const turnId = await api.startThreadTurn(threadId, submitPayload.text, {
+            cwd: getThreadCwd(refreshedState, threadId),
             model: refreshedState.selectedModelId,
             reasoningEffort: refreshedState.selectedReasoningEffort,
             imageUrls: submitPayload.imageUrls,
