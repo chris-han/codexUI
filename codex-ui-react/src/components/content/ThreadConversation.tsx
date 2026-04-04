@@ -368,12 +368,14 @@ function ThreadConversation() {
 
           {/* Composer */}
           <div className="border-t border-gray-200 bg-white p-4">
-            <ThreadComposer
-              onSend={handleSendMessage}
-              onInterrupt={handleInterrupt}
-              isInProgress={isInProgress}
-              cwd={threadView.cwd}
-            />
+            <div className="mx-auto w-full max-w-2xl">
+              <ThreadComposer
+                onSend={handleSendMessage}
+                onInterrupt={handleInterrupt}
+                isInProgress={isInProgress}
+                cwd={threadView.cwd}
+              />
+            </div>
           </div>
         </>
       )}

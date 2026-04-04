@@ -67,7 +67,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<null | 'model' | 'skills' | 'reasoning'>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -144,7 +144,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      const root = menuRef.current;
+      const root = controlsRef.current;
       if (!root) return;
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -458,8 +458,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center gap-4 border-t border-gray-100 pt-3">
-        <div ref={menuRef} className="relative shrink-0">
+      <div ref={controlsRef} className="mt-3 flex items-center gap-4 border-t border-gray-100 pt-3">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -498,7 +498,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
                 >
-                  <span className="text-lg leading-none">+</span>
+                  <span className="text-2xl leading-none">+</span>
                   <span>Upload attachment</span>
                 </button>
               </div>
@@ -507,7 +507,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
 
         <div className="flex min-w-0 items-center gap-6">
-          <div className="relative min-w-[190px]">
+          <div className="relative min-w-[120px]">
             <button
               type="button"
               onClick={() => toggleDropdown('model')}
@@ -541,7 +541,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
             ) : null}
           </div>
 
-          <div className="relative min-w-[82px]">
+          <div className="relative min-w-[54px]">
             <button
               type="button"
               onClick={() => toggleDropdown('skills')}
