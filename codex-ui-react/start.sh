@@ -1,0 +1,11 @@
+#!/bin/bash
+cd /home/chris/repo/codexUI/codex-ui-react
+
+# Clear ports first
+pkill -f "bun server" 2>/dev/null || true
+pkill -f "codex app-server" 2>/dev/null || true
+sleep 2
+
+# Load env and start
+export $(grep -v '^#' .env | xargs)
+npx concurrently "bun server/kimiProxy.ts" "sleep 2 && bun server/standalone.ts" "sleep 5 && vite"
