@@ -400,12 +400,12 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-gray-100 pt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-3">
         <div className="relative min-w-[84px]">
           <select
             value={selectedCollaborationMode}
             onChange={(e) => handleCollaborationModeChange(e.target.value)}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-600 outline-none transition focus:border-gray-300"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-500 outline-none transition hover:text-gray-700"
             disabled={disabled || isInProgress}
             aria-label="Collaboration mode"
           >
@@ -422,7 +422,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           <select
             value={selectedModelId}
             onChange={(e) => setSelectedModelId(e.target.value)}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-700 outline-none transition focus:border-gray-300"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
             disabled={disabled || isInProgress}
             aria-label="Model"
           >
@@ -442,7 +442,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               handleSkillDropdownChange(e.target.value);
               e.currentTarget.value = '';
             }}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-700 outline-none transition focus:border-gray-300"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
             disabled={disabled || isInProgress || skillOptions.length === 0}
             aria-label="Skills"
           >
@@ -460,7 +460,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           <select
             value={selectedReasoningEffort}
             onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-700 outline-none transition focus:border-gray-300"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
             disabled={disabled || isInProgress}
             aria-label="Reasoning effort"
           >
