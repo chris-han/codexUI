@@ -218,6 +218,29 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
+### Feature: codex-ui-react dev startup resolves Codex CLI automatically
+
+#### Prerequisites
+- Dependencies are installed in `/home/chris/repo/codexUI/codex-ui-react`.
+- `bun` is installed and can execute `bun run dev`.
+- Network access is available if `bunx --bun @openai/codex` needs to fetch the CLI package.
+
+#### Steps
+1. Ensure no prior `codex-ui-react` dev processes are still bound to ports `3000`, `3456`, or `5173`.
+2. From `/home/chris/repo/codexUI/codex-ui-react`, run `bun run dev`.
+3. Watch the bridge server logs during startup.
+4. Confirm the bridge prints a `CODEX_COMMAND` value in the proxy config and does not exit with `Executable not found in $PATH: "codex"`.
+5. Confirm Vite stays up and `/codex-api/events` proxy requests stop failing due to backend startup failure.
+
+#### Expected Results
+- `bun run dev` starts the proxy, bridge server, and Vite without requiring a globally installed `codex` binary.
+- The bridge resolves either the existing `codex` executable or the fallback `bunx --bun @openai/codex` command automatically.
+- The previous `spawn codex ENOENT` failure does not appear.
+
+#### Rollback/Cleanup
+- Stop the dev stack with `Ctrl+C`.
+- Terminate any leftover processes on ports `3000`, `3456`, or `5173` if the shell exits unexpectedly.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
@@ -574,3 +597,270 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Restore `.env` values to preferred defaults.
+
+### Feature: React stale thread recovery
+
+#### Prerequisites
+- React Codex UI app running with `/codex-api/rpc` available.
+- Browser storage contains a previously selected thread ID that no longer has a resumable rollout.
+
+#### Steps
+1. Open the React app with DevTools Console and Network tabs visible.
+2. Let the app load with the stale thread still selected from storage.
+3. Observe the initial `thread/read` request for that thread fail.
+4. Observe one follow-up `thread/resume` request for the same thread.
+5. Wait for the next polling interval after the failed resume.
+
+#### Expected Results
+- The app clears the invalid selected thread after the failed resume.
+- The conversation view falls back to having no active thread selected for that stale ID.
+- The console may show a single warning for the stale thread, but it does not continue logging repeated 500 errors every poll cycle.
+- Subsequent polling refreshes thread groups without reissuing `thread/read` or `thread/resume` for the stale thread ID.
+
+#### Rollback/Cleanup
+- Select a valid thread again, or clear the app's stored selected-thread key in browser storage.
+
+### Feature: New thread creation navigates to the created thread
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Local app-server bridge available so `thread/start` and `thread/read` succeed.
+
+#### Steps
+1. Open the app root page.
+2. Click `New Thread`.
+3. Enter a unique folder name.
+4. Optionally enter an initial message.
+5. Click `Create Thread`.
+
+#### Expected Results
+- The modal closes after successful creation.
+- The app navigates to `/thread/<new-thread-id>` automatically.
+- The created thread is selected in the sidebar.
+- The thread conversation view loads without showing `Thread not found`.
+
+#### Rollback/Cleanup
+- Archive or remove the temporary thread if it is no longer needed.
+
+### Feature: Initial load avoids expected startup RPC 500s
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Browser DevTools Network and Console tabs open.
+
+#### Steps
+1. Open the app root page.
+2. Let the initial page load settle without opening settings or account-specific UI.
+3. Inspect startup `/codex-api/rpc` requests.
+4. Inspect the console for startup RPC errors.
+
+#### Expected Results
+- Startup does not issue `skills/list` with `params: null`.
+- Startup does not issue `account/rateLimits/read` automatically.
+- The console does not show expected startup 500s from those two RPCs.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Composer focus survives background thread refresh
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- An existing thread route open in the conversation view.
+
+#### Steps
+1. Click into the composer textarea.
+2. Type a partial message but do not submit it.
+3. Wait longer than one polling interval (at least 6 seconds).
+4. Continue typing in the same textarea.
+
+#### Expected Results
+- The composer stays focused while the background refresh runs.
+- The partially typed message remains in the textarea.
+- The textarea is not temporarily disabled just because thread messages refreshed.
+
+#### Rollback/Cleanup
+- Clear the draft message if it was only for verification.
+
+### Feature: Notification WebSocket uses same-origin proxied path
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Vite proxy enabled for `/codex-api` with WebSocket forwarding.
+- Browser DevTools Console open.
+
+#### Steps
+1. Open the app root page.
+2. Let startup settle.
+3. Inspect console messages and network entries for the notification socket.
+
+#### Expected Results
+- The app connects to `ws://localhost:5173/codex-api/ws` rather than hard-coding port `3000`.
+- The browser console does not show the previous `ws://localhost:3000/codex-api/ws` warning on startup.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Composer model reflects active configured provider
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Backend config has a non-default current model such as `kimi-for-coding`.
+
+#### Steps
+1. Open the app and wait for startup to settle.
+2. Open a thread and expand `Options` in the composer.
+3. Inspect the model dropdown value and available options.
+4. Create a new thread and confirm it inherits the shown model.
+
+#### Expected Results
+- The selected model initializes from backend `config/read`, not a hard-coded `gpt-4o` fallback.
+- If the configured model is absent from `model/list`, it still appears in the dropdown as the selected model.
+- New threads use the configured model shown in the UI.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Kimi proxy accepts message sends with Codex tool definitions
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Backend config uses the Kimi proxy via `openai_base_url = http://localhost:3456/v1`.
+- A thread is open with `kimi-for-coding` selected in the composer options.
+
+#### Steps
+1. Open an existing thread or create a new one.
+2. Type a simple message such as `Reply with one short sentence.` into the composer.
+3. Submit the message once.
+4. Inspect the browser console and network entries for `/codex-api/rpc`.
+
+#### Expected Results
+- The send action does not fail immediately with `Failed to send message`.
+- The Kimi proxy does not return the previous `function name is invalid` error.
+- The thread enters an in-progress state and then completes or streams normally.
+
+#### Rollback/Cleanup
+- Archive or ignore the verification thread if it was created only for testing.
+
+### Feature: Thread sync is event-driven instead of constant polling
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Browser DevTools Network tab open and filtered to `/codex-api/rpc`.
+
+#### Steps
+1. Open the app and let the initial load settle.
+2. Stay on the page for at least 15 seconds without changing focus.
+3. Confirm no repeating 5-second `thread/list` and `thread/read` cycle appears.
+4. Switch to another browser tab or window, then return to the app.
+5. Start or complete a turn in an open thread and observe subsequent RPC traffic.
+
+#### Expected Results
+- After the initial load, the app does not issue constant background polling every 5 seconds.
+- Returning focus to the app triggers a one-time refresh instead of restarting a timer loop.
+- Notification-driven events such as turn start or completion trigger targeted refreshes for thread state.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Sending a message resumes an unloaded thread before turn start
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- A previously created thread exists but is not currently loaded in the backend process.
+- The thread still has a resumable rollout.
+
+#### Steps
+1. Open the thread route directly.
+2. Wait for the thread view to load or resume.
+3. Type a message into the composer and submit it once.
+4. Inspect the console and `/codex-api/rpc` network entries if needed.
+
+#### Expected Results
+- The send action does not fail immediately with `thread not found` or `thread not loaded`.
+- If the backend needs to reload the thread first, the app issues a single `thread/resume` and then retries `turn/start`.
+- The thread enters the normal in-progress state after the retry succeeds.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Composer waits for thread detail before first send
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- A thread exists in the sidebar and can be opened directly from the thread route.
+
+#### Steps
+1. Open the thread route.
+2. As soon as the thread shell appears, immediately type and submit a message before prior messages finish loading.
+3. Inspect the network entries for `/codex-api/rpc` and the visible send behavior.
+
+#### Expected Results
+- The app loads thread detail first if it has not already been loaded into local message state.
+- The first send does not fail just because the thread summary rendered before the backend thread finished loading.
+- The user does not see an immediate `Failed to send message` caused by a race between route selection and the first submit.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Kimi proxy normalizes unsupported Responses roles
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Backend config uses the Kimi proxy via `openai_base_url = http://localhost:3456/v1`.
+
+#### Steps
+1. Open a thread and submit a normal composer message.
+2. If available, exercise a flow that includes system or developer-style instructions in the upstream request.
+3. Inspect proxy-backed send behavior and any related server logs.
+
+#### Expected Results
+- The Kimi proxy does not forward unsupported or empty chat roles.
+- Inputs using Responses-style `developer` role are normalized to a Kimi-supported role.
+- The proxy no longer returns `invalid request: unsupported role ROLE_UNSPECIFIED`.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Kimi streaming emits response item lifecycle events
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- Backend config uses the Kimi proxy via `openai_base_url = http://localhost:3456/v1`.
+- Browser console or backend logs are available for inspection.
+
+#### Steps
+1. Open a thread and submit a simple message.
+2. Wait for the assistant response to stream or complete.
+3. Inspect backend logs if needed for raw response parsing errors.
+
+#### Expected Results
+- The app-server does not log `OutputTextDelta without active item`.
+- Assistant text streams or completes into a normal message item.
+- The thread ends with an assistant message instead of an empty completed turn.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
+### Feature: Azure OpenAI upstream runs through the local Responses proxy
+
+#### Prerequisites
+- `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` are present in `codex-ui-react/.env`.
+- `codex-ui-react/.codex/config.toml` uses `model = "gpt-4o"` and `openai_base_url = "http://localhost:3456/v1"`.
+- React Codex UI stack is restarted after the env and config change.
+
+#### Steps
+1. Start the local React Codex UI stack.
+2. Call `config/read` or open the UI and inspect the selected model.
+3. Create a new thread and send a simple message.
+4. Inspect the bridge and app-server logs during the turn.
+
+#### Expected Results
+- `config/read` reports the selected model as `gpt-4o`.
+- The Codex app-server continues to talk to `http://localhost:3456/v1` instead of trying Azure directly.
+- The local proxy routes the `gpt-4o` request to Azure OpenAI upstream.
+- The app-server does not log a `401 Unauthorized` websocket error against `wss://...azure.com/openai/v1/responses`.
+- The Azure upstream request does not fail with `max_tokens is too large` for `gpt-4o`.
+
+#### Rollback/Cleanup
+- Restore the previous `codex-ui-react/.codex/config.toml` values if switching back to a different upstream routing setup.
