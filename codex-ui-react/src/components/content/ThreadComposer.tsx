@@ -11,7 +11,6 @@ import type {
 import {
   IconTablerArrowUp,
   IconTablerChevronDown,
-  IconTablerMicrophone,
   IconTablerPlayerStopFilled,
   IconTablerX,
 } from '../icons';
@@ -284,7 +283,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative rounded-[2rem] border border-white/8 bg-[#343434] p-5 text-white shadow-[0_24px_60px_rgba(0,0,0,0.24)]"
+      className="relative rounded-3xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
     >
       <input
         ref={uploadInputRef}
@@ -299,13 +298,13 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           {selectedSkills.map((skill) => (
             <span
               key={skill.path}
-              className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm text-white"
+              className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700"
             >
               <span>{skill.name}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveSkill(skill.path)}
-                className="text-white/55 transition-colors hover:text-white"
+                className="text-gray-400 transition-colors hover:text-gray-700"
                 aria-label={`Remove skill ${skill.name}`}
               >
                 <IconTablerX className="h-3.5 w-3.5" />
@@ -320,13 +319,13 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           {fileAttachments.map((attachment) => (
             <span
               key={attachment.fsPath}
-              className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm text-white"
+              className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
             >
               <span title={attachment.fsPath}>{attachment.label}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveFileAttachment(attachment.fsPath)}
-                className="text-white/55 transition-colors hover:text-white"
+                className="text-blue-400 transition-colors hover:text-blue-700"
                 aria-label={`Remove file ${attachment.label}`}
               >
                 <IconTablerX className="h-3.5 w-3.5" />
@@ -338,7 +337,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
       {selectedCollaborationMode === 'plan' ? (
         <div className="mb-3">
-          <span className="inline-flex items-center rounded-full bg-white/14 px-2.5 py-1 text-xs font-medium text-white">
+          <span className="inline-flex items-center rounded-full bg-gray-900 px-2.5 py-1 text-xs font-medium text-white">
             Plan
           </span>
         </div>
@@ -395,14 +394,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               handleSubmit();
             }
           }}
-          placeholder={disabled ? 'Loading...' : 'Ask a question with /plan'}
+          placeholder={disabled ? 'Loading...' : 'Type a message... (@ for files, / for skills)'}
           disabled={disabled || isInProgress}
-          className="min-h-[112px] w-full resize-none border-0 bg-transparent px-2 py-2 pr-12 text-[17px] text-white outline-none placeholder:text-white/55 disabled:opacity-50"
+          className="min-h-[112px] w-full resize-none border-0 bg-transparent px-2 py-2 pr-12 text-[15px] text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50"
           rows={4}
         />
 
         {slashSkillOptions.length > 0 ? (
-          <div className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#343434] shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+          <div className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
             {slashSkillOptions.map((skill, index) => (
               <button
                 key={skill.path ?? skill.id}
@@ -412,11 +411,11 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                   handleAddSkill(skill);
                 }}
                 className={`flex w-full flex-col items-start gap-1 px-4 py-3 text-left ${
-                  index === highlightedSkillIndex ? 'bg-white/10' : 'bg-[#343434]'
+                  index === highlightedSkillIndex ? 'bg-gray-50' : 'bg-white'
                 }`}
               >
-                <span className="text-sm font-medium text-white">{skill.name}</span>
-                <span className="text-xs text-white/55">
+                <span className="text-sm font-medium text-gray-900">{skill.name}</span>
+                <span className="text-xs text-gray-500">
                   {skill.description || skill.path || 'Skill'}
                 </span>
               </button>
@@ -425,7 +424,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         ) : null}
 
         {fileMentionSuggestions.length > 0 ? (
-          <div className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-white/8 bg-[#343434] shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+          <div className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
             {fileMentionSuggestions.map((suggestion, index) => (
               <button
                 key={suggestion.path}
@@ -435,23 +434,23 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                   handleAddFileAttachment(suggestion);
                 }}
                 className={`flex w-full flex-col items-start gap-1 px-4 py-3 text-left ${
-                  index === highlightedFileIndex ? 'bg-white/10' : 'bg-[#343434]'
+                  index === highlightedFileIndex ? 'bg-gray-50' : 'bg-white'
                 }`}
               >
-                <span className="text-sm font-medium text-white">{getBaseName(suggestion.path)}</span>
-                <span className="text-xs text-white/55">{suggestion.path}</span>
+                <span className="text-sm font-medium text-gray-900">{getBaseName(suggestion.path)}</span>
+                <span className="text-xs text-gray-500">{suggestion.path}</span>
               </button>
             ))}
           </div>
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/8 pt-4">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-3">
         <div ref={menuRef} className="relative shrink-0">
           <button
             type="button"
             onClick={() => setIsPlusMenuOpen((open) => !open)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={disabled || isInProgress}
             aria-label="More actions"
           >
@@ -462,7 +461,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </button>
 
           {isPlusMenuOpen ? (
-            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-3xl border border-white/8 bg-[#343434] p-3 text-white shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-3xl bg-[#343434] p-3 text-white shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
               <button
                 type="button"
                 onClick={() => {
@@ -488,9 +487,9 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
 
         <div className="relative min-w-[210px] flex-1 sm:flex-none">
-          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-medium text-white">
+          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
             <span className="truncate">{selectedModelId}</span>
-            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-white/85" />
+            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           </span>
           <select
             value={selectedModelId}
@@ -508,9 +507,9 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
 
         <div className="relative min-w-[124px] flex-1">
-          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-medium text-white">
+          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
             <span className="truncate">Skills</span>
-            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-white/85" />
+            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           </span>
           <select
             value=""
@@ -532,9 +531,9 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
 
         <div className="relative min-w-[112px]">
-          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-medium text-white">
+          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
             <span className="truncate">{selectedReasoningLabel}</span>
-            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-white/85" />
+            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           </span>
           <select
             value={selectedReasoningEffort}
@@ -551,21 +550,12 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </select>
         </div>
 
-        <div className="ml-auto flex items-center gap-3 self-end">
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled
-            aria-label="Microphone unavailable"
-            title="Microphone unavailable"
-          >
-            <IconTablerMicrophone className="h-6 w-6" />
-          </button>
+        <div className="ml-auto flex items-center gap-2 self-end">
           {isInProgress ? (
             <button
               type="button"
               onClick={onInterrupt}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/18 text-white transition-colors hover:bg-white/24"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
               title="Stop"
             >
               <IconTablerPlayerStopFilled className="h-4 w-4" />
@@ -574,10 +564,10 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
             <button
               type="submit"
               disabled={!canSubmit || disabled}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/18 text-white transition-colors hover:bg-white/24 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               title="Send"
             >
-              <IconTablerArrowUp className="h-5 w-5" />
+              <IconTablerArrowUp className="h-4 w-4" />
             </button>
           )}
         </div>
