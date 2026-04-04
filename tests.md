@@ -1460,6 +1460,7 @@ This file tracks manual regression and feature verification steps.
 
 #### Expected Results
 - The leftmost selector visibly shows `Default` or `Plan` instead of a blank or collapsed control.
+- The collaboration mode label remains visible even if the native browser select does not paint its own selected text reliably.
 - The selector row uses flatter inline-style controls rather than large pill-shaped form fields.
 - The selector row uses a consistent custom-chevron style instead of a broken native-select layout.
 - The chevron icon for each selector sits close to its text label instead of floating with excessive right-side gap.

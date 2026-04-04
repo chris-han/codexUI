@@ -98,6 +98,11 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       ),
     [availableCollaborationModes]
   );
+  const selectedCollaborationModeLabel = useMemo(() => {
+    const selected = collaborationModeOptions.find((option) => option.value === selectedCollaborationMode);
+    if (selected?.label?.trim()) return selected.label.trim();
+    return selectedCollaborationMode === 'plan' ? 'Plan' : 'Default';
+  }, [collaborationModeOptions, selectedCollaborationMode]);
 
   const modelOptions = useMemo(
     () =>
@@ -402,10 +407,13 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-3">
         <div className="relative min-w-[84px]">
+          <span className="pointer-events-none block truncate pr-4 text-sm font-normal text-gray-500">
+            {selectedCollaborationModeLabel}
+          </span>
           <select
             value={selectedCollaborationMode}
             onChange={(e) => handleCollaborationModeChange(e.target.value)}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-500 outline-none transition hover:text-gray-700"
+            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
             disabled={disabled || isInProgress}
             aria-label="Collaboration mode"
           >
