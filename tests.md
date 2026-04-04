@@ -1494,6 +1494,7 @@ This file tracks manual regression and feature verification steps.
 - When plan mode is active, the composer shows a small `Plan` state chip above the input.
 - `Upload attachment` opens the file picker and selected files appear as attachment chips.
 - The `+`, model, skills, and reasoning menus all use the same light page-matched surface and rounded shape instead of mismatched native dropdown styling.
+- Those menu surfaces use the same smaller corner radius as the surrounding card treatment instead of oversized pill-like rounding.
 - Long item lists in any of those menus stay within a bounded height and expose a scrollbar instead of overflowing off-screen.
 
 #### Rollback/Cleanup
