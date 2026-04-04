@@ -1419,3 +1419,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary skill chips before leaving the thread if desired.
+
+### Feature: React composer supports Vue-style `@` file mention search
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- The active thread or selected home-route project has a valid working directory with searchable files.
+- `rg` is installed in the runtime environment used by `codex-ui-react/server/standalone.ts`.
+
+#### Steps
+1. Open a thread whose project has known files in its working directory.
+2. Type `@` in the composer, followed by part of a filename.
+3. Wait for the file mention menu to populate.
+4. Use arrow keys plus `Enter`, or click a result, to select a file.
+5. Confirm the selected file appears as a removable chip above the input.
+6. Send a message with one or more file chips attached.
+
+#### Expected Results
+- Typing `@` opens a file search menu backed by `/codex-api/composer-file-search`.
+- Results are ranked with exact and basename-prefix matches first.
+- Selecting a file removes the trailing `@query` token from the draft and adds a visible file chip.
+- Sending the message succeeds and the selected file attachments are preserved in the structured turn payload path.
+
+#### Rollback/Cleanup
+- Remove any temporary file chips before leaving the thread if desired.

@@ -84,6 +84,7 @@ function HomeScreen() {
               onInterrupt={() => {}}
               isInProgress={false}
               disabled={!selectedCwd || isSendingMessage}
+              cwd={selectedCwd}
             />
           </div>
         </div>

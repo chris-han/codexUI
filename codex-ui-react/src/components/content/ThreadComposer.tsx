@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCodexStore } from '../../stores';
+import { searchComposerFiles, type ComposerFileSuggestion } from '../../api/codexGateway';
 import type {
+  ComposerFileAttachment,
   CollaborationModeKind,
   ReasoningEffort,
   SkillInfo,
@@ -17,6 +19,7 @@ interface ThreadComposerProps {
   onInterrupt: () => void;
   isInProgress: boolean;
   disabled?: boolean;
+  cwd?: string;
 }
 
 function buildSkillSelection(skill: SkillInfo) {
@@ -26,10 +29,23 @@ function buildSkillSelection(skill: SkillInfo) {
   };
 }
 
-function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled }: ThreadComposerProps) {
+function getBaseName(path: string): string {
+  const normalized = path.replace(/\\/g, '/');
+  const idx = normalized.lastIndexOf('/');
+  return idx >= 0 ? normalized.slice(idx + 1) : normalized;
+}
+
+function removeTrailingMentionToken(value: string): string {
+  return value.replace(/(^|\s)@[^\s]*$/, '$1').trimEnd();
+}
+
+function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: ThreadComposerProps) {
   const [message, setMessage] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<Array<{ name: string; path: string }>>([]);
+  const [fileAttachments, setFileAttachments] = useState<ComposerFileAttachment[]>([]);
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
+  const [fileMentionSuggestions, setFileMentionSuggestions] = useState<ComposerFileSuggestion[]>([]);
+  const [highlightedFileIndex, setHighlightedFileIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const {
@@ -77,7 +93,43 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled }: ThreadC
     setHighlightedSkillIndex(0);
   }, [slashQuery]);
 
-  const canSubmit = message.trim().length > 0 || selectedSkills.length > 0;
+  const fileMentionQuery = useMemo(() => {
+    const match = message.match(/(?:^|\s)@([^\s]*)$/);
+    return match ? match[1].toLowerCase() : null;
+  }, [message]);
+
+  useEffect(() => {
+    setHighlightedFileIndex(0);
+  }, [fileMentionQuery]);
+
+  useEffect(() => {
+    if (fileMentionQuery === null || !cwd?.trim()) {
+      setFileMentionSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const suggestions = await searchComposerFiles(cwd, fileMentionQuery, 20);
+        if (!cancelled) {
+          setFileMentionSuggestions(suggestions);
+        }
+      } catch {
+        if (!cancelled) {
+          setFileMentionSuggestions([]);
+        }
+      }
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [cwd, fileMentionQuery]);
+
+  const canSubmit =
+    message.trim().length > 0 || selectedSkills.length > 0 || fileAttachments.length > 0;
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -85,11 +137,13 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled }: ThreadC
     onSend({
       text: message.trim(),
       imageUrls: [],
-      fileAttachments: [],
+      fileAttachments,
       skills: selectedSkills,
     });
     setMessage('');
     setSelectedSkills([]);
+    setFileAttachments([]);
+    setFileMentionSuggestions([]);
   };
 
   const handleAddSkill = (skill: SkillInfo) => {
@@ -104,6 +158,31 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled }: ThreadC
 
   const handleRemoveSkill = (path: string) => {
     setSelectedSkills((current) => current.filter((skill) => skill.path !== path));
+  };
+
+  const handleAddFileAttachment = (suggestion: ComposerFileSuggestion) => {
+    const normalizedPath = suggestion.path.trim();
+    if (!normalizedPath) return;
+    setFileAttachments((current) => {
+      if (current.some((attachment) => attachment.fsPath === normalizedPath)) {
+        return current;
+      }
+      return [
+        ...current,
+        {
+          label: getBaseName(normalizedPath),
+          path: normalizedPath,
+          fsPath: normalizedPath,
+        },
+      ];
+    });
+    setMessage((current) => removeTrailingMentionToken(current));
+    setFileMentionSuggestions([]);
+    textareaRef.current?.focus();
+  };
+
+  const handleRemoveFileAttachment = (fsPath: string) => {
+    setFileAttachments((current) => current.filter((attachment) => attachment.fsPath !== fsPath));
   };
 
   const handleSkillDropdownChange = (value: string) => {
@@ -144,12 +223,53 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled }: ThreadC
         </div>
       ) : null}
 
+      {fileAttachments.length > 0 ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {fileAttachments.map((attachment) => (
+            <span
+              key={attachment.fsPath}
+              className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
+            >
+              <span title={attachment.fsPath}>{attachment.label}</span>
+              <button
+                type="button"
+                onClick={() => handleRemoveFileAttachment(attachment.fsPath)}
+                className="text-blue-400 transition-colors hover:text-blue-700"
+                aria-label={`Remove file ${attachment.label}`}
+              >
+                <IconTablerX className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <div className="relative">
         <textarea
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
+            if (fileMentionSuggestions.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+              e.preventDefault();
+              setHighlightedFileIndex((current) => {
+                if (e.key === 'ArrowDown') {
+                  return (current + 1) % fileMentionSuggestions.length;
+                }
+                return (current - 1 + fileMentionSuggestions.length) % fileMentionSuggestions.length;
+              });
+              return;
+            }
+
+            if (fileMentionSuggestions.length > 0 && e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              const suggestion = fileMentionSuggestions[highlightedFileIndex];
+              if (suggestion) {
+                handleAddFileAttachment(suggestion);
+                return;
+              }
+            }
+
             if (slashSkillOptions.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
               e.preventDefault();
               setHighlightedSkillIndex((current) => {
@@ -199,6 +319,27 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled }: ThreadC
                 <span className="text-xs text-gray-500">
                   {skill.description || skill.path || 'Skill'}
                 </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {fileMentionSuggestions.length > 0 ? (
+          <div className="absolute left-0 top-full z-20 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+            {fileMentionSuggestions.map((suggestion, index) => (
+              <button
+                key={suggestion.path}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  handleAddFileAttachment(suggestion);
+                }}
+                className={`flex w-full flex-col items-start gap-1 px-4 py-3 text-left ${
+                  index === highlightedFileIndex ? 'bg-gray-50' : 'bg-white'
+                }`}
+              >
+                <span className="text-sm font-medium text-gray-900">{getBaseName(suggestion.path)}</span>
+                <span className="text-xs text-gray-500">{suggestion.path}</span>
               </button>
             ))}
           </div>

@@ -372,6 +372,7 @@ function ThreadConversation() {
               onSend={handleSendMessage}
               onInterrupt={handleInterrupt}
               isInProgress={isInProgress}
+              cwd={threadView.cwd}
             />
           </div>
         </>

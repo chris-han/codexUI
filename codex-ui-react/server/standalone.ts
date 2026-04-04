@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, stat } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
@@ -77,6 +77,10 @@ function canRunCommand(command: string, args: string[] = []): boolean {
   return !result.error && result.status === 0;
 }
 
+function resolveRipgrepCommand(): string | null {
+  return canRunCommand('rg', ['--version']) ? 'rg' : null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -104,6 +108,57 @@ function isThreadNotMaterializedYetError(error: unknown): boolean {
 
 function logProviderModelDiscoveryWarning(message: string, details: Record<string, unknown>): void {
   console.warn('[codex-provider-models]', message, details);
+}
+
+function scoreFileCandidate(path: string, query: string): number {
+  if (!query) return 0;
+  const lowerPath = path.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const baseName = lowerPath.slice(lowerPath.lastIndexOf('/') + 1);
+  if (baseName === lowerQuery) return 0;
+  if (baseName.startsWith(lowerQuery)) return 1;
+  if (baseName.includes(lowerQuery)) return 2;
+  if (lowerPath.includes(`/${lowerQuery}`)) return 3;
+  if (lowerPath.includes(lowerQuery)) return 4;
+  return 10;
+}
+
+async function listFilesWithRipgrep(cwd: string): Promise<string[]> {
+  return await new Promise<string[]>((resolvePromise, reject) => {
+    const ripgrepCommand = resolveRipgrepCommand();
+    if (!ripgrepCommand) {
+      reject(new Error('ripgrep (rg) is not available'));
+      return;
+    }
+
+    const proc = spawn(
+      ripgrepCommand,
+      ['--files', '--hidden', '-g', '!.git', '-g', '!node_modules'],
+      {
+        cwd,
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolvePromise(
+          stdout
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+        );
+        return;
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n');
+      reject(new Error(details || 'rg --files failed'));
+    });
+  });
 }
 
 function isTimeoutError(payload: unknown): boolean {
@@ -672,6 +727,44 @@ app.get('/codex-api/browse-directory', async (req, res) => {
     res.json({ data });
   } catch (error) {
     res.status(400).json({ error: getErrorMessage(error, 'Failed to browse directory') });
+  }
+});
+
+app.post('/codex-api/composer-file-search', async (req, res) => {
+  try {
+    const body = asRecord(req.body);
+    const rawCwd = readNonEmptyString(body?.cwd);
+    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    const limitRaw = typeof body?.limit === 'number' ? body.limit : 20;
+    const limit = Math.max(1, Math.min(100, Math.floor(limitRaw)));
+
+    if (!rawCwd) {
+      res.status(400).json({ error: 'Missing cwd' });
+      return;
+    }
+
+    const cwd = isAbsolute(rawCwd) ? rawCwd : resolve(rawCwd);
+    const info = await stat(cwd).catch(() => null);
+    if (!info) {
+      res.status(404).json({ error: 'cwd does not exist' });
+      return;
+    }
+    if (!info.isDirectory()) {
+      res.status(400).json({ error: 'cwd is not a directory' });
+      return;
+    }
+
+    const files = await listFilesWithRipgrep(cwd);
+    const data = files
+      .map((path) => ({ path, score: scoreFileCandidate(path, query) }))
+      .filter((row) => query.length === 0 || row.score < 10)
+      .sort((a, b) => (a.score - b.score) || a.path.localeCompare(b.path))
+      .slice(0, limit)
+      .map((row) => ({ path: row.path }));
+
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to search files') });
   }
 });
 

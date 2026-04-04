@@ -61,6 +61,10 @@ type SkillsListResponseEntry = {
   errors?: unknown[];
 };
 
+export type ComposerFileSuggestion = {
+  path: string;
+};
+
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
   { value: 'default', label: 'Default' },
@@ -545,6 +549,44 @@ export async function getSkillsList(): Promise<SkillInfo[]> {
   } catch {
     return [];
   }
+}
+
+export async function searchComposerFiles(
+  cwd: string,
+  query: string,
+  limit = 20
+): Promise<ComposerFileSuggestion[]> {
+  const response = await fetch('/codex-api/composer-file-search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cwd: cwd.trim(),
+      query: query.trim(),
+      limit,
+    }),
+  });
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to search files'));
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+  const data = Array.isArray(record?.data) ? record.data : [];
+  const suggestions: ComposerFileSuggestion[] = [];
+  for (const item of data) {
+    const row =
+      item && typeof item === 'object' && !Array.isArray(item)
+        ? (item as Record<string, unknown>)
+        : null;
+    const path = typeof row?.path === 'string' && row.path.trim().length > 0
+      ? row.path.trim()
+      : null;
+    if (!path) continue;
+    suggestions.push({ path });
+  }
+  return suggestions;
 }
 
 // Accounts
