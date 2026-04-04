@@ -1306,6 +1306,7 @@ This file tracks manual regression and feature verification steps.
 - The proxy emits reasoning and assistant message items with distinct output indexes.
 - The assistant answer does not stop after a short prefix near the end of the reasoning phase.
 - The final completed response preserves the same item ordering as the stream.
+- Once answer text starts streaming, it remains visible below the reasoning block instead of being hidden above the current scroll position.
 
 #### Rollback/Cleanup
 - No cleanup required.

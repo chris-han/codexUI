@@ -225,6 +225,19 @@ function ThreadConversation() {
               </div>
             ))}
 
+            {/* Live reasoning */}
+            {liveReasoning && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] bg-blue-50 border border-blue-100 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="text-xs font-medium text-blue-500 mb-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                    Thinking
+                  </div>
+                  <MessageContent text={liveReasoning} />
+                </div>
+              </div>
+            )}
+
             {/* Live streaming message */}
             {liveMessage && (
               <div className="flex justify-start">
@@ -237,19 +250,6 @@ function ThreadConversation() {
                     <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                     <span className="text-xs text-gray-400">Typing...</span>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Live reasoning */}
-            {liveReasoning && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] bg-blue-50 border border-blue-100 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="text-xs font-medium text-blue-500 mb-1 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-                    Thinking
-                  </div>
-                  <MessageContent text={liveReasoning} />
                 </div>
               </div>
             )}
