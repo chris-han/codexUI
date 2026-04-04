@@ -1289,22 +1289,3 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Restore the previously selected model if needed.
-
-### Feature: Kimi hides final response until reasoning stream completes
-
-#### Prerequisites
-- React Codex UI app running at `http://127.0.0.1:5173`.
-- The selected model is `kimi-k2.5`, `kimi-k2-thinking`, or another provider model that streams reasoning separately from answer text.
-
-#### Steps
-1. Open a thread and send a prompt that produces a visible `Thinking` phase.
-2. Watch the live reasoning section near the end of the turn.
-3. Observe the assistant response as the reasoning phase finishes.
-
-#### Expected Results
-- While the reasoning item is still active, the UI shows only the `Thinking` block.
-- If output text deltas arrive slightly before reasoning completes, they are buffered and not shown yet.
-- The assistant response appears only after the reasoning item completes, avoiding mixed `Thinking` and final-answer blocks at the end of the stream.
-
-#### Rollback/Cleanup
-- No cleanup required.

@@ -33,10 +33,6 @@ function ThreadConversation() {
     if (!threadId) return '';
     return state.liveReasoningByThreadId.get(threadId) || '';
   }, [threadId]));
-  const isReasoningActive = useCodexStore(useCallback((state) => {
-    if (!threadId) return false;
-    return state.isReasoningActiveByThreadId.get(threadId) || false;
-  }, [threadId]));
   const liveActivityLabel = useCodexStore(useCallback((state) => {
     if (!threadId) return '';
     return state.liveActivityLabelByThreadId.get(threadId) || '';
@@ -230,7 +226,7 @@ function ThreadConversation() {
             ))}
 
             {/* Live streaming message */}
-            {liveMessage && !isReasoningActive && (
+            {liveMessage && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] bg-white border border-gray-200 rounded-2xl rounded-bl-md px-4 py-3">
                   <div className="text-xs font-medium text-gray-400 mb-1">
