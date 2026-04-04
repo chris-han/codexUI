@@ -478,28 +478,30 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
           {isPlusMenuOpen ? (
             <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[260px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-4 text-gray-900 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
-              <button
-                type="button"
-                onClick={() => {
-                  handleCollaborationModeChange(selectedCollaborationMode === 'plan' ? 'default' : 'plan');
-                  closeMenus();
-                }}
-                className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
-              >
-                <IconLucideSplinePointer className="h-5 w-5 shrink-0" />
-                <span>Plan</span>
-              </button>
-              <div className="my-2 h-px bg-gray-200" />
-              <button
-                type="button"
-                onClick={() => {
-                  uploadInputRef.current?.click();
-                }}
-                className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
-              >
-                <span className="text-lg leading-none">+</span>
-                <span>Upload attachment</span>
-              </button>
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCollaborationModeChange(selectedCollaborationMode === 'plan' ? 'default' : 'plan');
+                    closeMenus();
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
+                >
+                  <IconLucideSplinePointer className="h-5 w-5 shrink-0" />
+                  <span>Plan</span>
+                </button>
+                <div className="my-2 h-px bg-gray-200" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    uploadInputRef.current?.click();
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  <span>Upload attachment</span>
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
@@ -516,22 +518,24 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </button>
           {openDropdown === 'model' ? (
             <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[280px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
-              {modelOptions.map((option) => (
-                <button
-                  key={`model-${option.value}`}
-                  type="button"
-                  onClick={() => {
-                    setSelectedModelId(option.value);
-                    closeMenus();
-                  }}
-                  className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
-                    option.value === selectedModelId ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <span>{option.label}</span>
-                  {option.value === selectedModelId ? <span className="text-gray-400">✓</span> : null}
-                </button>
-              ))}
+              <div className="max-h-72 overflow-y-auto pr-1">
+                {modelOptions.map((option) => (
+                  <button
+                    key={`model-${option.value}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedModelId(option.value);
+                      closeMenus();
+                    }}
+                    className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
+                      option.value === selectedModelId ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>{option.label}</span>
+                    {option.value === selectedModelId ? <span className="text-gray-400">✓</span> : null}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
@@ -548,19 +552,21 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </button>
           {openDropdown === 'skills' ? (
             <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[280px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
-              {skillOptions.map((option) => (
-                <button
-                  key={`skill-${option.value}`}
-                  type="button"
-                  onClick={() => {
-                    handleSkillDropdownChange(option.value);
-                    closeMenus();
-                  }}
-                  className="flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm text-gray-700 transition hover:bg-gray-50"
-                >
-                  {option.label}
-                </button>
-              ))}
+              <div className="max-h-72 overflow-y-auto pr-1">
+                {skillOptions.map((option) => (
+                  <button
+                    key={`skill-${option.value}`}
+                    type="button"
+                    onClick={() => {
+                      handleSkillDropdownChange(option.value);
+                      closeMenus();
+                    }}
+                    className="flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
@@ -577,22 +583,24 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </button>
           {openDropdown === 'reasoning' ? (
             <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
-              {reasoningOptions.map((option) => (
-                <button
-                  key={`effort-${option.value}`}
-                  type="button"
-                  onClick={() => {
-                    setSelectedReasoningEffort(option.value as ReasoningEffort);
-                    closeMenus();
-                  }}
-                  className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
-                    option.value === selectedReasoningEffort ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <span>{option.label}</span>
-                  {option.value === selectedReasoningEffort ? <span className="text-gray-400">✓</span> : null}
-                </button>
-              ))}
+              <div className="max-h-72 overflow-y-auto pr-1">
+                {reasoningOptions.map((option) => (
+                  <button
+                    key={`effort-${option.value}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedReasoningEffort(option.value as ReasoningEffort);
+                      closeMenus();
+                    }}
+                    className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
+                      option.value === selectedReasoningEffort ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>{option.label}</span>
+                    {option.value === selectedReasoningEffort ? <span className="text-gray-400">✓</span> : null}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
