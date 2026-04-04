@@ -396,6 +396,34 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup is required beyond stopping the server if it was started only for verification.
 
+### Feature: codex-ui-react rich message rendering
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- An existing thread is available for sending a new message.
+
+#### Steps
+1. Send a message that contains mixed formatting, for example:
+   `hello **bold** \`code\` https://example.com`
+2. Send or receive a message that contains a fenced code block with a language hint, for example:
+   ````
+   ```ts
+   console.log('hi')
+   ```
+   ````
+3. Send or receive a message with markdown headings or bullet list lines.
+4. Open the thread in the React UI and inspect the rendered assistant and user message cards.
+
+#### Expected Results
+- Inline `**bold**` text is rendered in bold.
+- Inline backtick code is rendered as inline code.
+- HTTP/HTTPS links are rendered as clickable links.
+- Triple-backtick code fences render as a distinct code block with the optional language label.
+- Simple markdown headings and bullet lists render with structure instead of a single plain pre-wrapped blob.
+
+#### Rollback/Cleanup
+- No cleanup is required beyond removing any temporary test messages if they were created only for verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).

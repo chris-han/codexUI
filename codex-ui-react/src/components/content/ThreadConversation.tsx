@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom';
 import { useCodexStore, selectSelectedThread, selectMessagesForSelectedThread, selectLiveMessageForSelectedThread, selectLiveReasoningForSelectedThread, selectIsInProgress, selectPendingRequestsForSelectedThread } from '../../stores';
 import ThreadComposer from './ThreadComposer';
+import MessageContent from './MessageContent';
 import { IconTablerArchive, IconTablerGitFork } from '../icons';
 
 const ReviewPane = lazy(() => import('./ReviewPane'));
@@ -162,9 +163,7 @@ function ThreadConversation() {
                       Assistant
                     </div>
                   )}
-                  <div className="whitespace-pre-wrap text-sm">
-                    {message.text}
-                  </div>
+                  <MessageContent text={message.text} />
                   {message.fileChanges && message.fileChanges.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {message.fileChanges.map((change) => (
@@ -197,7 +196,7 @@ function ThreadConversation() {
                   <div className="text-xs font-medium text-gray-400 mb-1">
                     Assistant
                   </div>
-                  <div className="whitespace-pre-wrap text-sm">{liveMessage}</div>
+                  <MessageContent text={liveMessage} />
                   <div className="mt-2 flex items-center gap-2">
                     <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                     <span className="text-xs text-gray-400">Typing...</span>
@@ -213,9 +212,7 @@ function ThreadConversation() {
                   <div className="text-xs font-medium text-blue-500 mb-1">
                     Reasoning
                   </div>
-                  <div className="whitespace-pre-wrap text-sm text-blue-700">
-                    {liveReasoning}
-                  </div>
+                  <MessageContent text={liveReasoning} />
                 </div>
               </div>
             )}
