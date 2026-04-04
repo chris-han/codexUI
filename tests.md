@@ -1289,3 +1289,23 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Restore the previously selected model if needed.
+
+### Feature: Kimi streaming preserves distinct reasoning and message item order
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- Backend config routes Kimi requests through `http://127.0.0.1:3456/v1`.
+- The selected model is `kimi-k2.5` or `kimi-k2-thinking`.
+
+#### Steps
+1. Open a thread and send a prompt that yields a long reasoning phase and a longer final answer.
+2. Observe the stream near the transition from reasoning to final answer text.
+3. Let the turn complete and inspect the final assistant message in the thread.
+
+#### Expected Results
+- The proxy emits reasoning and assistant message items with distinct output indexes.
+- The assistant answer does not stop after a short prefix near the end of the reasoning phase.
+- The final completed response preserves the same item ordering as the stream.
+
+#### Rollback/Cleanup
+- No cleanup required.

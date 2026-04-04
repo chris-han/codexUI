@@ -584,6 +584,8 @@ function createResponseStreamEmitter(
   const reasoningParts: string[] = [];
   let messageOpened = false;
   let reasoningOpened = false;
+  let messageOutputIndex: number | null = null;
+  let reasoningOutputIndex: number | null = null;
   let closed = false;
   let usage = {
     input_tokens: 0,
@@ -650,9 +652,10 @@ function createResponseStreamEmitter(
   const ensureMessageStarted = () => {
     if (messageOpened) return;
     messageOpened = true;
+    messageOutputIndex = reasoningOpened ? 1 : 0;
     writeEvent({
       type: 'response.output_item.added',
-      output_index: 0,
+      output_index: messageOutputIndex,
       item: {
         type: 'message',
         id: messageId,
@@ -664,7 +667,7 @@ function createResponseStreamEmitter(
     writeEvent({
       type: 'response.content_part.added',
       item_id: messageId,
-      output_index: 0,
+      output_index: messageOutputIndex,
       content_index: 0,
       part: {
         type: 'output_text',
@@ -677,9 +680,10 @@ function createResponseStreamEmitter(
   const ensureReasoningStarted = () => {
     if (reasoningOpened) return;
     reasoningOpened = true;
+    reasoningOutputIndex = messageOpened ? 1 : 0;
     writeEvent({
       type: 'response.output_item.added',
-      output_index: 0,
+      output_index: reasoningOutputIndex,
       item: {
         type: 'reasoning',
         id: reasoningItemId,
@@ -690,7 +694,7 @@ function createResponseStreamEmitter(
     writeEvent({
       type: 'response.reasoning_summary_part.added',
       item_id: reasoningItemId,
-      output_index: 0,
+      output_index: reasoningOutputIndex,
       summary_index: 0,
       part: {
         type: 'summary_text',
@@ -707,7 +711,7 @@ function createResponseStreamEmitter(
       writeEvent({
         type: 'response.output_text.delta',
         item_id: messageId,
-        output_index: 0,
+        output_index: messageOutputIndex ?? 0,
         content_index: 0,
         delta,
       });
@@ -719,7 +723,7 @@ function createResponseStreamEmitter(
       writeEvent({
         type: 'response.reasoning_summary_text.delta',
         item_id: reasoningItemId,
-        output_index: 0,
+        output_index: reasoningOutputIndex ?? 0,
         summary_index: 0,
         delta,
       });
@@ -736,20 +740,65 @@ function createResponseStreamEmitter(
 
       const finalText = fullTextParts.join('');
       const finalReasoning = reasoningParts.join('');
-      const finalOutput = buildResponseOutput(finalMessage, requestId, toolMapping);
+      const finalOutput: Array<Record<string, unknown> | undefined> = [];
+      if (reasoningOpened) {
+        finalOutput[reasoningOutputIndex ?? 0] = {
+          type: 'reasoning',
+          id: reasoningItemId,
+          status: 'completed',
+          summary: [{ type: 'summary_text', text: finalReasoning }],
+        };
+      }
+      for (const [index, item] of buildResponseOutput(finalMessage, requestId, toolMapping).entries()) {
+        const targetIndex =
+          index === 0 && messageOpened
+            ? (messageOutputIndex ?? (reasoningOpened ? 1 : 0))
+            : index + (reasoningOpened ? 1 : 0);
+        finalOutput[targetIndex] = item as Record<string, unknown>;
+      }
+
+      if (reasoningOpened) {
+        writeEvent({
+          type: 'response.reasoning_summary_text.done',
+          item_id: reasoningItemId,
+          output_index: reasoningOutputIndex ?? 0,
+          summary_index: 0,
+          text: finalReasoning,
+        });
+        writeEvent({
+          type: 'response.reasoning_summary_part.done',
+          item_id: reasoningItemId,
+          output_index: reasoningOutputIndex ?? 0,
+          summary_index: 0,
+          part: {
+            type: 'summary_text',
+            text: finalReasoning,
+          },
+        });
+        writeEvent({
+          type: 'response.output_item.done',
+          output_index: reasoningOutputIndex ?? 0,
+          item: {
+            type: 'reasoning',
+            id: reasoningItemId,
+            status: 'completed',
+            summary: [{ type: 'summary_text', text: finalReasoning }],
+          },
+        });
+      }
 
       if (messageOpened) {
         writeEvent({
           type: 'response.output_text.done',
           item_id: messageId,
-          output_index: 0,
+          output_index: messageOutputIndex ?? 0,
           content_index: 0,
           text: finalText,
         });
         writeEvent({
           type: 'response.content_part.done',
           item_id: messageId,
-          output_index: 0,
+          output_index: messageOutputIndex ?? 0,
           content_index: 0,
           part: {
             type: 'output_text',
@@ -759,43 +808,13 @@ function createResponseStreamEmitter(
         });
         writeEvent({
           type: 'response.output_item.done',
-          output_index: 0,
+          output_index: messageOutputIndex ?? 0,
           item: {
             type: 'message',
             id: messageId,
             status: 'completed',
             role: typeof finalMessage?.role === 'string' ? finalMessage.role : 'assistant',
             content: [{ type: 'output_text', text: finalText, annotations: [] }],
-          },
-        });
-      }
-
-      if (reasoningOpened) {
-        writeEvent({
-          type: 'response.reasoning_summary_text.done',
-          item_id: reasoningItemId,
-          output_index: 0,
-          summary_index: 0,
-          text: finalReasoning,
-        });
-        writeEvent({
-          type: 'response.reasoning_summary_part.done',
-          item_id: reasoningItemId,
-          output_index: 0,
-          summary_index: 0,
-          part: {
-            type: 'summary_text',
-            text: finalReasoning,
-          },
-        });
-        writeEvent({
-          type: 'response.output_item.done',
-          output_index: 0,
-          item: {
-            type: 'reasoning',
-            id: reasoningItemId,
-            status: 'completed',
-            summary: [{ type: 'summary_text', text: finalReasoning }],
           },
         });
       }
@@ -810,7 +829,7 @@ function createResponseStreamEmitter(
         instructions: null,
         max_output_tokens: null,
         model,
-        output: finalOutput,
+        output: finalOutput.filter(Boolean),
         parallel_tool_calls: true,
         previous_response_id: null,
         reasoning: { effort: 'medium', generate_summary: null },
