@@ -870,6 +870,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Select a valid thread again, or clear the app's stored selected-thread key in browser storage.
 
+### Feature: React refresh resumes thread without console noise
+
+#### Prerequisites
+- React Codex UI app running at `http://localhost:5173`.
+- An existing thread route is open directly at `/thread/<id>`.
+- The backend process has been restarted or the thread is not loaded in memory yet.
+
+#### Steps
+1. Open DevTools Console and Network tabs.
+2. Load or refresh the direct thread URL once.
+3. Inspect the first `/codex-api/rpc` requests issued during page load.
+4. Confirm the page finishes loading the thread conversation.
+
+#### Expected Results
+- The app resumes the thread before the first detail fetch instead of probing with a failing `thread/read`.
+- Refresh does not emit a `500` for the normal unloaded-thread case.
+- React Router does not log the `v7_relativeSplatPath` future-flag warning on startup.
+- The thread conversation renders normally after refresh.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
 ### Feature: New thread creation navigates to the created thread
 
 #### Prerequisites

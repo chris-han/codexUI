@@ -134,7 +134,34 @@ async function getEmptyThreadDetailFromList(threadId: string): Promise<{
 export async function getThreadDetail(threadId: string): Promise<{
   messages: UiMessage[];
   thread: UiThread | null;
+}>;
+export async function getThreadDetail(
+  threadId: string,
+  options: { resumeFirst?: boolean }
+): Promise<{
+  messages: UiMessage[];
+  thread: UiThread | null;
+}>;
+export async function getThreadDetail(
+  threadId: string,
+  options: { resumeFirst?: boolean } = {}
+): Promise<{
+  messages: UiMessage[];
+  thread: UiThread | null;
 }> {
+  if (options.resumeFirst) {
+    try {
+      await resumeThread(threadId);
+    } catch (error: unknown) {
+      if (isThreadNotMaterializedYetError(error)) {
+        return await getEmptyThreadDetailFromList(threadId);
+      }
+      if (isMissingRolloutError(error) || isThreadNotFoundError(error)) {
+        return { messages: [], thread: null };
+      }
+    }
+  }
+
   try {
     const result = await rpcCall<ThreadReadResult>('thread/read', {
       threadId,

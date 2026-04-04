@@ -69,6 +69,7 @@ export interface CodexState {
 
   // Message state
   messagesByThreadId: Map<string, UiMessage[]>;
+  hydratedThreadIds: Set<string>;
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
   inProgressByThreadId: Map<string, boolean>;
@@ -170,6 +171,7 @@ const getInitialState = (): CodexState => ({
   isLoadingThreads: false,
 
   messagesByThreadId: new Map(),
+  hydratedThreadIds: new Set(),
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
   inProgressByThreadId: new Map(),
@@ -307,10 +309,14 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           state.isLoadingMessages = true;
         });
         try {
-          const { messages, thread } = await api.getThreadDetail(threadId);
+          const shouldResumeFirst = !get().hydratedThreadIds.has(threadId);
+          const { messages, thread } = await api.getThreadDetail(threadId, {
+            resumeFirst: shouldResumeFirst,
+          });
           set((state) => {
             if (!thread) {
               state.messagesByThreadId.delete(threadId);
+              state.hydratedThreadIds.delete(threadId);
               state.liveMessagesByThreadId.delete(threadId);
               state.liveReasoningByThreadId.delete(threadId);
               state.inProgressByThreadId.delete(threadId);
@@ -322,9 +328,13 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             }
             upsertThreadIntoGroups(state, thread);
             state.messagesByThreadId.set(threadId, messages);
+            state.hydratedThreadIds.add(threadId);
           });
         } catch (error) {
           console.error('Failed to load messages:', error);
+          set((state) => {
+            state.hydratedThreadIds.delete(threadId);
+          });
         } finally {
           set((state) => {
             state.isLoadingMessages = false;
@@ -377,6 +387,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           await api.archiveThread(threadId);
           // Remove from local state
           set((state) => {
+            state.hydratedThreadIds.delete(threadId);
             state.projectGroups = state.projectGroups
               .map((group) => ({
                 ...group,
