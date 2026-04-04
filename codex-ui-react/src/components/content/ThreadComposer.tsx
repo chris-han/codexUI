@@ -10,6 +10,7 @@ import type {
 } from '../../types/codex';
 import {
   IconTablerArrowUp,
+  IconTablerChevronDown,
   IconTablerPlayerStopFilled,
   IconTablerX,
 } from '../icons';
@@ -37,6 +38,16 @@ function getBaseName(path: string): string {
 
 function removeTrailingMentionToken(value: string): string {
   return value.replace(/(^|\s)@[^\s]*$/, '$1').trimEnd();
+}
+
+function dedupeByValue<T extends { value: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const value = item.value.trim();
+    if (!value || seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
 }
 
 function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: ThreadComposerProps) {
@@ -68,6 +79,43 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
     { value: 'high', label: 'High' },
     { value: 'xhigh', label: 'Max' },
   ];
+
+  const collaborationModeOptions = useMemo(
+    () =>
+      dedupeByValue(
+        availableCollaborationModes.map((option) => ({
+          value: option.value,
+          label:
+            option.label?.trim() ||
+            (option.value === 'plan' ? 'Plan' : 'Default'),
+        }))
+      ),
+    [availableCollaborationModes]
+  );
+
+  const modelOptions = useMemo(
+    () =>
+      dedupeByValue(
+        (availableModelIds.length === 0 ? [selectedModelId] : availableModelIds).map((model) => ({
+          value: model,
+          label: model,
+        }))
+      ),
+    [availableModelIds, selectedModelId]
+  );
+
+  const skillOptions = useMemo(
+    () =>
+      dedupeByValue(
+        installedSkills
+          .filter((skill) => skill.path || skill.id)
+          .map((skill) => ({
+            value: skill.path ?? skill.id,
+            label: skill.name,
+          }))
+      ),
+    [installedSkills]
+  );
 
   const slashQuery = useMemo(() => {
     const trimmed = message.trimStart();
@@ -347,71 +395,77 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
-        <select
-          value={selectedCollaborationMode}
-          onChange={(e) => handleCollaborationModeChange(e.target.value)}
-          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-primary"
-          disabled={disabled || isInProgress}
-          aria-label="Collaboration mode"
-        >
-          {availableCollaborationModes.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={selectedModelId}
-          onChange={(e) => setSelectedModelId(e.target.value)}
-          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-primary"
-          disabled={disabled || isInProgress}
-          aria-label="Model"
-        >
-          {availableModelIds.length === 0 ? (
-            <option value={selectedModelId}>{selectedModelId}</option>
-          ) : (
-            availableModelIds.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))
-          )}
-        </select>
-
-        <select
-          value=""
-          onChange={(e) => {
-            handleSkillDropdownChange(e.target.value);
-            e.currentTarget.value = '';
-          }}
-          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-primary"
-          disabled={disabled || isInProgress || installedSkills.length === 0}
-          aria-label="Skills"
-        >
-          <option value="">Skills</option>
-          {installedSkills
-            .filter((skill) => skill.path)
-            .map((skill) => (
-              <option key={skill.path} value={skill.path}>
-                {skill.name}
+        <div className="relative min-w-[120px]">
+          <select
+            value={selectedCollaborationMode}
+            onChange={(e) => handleCollaborationModeChange(e.target.value)}
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            disabled={disabled || isInProgress}
+            aria-label="Collaboration mode"
+          >
+            {collaborationModeOptions.map((option) => (
+              <option key={`mode-${option.value}`} value={option.value}>
+                {option.label}
               </option>
             ))}
-        </select>
+          </select>
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+        </div>
 
-        <select
-          value={selectedReasoningEffort}
-          onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
-          className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-primary"
-          disabled={disabled || isInProgress}
-          aria-label="Reasoning effort"
-        >
-          {reasoningOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative min-w-[240px]">
+          <select
+            value={selectedModelId}
+            onChange={(e) => setSelectedModelId(e.target.value)}
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            disabled={disabled || isInProgress}
+            aria-label="Model"
+          >
+            {modelOptions.map((option) => (
+              <option key={`model-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+        </div>
+
+        <div className="relative min-w-[160px]">
+          <select
+            value=""
+            onChange={(e) => {
+              handleSkillDropdownChange(e.target.value);
+              e.currentTarget.value = '';
+            }}
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            disabled={disabled || isInProgress || skillOptions.length === 0}
+            aria-label="Skills"
+          >
+            <option value="">Skills</option>
+            {skillOptions.map((option) => (
+              <option key={`skill-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+        </div>
+
+        <div className="relative min-w-[132px]">
+          <select
+            value={selectedReasoningEffort}
+            onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            disabled={disabled || isInProgress}
+            aria-label="Reasoning effort"
+          >
+            {reasoningOptions.map((option) => (
+              <option key={`effort-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+        </div>
 
         <div className="ml-auto flex items-center gap-2">
           {isInProgress ? (

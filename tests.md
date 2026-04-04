@@ -1443,3 +1443,23 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary file chips before leaving the thread if desired.
+
+### Feature: React composer selector row renders stable Vue-style pills
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- Model config and collaboration mode config have loaded.
+
+#### Steps
+1. Open a thread composer in the React app.
+2. Inspect the bottom selector row for collaboration mode, model, skills, and reasoning effort.
+3. Open each selector and confirm labels are visible.
+4. Watch the browser console while the composer renders.
+
+#### Expected Results
+- The leftmost selector visibly shows `Default` or `Plan` instead of a blank or collapsed control.
+- All selector pills keep readable widths and use a consistent custom-chevron style instead of a broken native-select layout.
+- The console does not warn about duplicate React keys from `ThreadComposer` option rendering.
+
+#### Rollback/Cleanup
+- No cleanup required.
