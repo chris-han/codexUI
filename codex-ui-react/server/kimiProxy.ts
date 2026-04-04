@@ -289,6 +289,7 @@ function convertToChatFormat(body: any) {
   if (typeof body.input === 'string') {
     messages.push({ role: 'user', content: body.input });
   } else if (Array.isArray(body.input)) {
+    const directUserParts: string[] = [];
     for (const item of body.input) {
       if (item.type === 'message') {
         const content = toPlainTextContent(item.content);
@@ -299,7 +300,20 @@ function convertToChatFormat(body: any) {
           role: normalizeChatRole(item.role),
           content,
         });
+        continue;
       }
+
+      if (item.type === 'text' && typeof item.text === 'string' && item.text.length > 0) {
+        directUserParts.push(item.text);
+        continue;
+      }
+    }
+
+    if (directUserParts.length > 0) {
+      messages.push({
+        role: 'user',
+        content: directUserParts.join('\n'),
+      });
     }
   }
 

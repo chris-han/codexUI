@@ -1001,6 +1001,7 @@ This file tracks manual regression and feature verification steps.
 #### Prerequisites
 - React Codex UI app running at `http://localhost:5173`.
 - Vite proxy enabled for `/codex-api` with WebSocket forwarding.
+- Bridge server sends the JSON-RPC `initialized` notification after `initialize`.
 - Browser DevTools Console and Network tabs open.
 
 #### Steps
@@ -1013,6 +1014,7 @@ This file tracks manual regression and feature verification steps.
 - The app connects to `ws://localhost:5173/codex-api/ws` rather than hard-coding port `3000`.
 - The browser console does not show the previous `ws://localhost:3000/codex-api/ws` warning on startup.
 - The SSE fallback also stays on the app origin as `/codex-api/events`.
+- Live `/v1/responses` WebSocket requests that send top-level `input: [{ type: "text", text: ... }]` are translated into an upstream user message instead of an empty chat body.
 
 #### Rollback/Cleanup
 - No cleanup required.

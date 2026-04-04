@@ -313,8 +313,14 @@ class CodexBridge {
           name: 'codex-ui-react',
           version: '0.1.0',
         },
-        capabilities: {},
+        capabilities: {
+          experimentalApi: true,
+        },
       });
+      this.process.stdin.write(JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'initialized',
+      }) + '\n');
       console.log('codex app-server initialized');
       this.isReady = true;
     } catch (error) {
