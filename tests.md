@@ -1489,6 +1489,7 @@ This file tracks manual regression and feature verification steps.
 - A `+` action menu is present instead, matching the Codex web interaction model more closely.
 - The `+` button shows a centered plus glyph at rest, and its circular background appears only on hover.
 - `Plan` in the menu toggles the underlying collaboration mode state.
+- The `Plan` action uses the spline-pointer style icon instead of a generic text glyph.
 - When plan mode is active, the composer shows a small `Plan` state chip above the input.
 - `Upload attachment` opens the file picker and selected files appear as attachment chips.
 

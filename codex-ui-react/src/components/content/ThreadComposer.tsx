@@ -11,6 +11,7 @@ import type {
 import {
   IconTablerArrowUp,
   IconTablerChevronDown,
+  IconLucideSplinePointer,
   IconTablerPlayerStopFilled,
   IconTablerX,
 } from '../icons';
@@ -470,7 +471,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                 }}
                 className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-white/10"
               >
-                <span className="text-lg leading-none">{selectedCollaborationMode === 'plan' ? '✓' : '↗'}</span>
+                <IconLucideSplinePointer className="h-4.5 w-4.5 shrink-0" />
                 <span>Plan</span>
               </button>
               <div className="my-2 h-px bg-white/15" />

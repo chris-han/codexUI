@@ -13,6 +13,7 @@ export { IconTablerFolderOpen } from './IconTablerFolderOpen';
 export { IconTablerGitFork } from './IconTablerGitFork';
 export { IconTablerLayoutSidebar } from './IconTablerLayoutSidebar';
 export { IconTablerLayoutSidebarFilled } from './IconTablerLayoutSidebarFilled';
+export { IconLucideSplinePointer } from './IconLucideSplinePointer';
 export { IconTablerMicrophone } from './IconTablerMicrophone';
 export { IconTablerPin } from './IconTablerPin';
 export { IconTablerPlayerStopFilled } from './IconTablerPlayerStopFilled';
