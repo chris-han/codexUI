@@ -39,7 +39,7 @@ type DirectoryBrowseResponse = {
   entries: DirectoryBrowseEntry[];
 };
 
-// Check and free port 3000 before starting
+// Check and free the configured bridge port before starting
 function ensurePortFree(port: number): void {
   try {
     const pid = execSync(`lsof -ti:${port}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
@@ -737,7 +737,7 @@ if (existsSync(distDir)) {
 }
 
 async function main() {
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT || process.env.BRIDGE_PORT || 3457);
   const USER_THREADS_PATH = '/home/chris/repo/codexUI/user_threads';
 
   // Ensure port is free before starting

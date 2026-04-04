@@ -1,5 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+const bridgePort = Number(process.env.BRIDGE_PORT || '3457');
 
 export default defineConfig({
   plugins: [react()],
@@ -7,10 +9,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/codex-api': {
-        target: 'http://localhost:3000',
+        target: `http://localhost:${bridgePort}`,
         changeOrigin: true,
         ws: true, // Enable WebSocket proxy
       },
     },
   },
-})
+});

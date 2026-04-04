@@ -1246,3 +1246,24 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React dev bridge no longer depends on port 3000
+
+#### Prerequisites
+- `codex-ui-react` dependencies are installed.
+- Another local process may already be bound to port `3000`.
+
+#### Steps
+1. Start the React stack with `cd codex-ui-react && bun run dev`.
+2. If desired, inspect the Vite proxy target and bridge server environment in the startup logs.
+3. Confirm the bridge server starts even when port `3000` is occupied by another process.
+4. Optionally repeat with `BRIDGE_PORT=4567 bun run dev`.
+
+#### Expected Results
+- The bridge server defaults to port `3457`, not `3000`.
+- Vite proxies `/codex-api` traffic to the same configured bridge port.
+- Startup does not fail with `Failed to start server. Is port 3000 in use?`.
+- Setting `BRIDGE_PORT` changes both the bridge listener and the Vite proxy target together.
+
+#### Rollback/Cleanup
+- Stop the dev processes after verification.
