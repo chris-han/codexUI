@@ -1,3 +1,8 @@
+---
+name: github-pr-acceptance
+description: Accept and merge pull requests on GitHub
+---
+
 # GitHub PR Acceptance
 
 ## When To Use
