@@ -11,6 +11,7 @@ import type {
   RpcNotification,
   SkillInfo,
   SpeedMode,
+  ThreadComposerSubmitPayload,
   UiAccountEntry,
   UiMessage,
   UiProjectGroup,
@@ -145,7 +146,10 @@ export interface CodexActions {
   loadThreads: () => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
   loadMessages: (threadId: string) => Promise<void>;
-  startNewThread: (cwd: string, message?: string) => Promise<string | null>;
+  startNewThread: (
+    cwd: string,
+    payload?: string | ThreadComposerSubmitPayload
+  ) => Promise<string | null>;
   archiveThreadById: (threadId: string) => Promise<void>;
   renameThreadById: (threadId: string, name: string) => Promise<void>;
   forkThreadById: (threadId: string) => Promise<string | null>;
@@ -153,7 +157,7 @@ export interface CodexActions {
   interruptSelectedThreadTurn: () => Promise<void>;
 
   // Message actions
-  sendMessage: (message: string) => Promise<void>;
+  sendMessage: (payload: string | ThreadComposerSubmitPayload) => Promise<void>;
 
   // UI actions
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -244,6 +248,26 @@ const getInitialState = (): CodexState => ({
 function clearSelectedThreadState(state: CodexState): void {
   state.selectedThreadId = null;
   removeFromStorage(SELECTED_THREAD_STORAGE_KEY);
+}
+
+function normalizeComposerPayload(
+  payload?: string | ThreadComposerSubmitPayload
+): ThreadComposerSubmitPayload {
+  if (typeof payload === 'string') {
+    return {
+      text: payload,
+      imageUrls: [],
+      fileAttachments: [],
+      skills: [],
+    };
+  }
+
+  return {
+    text: payload?.text ?? '',
+    imageUrls: payload?.imageUrls ?? [],
+    fileAttachments: payload?.fileAttachments ?? [],
+    skills: payload?.skills ?? [],
+  };
 }
 
 function upsertThreadIntoGroups(state: CodexState, thread: UiThread): void {
@@ -406,7 +430,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
         }
       },
 
-      startNewThread: async (cwd, message) => {
+      startNewThread: async (cwd, payload) => {
+        const submitPayload = normalizeComposerPayload(payload);
         set((state) => {
           state.isSendingMessage = true;
         });
@@ -421,8 +446,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             const shell = createThreadShell({
               threadId,
               cwd,
-              preview: message || '',
-              inProgress: Boolean(message),
+              preview: submitPayload.text || '',
+              inProgress: Boolean(submitPayload.text),
             });
             state.threadShellsById.set(threadId, shell);
             upsertThreadIntoGroups(state, shell);
@@ -437,10 +462,14 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           await get().selectThread(threadId);
 
           // Send initial message if provided
-          if (message) {
-            await api.startThreadTurn(threadId, message, {
+          if (submitPayload.text || submitPayload.skills.length > 0 || submitPayload.fileAttachments.length > 0 || submitPayload.imageUrls.length > 0) {
+            await api.startThreadTurn(threadId, submitPayload.text, {
               model: get().selectedModelId,
               reasoningEffort: get().selectedReasoningEffort,
+              imageUrls: submitPayload.imageUrls,
+              fileAttachments: submitPayload.fileAttachments,
+              skills: submitPayload.skills,
+              collaborationMode: get().selectedCollaborationMode,
             });
           }
 
@@ -547,9 +576,10 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
       // ==================== Message Actions ====================
 
-      sendMessage: async (message) => {
+      sendMessage: async (payload) => {
         const threadId = get().selectedThreadId;
         if (!threadId) return;
+        const submitPayload = normalizeComposerPayload(payload);
         set((state) => {
           state.isSendingMessage = true;
         });
@@ -566,9 +596,13 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             throw new Error(`Thread is unavailable: ${threadId}`);
           }
 
-          await api.startThreadTurn(threadId, message, {
+          await api.startThreadTurn(threadId, submitPayload.text, {
             model: refreshedState.selectedModelId,
             reasoningEffort: refreshedState.selectedReasoningEffort,
+            imageUrls: submitPayload.imageUrls,
+            fileAttachments: submitPayload.fileAttachments,
+            skills: submitPayload.skills,
+            collaborationMode: refreshedState.selectedCollaborationMode,
           });
           set((state) => {
             state.inProgressByThreadId.set(threadId, true);
@@ -621,15 +655,19 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
       initializeModelConfig: async () => {
         try {
-          const [availableModelIds, currentModelConfig] = await Promise.all([
+          const [availableModelIds, currentModelConfig, collaborationModes] = await Promise.all([
             api.getAvailableModelIds(),
             api.getCurrentModelConfig(),
+            api.getAvailableCollaborationModes(),
           ]);
 
           set((state) => {
             const configuredModel = currentModelConfig.model || state.selectedModelId || 'kimi-for-coding';
             state.selectedModelId = configuredModel;
             state.selectedReasoningEffort = currentModelConfig.reasoningEffort || state.selectedReasoningEffort;
+            state.availableCollaborationModes = collaborationModes.length > 0
+              ? collaborationModes
+              : state.availableCollaborationModes;
             state.availableModelIds = availableModelIds.includes(configuredModel)
               ? availableModelIds
               : [configuredModel, ...availableModelIds];

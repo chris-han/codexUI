@@ -1,5 +1,8 @@
 import type {
+  ComposerFileAttachment,
+  ComposerSkillSelection,
   CollaborationModeOption,
+  CollaborationModeKind,
   ReasoningEffort,
   RpcNotification,
   SkillInfo,
@@ -59,6 +62,44 @@ type SkillsListResponseEntry = {
 };
 
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
+const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'plan', label: 'Plan' },
+];
+
+type CurrentModelConfig = {
+  model: string;
+  reasoningEffort: ReasoningEffort;
+};
+
+type ResolvedCollaborationModeSettings = {
+  model: string;
+  reasoningEffort: ReasoningEffort | null;
+};
+
+function normalizePlanModeReasoningEffort(
+  value: ReasoningEffort | '' | null | undefined
+): ReasoningEffort | null {
+  return value && value.length > 0 ? value : null;
+}
+
+function normalizeCollaborationModeReasoningEffort(
+  value: ReasoningEffort | '' | null | undefined
+): ReasoningEffort | null {
+  return value && value.length > 0 ? value : null;
+}
+
+function buildTextWithAttachments(
+  prompt: string,
+  files: ComposerFileAttachment[]
+): string {
+  if (files.length === 0) return prompt;
+  let prefix = '# Files mentioned by the user:\n';
+  for (const file of files) {
+    prefix += `\n## ${file.label}: ${file.path}\n`;
+  }
+  return `${prefix}\n## My request for Codex:\n\n${prompt}\n`;
+}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? '');
@@ -254,13 +295,51 @@ export async function startThreadTurn(
   options?: {
     model?: string;
     reasoningEffort?: ReasoningEffort;
+    imageUrls?: string[];
+    skills?: ComposerSkillSelection[];
+    fileAttachments?: ComposerFileAttachment[];
+    collaborationMode?: CollaborationModeKind;
   }
 ): Promise<void> {
+  const normalizedModel = options?.model?.trim() ?? '';
+  const normalizedText = buildTextWithAttachments(
+    message,
+    options?.fileAttachments ?? []
+  );
+  const input: Array<Record<string, unknown>> = [
+    {
+      type: 'text',
+      text: normalizedText,
+      text_elements: [],
+    },
+  ];
+
+  for (const imageUrl of options?.imageUrls ?? []) {
+    const normalizedUrl = imageUrl.trim();
+    if (!normalizedUrl) continue;
+    input.push({
+      type: 'image',
+      url: normalizedUrl,
+    });
+  }
+
+  for (const skill of options?.skills ?? []) {
+    if (!skill.name.trim() || !skill.path.trim()) continue;
+    input.push({
+      type: 'skill',
+      name: skill.name,
+      path: skill.path,
+    });
+  }
+
   const request = {
     threadId,
-    input: [{ type: 'text', text: message }],
-    model: options?.model,
+    input,
+    model: normalizedModel || undefined,
     effort: options?.reasoningEffort,
+    collaborationMode: options?.collaborationMode
+      ? await resolveCollaborationMode(options.collaborationMode, normalizedModel, options?.reasoningEffort)
+      : undefined,
   };
 
   try {
@@ -280,6 +359,84 @@ export async function startThreadTurn(
     }
     throw error;
   }
+}
+
+async function resolveCollaborationMode(
+  mode: CollaborationModeKind,
+  model?: string,
+  effort?: ReasoningEffort
+): Promise<{
+  mode: CollaborationModeKind;
+  settings: {
+    model: string;
+    reasoning_effort: ReasoningEffort | null;
+    developer_instructions: null;
+  };
+}> {
+  const settings = await resolveCollaborationModeSettings(mode, model, effort);
+  return {
+    mode,
+    settings: {
+      model: settings.model,
+      reasoning_effort: settings.reasoningEffort,
+      developer_instructions: null,
+    },
+  };
+}
+
+async function resolveCollaborationModeSettings(
+  mode: CollaborationModeKind,
+  model?: string,
+  effort?: ReasoningEffort
+): Promise<ResolvedCollaborationModeSettings> {
+  const explicitModel = model?.trim() ?? '';
+  if (explicitModel) {
+    return {
+      model: explicitModel,
+      reasoningEffort:
+        mode === 'plan'
+          ? normalizePlanModeReasoningEffort(effort)
+          : normalizeCollaborationModeReasoningEffort(effort),
+    };
+  }
+
+  let currentConfig: CurrentModelConfig | null = null;
+  try {
+    currentConfig = await getCurrentModelConfig();
+  } catch {
+    currentConfig = null;
+  }
+
+  const configuredModel = currentConfig?.model.trim() ?? '';
+  if (configuredModel) {
+    return {
+      model: configuredModel,
+      reasoningEffort:
+        mode === 'plan'
+          ? normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort)
+          : normalizeCollaborationModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
+    };
+  }
+
+  let availableModelIds: string[] = [];
+  try {
+    availableModelIds = await getAvailableModelIds();
+  } catch {
+    availableModelIds = [];
+  }
+
+  const fallbackModel = availableModelIds.find((candidate) => candidate.trim().length > 0)?.trim() ?? '';
+  if (fallbackModel) {
+    return {
+      model: fallbackModel,
+      reasoningEffort:
+        mode === 'plan'
+          ? normalizePlanModeReasoningEffort(effort ?? currentConfig?.reasoningEffort)
+          : normalizeCollaborationModeReasoningEffort(effort ?? currentConfig?.reasoningEffort),
+    };
+  }
+
+  throw new Error(`${mode === 'plan' ? 'Plan' : 'Default'} mode requires an available model. Wait for models to load and try again.`);
 }
 
 export async function interruptThreadTurn(threadId: string): Promise<void> {
@@ -398,12 +555,9 @@ export async function getAvailableCollaborationModes(): Promise<
     const result = await rpcCall<{ data: CollaborationModeOption[] }>(
       'collaborationMode/list'
     );
-    return result.data || [];
+    return result.data || DEFAULT_COLLABORATION_MODE_OPTIONS;
   } catch {
-    return [
-      { value: 'default', label: 'Default' },
-      { value: 'plan', label: 'Plan Mode' },
-    ];
+    return DEFAULT_COLLABORATION_MODE_OPTIONS;
   }
 }
 

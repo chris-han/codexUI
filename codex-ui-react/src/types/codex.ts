@@ -83,6 +83,8 @@ export type CommandExecutionData = {
 }
 
 export type UiFileAttachment = { label: string; path: string }
+export type ComposerFileAttachment = { label: string; path: string; fsPath: string }
+export type ComposerSkillSelection = { name: string; path: string }
 export type UiFileChangeOperation = 'add' | 'delete' | 'update'
 export type UiFileChangeStatus = 'inProgress' | 'completed' | 'failed' | 'declined'
 export type UiFileChange = {
@@ -312,4 +314,11 @@ export type SkillInfo = {
   path?: string
   scope?: string
   enabled?: boolean
+}
+
+export type ThreadComposerSubmitPayload = {
+  text: string
+  imageUrls: string[]
+  fileAttachments: ComposerFileAttachment[]
+  skills: ComposerSkillSelection[]
 }

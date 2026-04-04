@@ -1392,3 +1392,30 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React composer supports Vue-style skill selection and collaboration mode turn payloads
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- `skills/list` returns one or more installed skills with valid `path` values.
+- At least one thread is available, or a project is available from the home route project selector.
+
+#### Steps
+1. Open either an existing thread or the home route composer.
+2. Type `/` in the composer and confirm a skill menu appears.
+3. Type part of a skill name after `/` and confirm the list filters.
+4. Press `Enter` on a highlighted skill or click a skill row.
+5. Confirm the selected skill appears as a removable chip above the input.
+6. Use the `Skills` dropdown to add another skill.
+7. Change the collaboration mode selector between `Default` and `Plan`.
+8. Send a message with at least one selected skill.
+
+#### Expected Results
+- Typing `/` opens a slash-skill picker instead of leaving raw `/skill` text in place.
+- Selecting a skill adds a visible chip and prevents duplicate selections.
+- The `Skills` dropdown can add additional skills without removing existing chips.
+- The collaboration mode selector updates the chosen mode before send.
+- Sending the message succeeds and the selected model, reasoning effort, collaboration mode, and selected skills are included in the `turn/start` payload path instead of being dropped locally.
+
+#### Rollback/Cleanup
+- Remove any temporary skill chips before leaving the thread if desired.

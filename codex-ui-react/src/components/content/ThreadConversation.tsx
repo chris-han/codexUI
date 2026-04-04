@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
+import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
 import { IconTablerArchive, IconTablerArrowBackUp, IconTablerCopy, IconTablerGitFork, IconTablerX } from '../icons';
@@ -80,8 +81,8 @@ function ThreadConversation() {
     scrollToBottom();
   }, [messages, liveMessage, scrollToBottom]);
 
-  const handleSendMessage = async (message: string) => {
-    await sendMessage(message);
+  const handleSendMessage = async (payload: ThreadComposerSubmitPayload) => {
+    await sendMessage(payload);
   };
 
   const handleInterrupt = async () => {

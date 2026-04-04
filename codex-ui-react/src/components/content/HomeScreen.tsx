@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
+import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
 
 function HomeScreen() {
@@ -33,9 +34,9 @@ function HomeScreen() {
 
   const selectedProject = projectOptions.find((option) => option.cwd === selectedCwd) || null;
 
-  const handleSend = async (message: string) => {
+  const handleSend = async (payload: ThreadComposerSubmitPayload) => {
     if (!selectedCwd) return;
-    const threadId = await startNewThread(selectedCwd, message);
+    const threadId = await startNewThread(selectedCwd, payload);
     if (threadId) {
       navigate(`/thread/${threadId}`);
     }
