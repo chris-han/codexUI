@@ -379,6 +379,23 @@ This file tracks manual regression and feature verification steps.
 - Revert or delete any temporary changes created only for review verification.
 - Close the review pane to return to the normal conversation view.
 
+### Feature: codex-ui-react API request logging
+
+#### Prerequisites
+- The React app server is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- Server stdout is visible in the terminal running `bun run server`.
+
+#### Steps
+1. Trigger at least one REST request under `/codex-api`, such as `GET /codex-api/review/snapshot` or `POST /codex-api/rpc`.
+2. Watch the React app server logs after the request completes.
+
+#### Expected Results
+- The server prints a structured `[codex-api]` log entry for each completed `/codex-api` request.
+- Each log entry includes the request method, original path, HTTP status, and request duration in milliseconds.
+
+#### Rollback/Cleanup
+- No cleanup is required beyond stopping the server if it was started only for verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).

@@ -519,6 +519,18 @@ const bridge = new CodexBridge();
 // Enable CORS for all origins
 app.use(cors());
 app.use(express.json());
+app.use('/codex-api', (req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    console.log('[codex-api]', {
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Date.now() - startedAt,
+    });
+  });
+  next();
+});
 
 app.post('/codex-api/rpc', async (req, res) => {
   try {
