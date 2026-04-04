@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, stat } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
+import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -602,6 +603,48 @@ app.get('/codex-api/browse-directory', async (req, res) => {
     res.json({ data });
   } catch (error) {
     res.status(400).json({ error: getErrorMessage(error, 'Failed to browse directory') });
+  }
+});
+
+app.get('/codex-api/review/snapshot', async (req, res) => {
+  try {
+    const cwd = typeof req.query.cwd === 'string' ? req.query.cwd.trim() : '';
+    const scope = req.query.scope === 'baseBranch' ? 'baseBranch' : 'workspace';
+    const workspaceView = req.query.workspaceView === 'staged' ? 'staged' : 'unstaged';
+    const baseBranch = typeof req.query.baseBranch === 'string' ? req.query.baseBranch.trim() : '';
+    if (!cwd) {
+      res.status(400).json({ error: 'Missing cwd' });
+      return;
+    }
+
+    const data = await getReviewSnapshot(cwd, scope, workspaceView, baseBranch);
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to load review snapshot') });
+  }
+});
+
+app.post('/codex-api/review/action', async (req, res) => {
+  try {
+    const data = await applyReviewAction(req.body);
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to apply review action') });
+  }
+});
+
+app.post('/codex-api/review/git/init', async (req, res) => {
+  try {
+    const cwd = typeof req.body?.cwd === 'string' ? req.body.cwd.trim() : '';
+    if (!cwd) {
+      res.status(400).json({ error: 'Missing cwd' });
+      return;
+    }
+
+    await initializeReviewGit(cwd);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to initialize Git') });
   }
 });
 

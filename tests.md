@@ -327,6 +327,31 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete any temporary test folder/thread created only for verification.
 
+### Feature: codex-ui-react review Git backend routes
+
+#### Prerequisites
+- The React app server is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- `git` is installed on the host running the React app server.
+- A temporary directory is available for creating a throwaway repository.
+
+#### Steps
+1. Create a temporary directory that is not yet a Git repository and add a file inside it.
+2. Call `GET /codex-api/review/snapshot?cwd=<temp-dir>&scope=workspace&workspaceView=unstaged`.
+3. Confirm the response reports `isGitRepo: false`.
+4. Call `POST /codex-api/review/git/init` with the same `cwd`.
+5. Call `GET /codex-api/review/snapshot?cwd=<temp-dir>&scope=workspace&workspaceView=unstaged` again.
+6. Confirm the response now reports `isGitRepo: true` and includes the untracked file in `data.files`.
+7. Call `POST /codex-api/review/action` with `action: "stage"`, `level: "all"`, `scope: "workspace"`, and `workspaceView: "unstaged"`.
+8. Call `GET /codex-api/review/snapshot?cwd=<temp-dir>&scope=workspace&workspaceView=staged` and confirm the staged file appears there.
+
+#### Expected Results
+- Review snapshot works for both non-Git and Git directories.
+- Git initialization through the React bridge creates a usable repository.
+- Review action endpoints can move workspace changes into the staged view.
+
+#### Rollback/Cleanup
+- Delete the temporary test directory after verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
