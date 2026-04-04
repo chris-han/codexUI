@@ -2,14 +2,15 @@
 
 ## Build And Restart Runbook
 
-- Build the project with `npm run build`.
+- Prefer `bun` over `npm` for package manager and script execution commands in this repository unless a task explicitly requires otherwise.
+- Build the project with `bun run build`.
 - Port `4172` is retired and must not be used for debugging, testing, or deployment.
 - The only runtime environment is the `4173` instance.
 - After each change, do not run manual browser testing or Playwright verification unless the user explicitly asks for it.
 - The `4173` instance must run in an isolated `tmux` session in the background.
 - The `4173` instance must start without password protection; always include `--no-password` in the launch command.
 - Recommended update flow:
-  1. `npm run build`
+  1. `bun run build`
   2. `tmux has-session -t codexui-prod 2>/dev/null && tmux kill-session -t codexui-prod`
   3. `tmux new-session -d -s codexui-prod 'cd /projects/srv/codexui && node dist-cli/index.js --port 4173 --no-tunnel --no-password'`
 
