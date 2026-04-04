@@ -543,6 +543,15 @@ app.use('/codex-api', (req, res, next) => {
 app.post('/codex-api/rpc', async (req, res) => {
   try {
     const { method, params } = req.body;
+
+    // Ensure the cwd directory exists before starting a new thread
+    if (method === 'thread/start') {
+      const cwd = readNonEmptyString((params as Record<string, unknown>)?.cwd);
+      if (cwd) {
+        await mkdir(cwd, { recursive: true });
+      }
+    }
+
     const result = await bridge.call(method, params);
     res.status(200).json({ result });
   } catch (error) {

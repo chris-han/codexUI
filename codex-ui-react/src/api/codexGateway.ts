@@ -157,7 +157,7 @@ export async function getThreadDetail(
         return await getEmptyThreadDetailFromList(threadId);
       }
       if (isMissingRolloutError(error) || isThreadNotFoundError(error)) {
-        return { messages: [], thread: null };
+        // Fall through to thread/read below — thread exists but has no rollout yet
       }
     }
   }
@@ -185,8 +185,7 @@ export async function getThreadDetail(
           return await getEmptyThreadDetailFromList(threadId);
         }
         if (isMissingRolloutError(resumeError)) {
-          console.warn('Thread has no resumable rollout, clearing selection:', threadId);
-          return { messages: [], thread: null };
+          return await getEmptyThreadDetailFromList(threadId);
         }
         console.error('Failed to resume thread:', resumeError);
       }
@@ -745,7 +744,7 @@ function normalizeThreadDetail(result: ThreadReadResult): {
   const projectName = extractProjectName(thread.cwd);
   const uiThread: UiThread = {
     id: thread.id,
-    title: thread.preview || 'Untitled',
+    title: thread.preview || thread.name || projectName || 'Untitled',
     projectName,
     cwd: thread.cwd,
     hasWorktree: false,

@@ -34,6 +34,7 @@ export type ThreadDetail = {
   id: string
   cwd: string
   preview: string
+  name?: string | null
   turns: ThreadTurn[]
   updatedAt: number
   createdAt: number
