@@ -6,9 +6,9 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -229,6 +229,91 @@ function normalizeLocalPath(rawPath: string): string {
     }
   }
   return trimmed;
+}
+
+function bufferIndexOf(buf: Buffer, needle: Buffer, start = 0): number {
+  for (let i = start; i <= buf.length - needle.length; i++) {
+    let match = true;
+    for (let j = 0; j < needle.length; j++) {
+      if (buf[i + j] !== needle[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return i;
+  }
+  return -1;
+}
+
+function sanitizeUploadFilename(fileName: string): string {
+  const sanitized = fileName.replace(/[/\\]/g, '_').trim();
+  return sanitized || 'uploaded-file';
+}
+
+async function handleFileUpload(req: express.Request, res: express.Response): Promise<void> {
+  try {
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolvePromise, reject) => {
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => resolvePromise());
+      req.on('error', reject);
+    });
+
+    const body = Buffer.concat(chunks);
+    const contentType = req.headers['content-type'] ?? '';
+    const boundaryMatch = contentType.match(/boundary=(.+)/i);
+    if (!boundaryMatch) {
+      res.status(400).json({ error: 'Missing multipart boundary' });
+      return;
+    }
+
+    const boundaryBuf = Buffer.from(`--${boundaryMatch[1]}`);
+    const parts: Buffer[] = [];
+    let searchStart = 0;
+    while (searchStart < body.length) {
+      const idx = body.indexOf(boundaryBuf, searchStart);
+      if (idx < 0) break;
+      if (searchStart > 0) {
+        parts.push(body.subarray(searchStart, idx));
+      }
+      searchStart = idx + boundaryBuf.length;
+      if (body[searchStart] === 0x0d && body[searchStart + 1] === 0x0a) {
+        searchStart += 2;
+      }
+    }
+
+    let fileName = 'uploaded-file';
+    let fileData: Buffer | null = null;
+    const headerSep = Buffer.from('\r\n\r\n');
+    for (const part of parts) {
+      const headerEnd = bufferIndexOf(part, headerSep);
+      if (headerEnd < 0) continue;
+      const headers = part.subarray(0, headerEnd).toString('utf8');
+      const fileNameMatch = headers.match(/filename="([^"]+)"/i);
+      if (!fileNameMatch) continue;
+      fileName = sanitizeUploadFilename(fileNameMatch[1]);
+      let end = part.length;
+      if (end >= 2 && part[end - 2] === 0x0d && part[end - 1] === 0x0a) {
+        end -= 2;
+      }
+      fileData = part.subarray(headerEnd + 4, end);
+      break;
+    }
+
+    if (!fileData) {
+      res.status(400).json({ error: 'No file in request' });
+      return;
+    }
+
+    const uploadRoot = join(tmpdir(), 'codex-ui-react-uploads');
+    await mkdir(uploadRoot, { recursive: true });
+    const destDir = await mkdtemp(join(uploadRoot, 'f-'));
+    const destPath = join(destDir, fileName);
+    await writeFile(destPath, fileData);
+    res.status(200).json({ data: { path: destPath, label: fileName } });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Upload failed') });
+  }
 }
 
 async function readDirectoryEntries(directoryPath: string): Promise<DirectoryBrowseEntry[]> {
@@ -728,6 +813,10 @@ app.get('/codex-api/browse-directory', async (req, res) => {
   } catch (error) {
     res.status(400).json({ error: getErrorMessage(error, 'Failed to browse directory') });
   }
+});
+
+app.post('/codex-api/upload-file', async (req, res) => {
+  await handleFileUpload(req, res);
 });
 
 app.post('/codex-api/composer-file-search', async (req, res) => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCodexStore } from '../../stores';
-import { searchComposerFiles, type ComposerFileSuggestion } from '../../api/codexGateway';
+import { searchComposerFiles, uploadComposerFile, type ComposerFileSuggestion } from '../../api/codexGateway';
 import type {
   ComposerFileAttachment,
   CollaborationModeKind,
@@ -66,6 +66,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   const [highlightedFileIndex, setHighlightedFileIndex] = useState(0);
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<null | 'model' | 'skills' | 'reasoning'>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -252,21 +253,23 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   const handleFilePickerChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) return;
-    setFileAttachments((current) => {
-      const existing = new Set(current.map((attachment) => attachment.fsPath));
-      const additions: ComposerFileAttachment[] = [];
-      for (const file of files) {
-        const inferredPath = file.webkitRelativePath || file.name;
-        if (!inferredPath || existing.has(inferredPath)) continue;
-        existing.add(inferredPath);
-        additions.push({
-          label: getBaseName(inferredPath),
-          path: inferredPath,
-          fsPath: inferredPath,
+    void (async () => {
+      try {
+        setUploadError(null);
+        const uploaded = await Promise.all(files.map((file) => uploadComposerFile(file)));
+        setFileAttachments((current) => {
+          const existing = new Set(current.map((attachment) => attachment.fsPath));
+          const additions = uploaded.filter((attachment) => {
+            if (!attachment.fsPath || existing.has(attachment.fsPath)) return false;
+            existing.add(attachment.fsPath);
+            return true;
+          });
+          return [...current, ...additions];
         });
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : 'Failed to upload file attachment');
       }
-      return [...current, ...additions];
-    });
+    })();
     event.target.value = '';
     setIsPlusMenuOpen(false);
   };
@@ -298,6 +301,12 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       onSubmit={handleSubmit}
       className="relative rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
     >
+      {uploadError ? (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {uploadError}
+        </div>
+      ) : null}
+
       <input
         ref={uploadInputRef}
         type="file"

@@ -65,6 +65,14 @@ export type ComposerFileSuggestion = {
   path: string;
 };
 
+type UploadComposerFileResponse = {
+  data?: {
+    path?: string;
+    label?: string;
+  };
+  error?: string;
+};
+
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
   { value: 'default', label: 'Default' },
@@ -658,6 +666,26 @@ export async function searchComposerFiles(
     suggestions.push({ path });
   }
   return suggestions;
+}
+
+export async function uploadComposerFile(file: File): Promise<ComposerFileAttachment> {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+
+  const response = await fetch('/codex-api/upload-file', {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await response.json() as UploadComposerFileResponse;
+  if (!response.ok || !payload.data?.path) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to upload file attachment'));
+  }
+
+  return {
+    label: payload.data.label?.trim() || file.name || 'uploaded-file',
+    path: payload.data.path,
+    fsPath: payload.data.path,
+  };
 }
 
 // Accounts

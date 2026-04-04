@@ -1567,3 +1567,25 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary verification files created for the test.
+
+### Feature: React file-picker attachments are staged to a server-readable path
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- An existing thread is open in the React UI.
+- A local file outside the thread working directory is available for upload, such as a `.docx` or `.txt` file.
+
+#### Steps
+1. Open the React composer and click `+`, then `Upload attachment`.
+2. Select a local file from the machine using the browser file picker.
+3. Confirm the attachment appears as a chip in the composer.
+4. Send a prompt asking the model to inspect the attached file.
+5. If the file is text-based, confirm the model can reference its content without the earlier `No such file or directory` attachment error.
+
+#### Expected Results
+- The file picker uploads the selected file to a temp server directory before the turn is sent.
+- The attachment chip stores a real server-side path, not just the browser filename.
+- The app no longer reports `Attached file contents (unavailable: No such file or directory)` for picker-uploaded files solely because the path was client-local.
+
+#### Rollback/Cleanup
+- Remove any temporary uploaded files from the server temp directory if manual cleanup is desired.
