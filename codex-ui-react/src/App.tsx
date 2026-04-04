@@ -1,10 +1,11 @@
-import { useEffect, useCallback } from 'react';
+import { Suspense, lazy, useCallback, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useCodexStore, subscribeCodexNotifications } from './stores';
 import type { RpcNotification } from './types/codex';
 import DesktopLayout from './components/layout/DesktopLayout';
-import ThreadConversation from './components/content/ThreadConversation';
-import SkillsHub from './components/content/SkillsHub';
+
+const ThreadConversation = lazy(() => import('./components/content/ThreadConversation'));
+const SkillsHub = lazy(() => import('./components/content/SkillsHub'));
 
 function App() {
   const store = useCodexStore();
@@ -58,8 +59,22 @@ function App() {
     <Routes>
       <Route path="/" element={<DesktopLayout />}>
         <Route index element={<div className="p-8 text-gray-500">Select a thread to start</div>} />
-        <Route path="thread/:threadId" element={<ThreadConversation />} />
-        <Route path="skills" element={<SkillsHub />} />
+        <Route
+          path="thread/:threadId"
+          element={(
+            <Suspense fallback={<div className="p-8 text-gray-500">Loading thread…</div>}>
+              <ThreadConversation />
+            </Suspense>
+          )}
+        />
+        <Route
+          path="skills"
+          element={(
+            <Suspense fallback={<div className="p-8 text-gray-500">Loading skills…</div>}>
+              <SkillsHub />
+            </Suspense>
+          )}
+        />
       </Route>
     </Routes>
   );

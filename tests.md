@@ -352,6 +352,33 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete the temporary test directory after verification.
 
+### Feature: codex-ui-react review pane
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- Open a thread whose `cwd` points at a writable project directory.
+- The project directory is a Git repository, or you are willing to initialize one from the review pane.
+
+#### Steps
+1. Open an existing thread in the React UI and click `Review` in the thread header.
+2. Verify the pane opens in place of the conversation and loads the current change snapshot.
+3. If the folder is not a Git repository, click `Initialize Git` and confirm the pane reloads.
+4. Make at least one workspace change in the thread's `cwd`, then use the pane to inspect the changed file and its hunks.
+5. In `Workspace` mode, use a file or hunk action such as `Stage hunk`, `Stage file`, or `Revert hunk`.
+6. Switch between `Unstaged` and `Staged` and confirm the change moves between the two views.
+7. Click `Run review`, wait for the review turn to complete, then switch to the `Findings` tab.
+8. Confirm the findings summary and any structured findings from the completed review are shown.
+
+#### Expected Results
+- The React thread view can toggle into a dedicated review pane.
+- The pane shows Git snapshots, file/hunk diffs, and applies workspace actions through the React bridge.
+- Running review sends a `review/start` request and later displays the thread's review findings.
+- The review pane is code-split and only loaded when needed.
+
+#### Rollback/Cleanup
+- Revert or delete any temporary changes created only for review verification.
+- Close the review pane to return to the normal conversation view.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
