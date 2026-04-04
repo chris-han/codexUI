@@ -405,7 +405,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           <select
             value={selectedCollaborationMode}
             onChange={(e) => handleCollaborationModeChange(e.target.value)}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-500 outline-none transition hover:text-gray-700"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-500 outline-none transition hover:text-gray-700"
             disabled={disabled || isInProgress}
             aria-label="Collaboration mode"
           >
@@ -415,14 +415,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="relative min-w-[210px] flex-1 sm:flex-none">
           <select
             value={selectedModelId}
             onChange={(e) => setSelectedModelId(e.target.value)}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
             disabled={disabled || isInProgress}
             aria-label="Model"
           >
@@ -432,7 +432,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="relative min-w-[124px] flex-1">
@@ -442,7 +442,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               handleSkillDropdownChange(e.target.value);
               e.currentTarget.value = '';
             }}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
             disabled={disabled || isInProgress || skillOptions.length === 0}
             aria-label="Skills"
           >
@@ -453,14 +453,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="relative min-w-[112px]">
           <select
             value={selectedReasoningEffort}
             onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-5 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
+            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
             disabled={disabled || isInProgress}
             aria-label="Reasoning effort"
           >
@@ -470,7 +470,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="ml-auto flex items-center gap-2 self-end">
