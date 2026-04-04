@@ -1388,6 +1388,7 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - The index route is no longer a plain placeholder.
 - The home route offers an inline new-thread composer similar to the Vue UI.
+- The project title below `Let's build` is itself the folder dropdown trigger, instead of a separate selector rendered underneath.
 - Sending from the home route creates a thread for the selected project and navigates into it.
 
 #### Rollback/Cleanup

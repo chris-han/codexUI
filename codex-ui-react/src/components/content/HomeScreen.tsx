@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
 import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
+import { IconTablerChevronDown } from '../icons';
 
 function HomeScreen() {
   const navigate = useNavigate();
   const { projectGroups, startNewThread, isSendingMessage } = useCodexStore();
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
 
   const projectOptions = useMemo(
     () =>
@@ -32,6 +35,20 @@ function HomeScreen() {
     }
   }, [projectOptions, selectedCwd]);
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const root = projectMenuRef.current;
+      if (!root) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (root.contains(target)) return;
+      setIsProjectMenuOpen(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
+
   const selectedProject = projectOptions.find((option) => option.cwd === selectedCwd) || null;
 
   const handleSend = async (payload: ThreadComposerSubmitPayload) => {
@@ -54,28 +71,46 @@ function HomeScreen() {
             <p className="text-5xl font-light tracking-tight text-gray-900">
               Let&apos;s build
             </p>
-            <div className="mt-2 inline-flex items-center gap-2 text-4xl font-semibold text-gray-500">
-              <span>{selectedProject?.label || 'Choose project'}</span>
-              <span className="text-xl">⌄</span>
-            </div>
-          </div>
+            <div ref={projectMenuRef} className="relative mt-2 inline-block text-left">
+              <button
+                type="button"
+                onClick={() => setIsProjectMenuOpen((open) => !open)}
+                className="inline-flex items-center gap-2 text-4xl font-semibold text-gray-500 outline-none transition hover:text-gray-700"
+                disabled={projectOptions.length === 0}
+                aria-haspopup="listbox"
+                aria-expanded={isProjectMenuOpen}
+              >
+                <span>{selectedProject?.label || 'Choose project'}</span>
+                <IconTablerChevronDown className="mt-1 h-6 w-6" />
+              </button>
 
-          <div className="mx-auto mb-6 max-w-md">
-            <select
-              value={selectedCwd}
-              onChange={(event) => setSelectedCwd(event.target.value)}
-              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {projectOptions.length === 0 ? (
-                <option value="">No projects available</option>
-              ) : (
-                projectOptions.map((option) => (
-                  <option key={option.cwd} value={option.cwd}>
-                    {option.label}
-                  </option>
-                ))
-              )}
-            </select>
+              {isProjectMenuOpen ? (
+                <div className="absolute left-1/2 top-[calc(100%+12px)] z-20 w-80 -translate-x-1/2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.12)]">
+                  <div className="max-h-80 overflow-auto py-2" role="listbox" aria-label="Project folders">
+                    {projectOptions.map((option) => (
+                      <button
+                        key={option.cwd}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCwd(option.cwd);
+                          setIsProjectMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition ${
+                          option.cwd === selectedCwd
+                            ? 'bg-gray-50 text-gray-900'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <span className="truncate">{option.label}</span>
+                        {option.cwd === selectedCwd ? (
+                          <span className="ml-3 text-xs font-medium text-gray-400">Selected</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="mx-auto mt-20 max-w-2xl rounded-3xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
