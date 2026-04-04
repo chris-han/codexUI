@@ -183,13 +183,18 @@ Add app-server tests for:
 
 ## Recommended Implementation Order
 
-1. Persist `attachments` in app-server turn state.
-2. Add attachment-aware planning hook before answer generation.
-3. Add direct-read path for text/code/config files.
-4. Add `.docx` extraction on app-server side.
-5. Emit progress notifications for attachment inspection.
-6. Add tests.
-7. Expand to `.pdf` and `.xlsx`.
+1. Keep web upload/staging as-is, but make sure staged absolute file paths are injected into the user-visible prompt in a deterministic attached-files block.
+2. Stop treating local file attachments as `mention`; reserve `mention` for apps/plugins.
+3. Add end-to-end tests that compare path-based app-server behavior against known-good CLI behavior for:
+   - text/code/config files
+   - `.docx`
+   - `.pdf`
+   - `.xlsx`
+4. Only if those tests show consistent gaps, add light app-server augmentation:
+   - attachment-aware preamble/instructions
+   - attachment progress notifications
+   - optional gating when the user explicitly asks about attachment contents
+5. Only if gaps still remain, consider first-class app-server attachment handling and server-owned extractor helpers.
 
 ## Non-Goals
 
