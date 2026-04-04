@@ -1460,6 +1460,7 @@ This file tracks manual regression and feature verification steps.
 - The leftmost selector visibly shows `Default` or `Plan` instead of a blank or collapsed control.
 - All selector pills keep readable widths and use a consistent custom-chevron style instead of a broken native-select layout.
 - The console does not warn about duplicate React keys from `ThreadComposer` option rendering.
+- If upstream option data contains malformed rows with missing values, the composer ignores them instead of crashing.
 
 #### Rollback/Cleanup
 - No cleanup required.

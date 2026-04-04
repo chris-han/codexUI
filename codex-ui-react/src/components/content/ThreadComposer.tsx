@@ -40,14 +40,20 @@ function removeTrailingMentionToken(value: string): string {
   return value.replace(/(^|\s)@[^\s]*$/, '$1').trimEnd();
 }
 
-function dedupeByValue<T extends { value: string }>(items: T[]): T[] {
+function dedupeByValue<T extends { value?: string | null }>(items: T[]): Array<T & { value: string }> {
   const seen = new Set<string>();
-  return items.filter((item) => {
-    const value = item.value.trim();
-    if (!value || seen.has(value)) return false;
+  const result: Array<T & { value: string }> = [];
+  for (const item of items) {
+    const rawValue = typeof item.value === 'string' ? item.value : '';
+    const value = rawValue.trim();
+    if (!value || seen.has(value)) continue;
     seen.add(value);
-    return true;
-  });
+    result.push({
+      ...item,
+      value,
+    });
+  }
+  return result;
 }
 
 function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: ThreadComposerProps) {
@@ -84,7 +90,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
     () =>
       dedupeByValue(
         availableCollaborationModes.map((option) => ({
-          value: option.value,
+          value: typeof option.value === 'string' ? option.value : '',
           label:
             option.label?.trim() ||
             (option.value === 'plan' ? 'Plan' : 'Default'),
@@ -97,8 +103,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
     () =>
       dedupeByValue(
         (availableModelIds.length === 0 ? [selectedModelId] : availableModelIds).map((model) => ({
-          value: model,
-          label: model,
+          value: typeof model === 'string' ? model : '',
+          label: typeof model === 'string' ? model : '',
         }))
       ),
     [availableModelIds, selectedModelId]
@@ -110,8 +116,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         installedSkills
           .filter((skill) => skill.path || skill.id)
           .map((skill) => ({
-            value: skill.path ?? skill.id,
-            label: skill.name,
+            value: typeof (skill.path ?? skill.id) === 'string' ? (skill.path ?? skill.id) : '',
+            label: skill.name || 'Skill',
           }))
       ),
     [installedSkills]
