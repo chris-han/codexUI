@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useCodexStore, selectSelectedThread, selectMessagesForSelectedThread, selectLiveMessageForSelectedThread, selectLiveReasoningForSelectedThread, selectIsInProgress, selectPendingRequestsForSelectedThread } from '../../stores';
+import { useCodexStore, selectSelectedThread, selectMessagesForSelectedThread, selectLiveMessageForSelectedThread, selectLiveReasoningForSelectedThread, selectIsInProgress, selectPendingRequestsForSelectedThread, selectLiveActivityLabelForSelectedThread, selectLiveCommandOutputForSelectedThread } from '../../stores';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
 import { IconTablerArchive, IconTablerGitFork } from '../icons';
@@ -18,6 +18,8 @@ function ThreadConversation() {
   const messages = selectMessagesForSelectedThread(store);
   const liveMessage = selectLiveMessageForSelectedThread(store);
   const liveReasoning = selectLiveReasoningForSelectedThread(store);
+  const liveActivityLabel = selectLiveActivityLabelForSelectedThread(store);
+  const liveCommandOutput = selectLiveCommandOutputForSelectedThread(store);
   const isInProgress = selectIsInProgress(store);
   const pendingRequests = selectPendingRequestsForSelectedThread(store);
 
@@ -89,7 +91,7 @@ function ThreadConversation() {
           {isInProgress && (
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
               <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-              Working...
+              {liveActivityLabel || 'Working...'}
             </span>
           )}
         </div>
@@ -209,10 +211,24 @@ function ThreadConversation() {
             {liveReasoning && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] bg-blue-50 border border-blue-100 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="text-xs font-medium text-blue-500 mb-1">
-                    Reasoning
+                  <div className="text-xs font-medium text-blue-500 mb-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                    Thinking
                   </div>
                   <MessageContent text={liveReasoning} />
+                </div>
+              </div>
+            )}
+
+            {/* Live command output */}
+            {liveCommandOutput && (
+              <div className="flex justify-start">
+                <div className="w-full max-w-[90%] bg-gray-900 border border-gray-700 rounded-xl px-4 py-3">
+                  <div className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                    Terminal output
+                  </div>
+                  <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto">{liveCommandOutput}</pre>
                 </div>
               </div>
             )}

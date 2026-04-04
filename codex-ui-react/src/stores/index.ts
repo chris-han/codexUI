@@ -72,6 +72,8 @@ export interface CodexState {
   hydratedThreadIds: Set<string>;
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
+  liveActivityLabelByThreadId: Map<string, string>;
+  liveCommandOutputByThreadId: Map<string, string>;
   inProgressByThreadId: Map<string, boolean>;
   isLoadingMessages: boolean;
   isSendingMessage: boolean;
@@ -174,6 +176,8 @@ const getInitialState = (): CodexState => ({
   hydratedThreadIds: new Set(),
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
+  liveActivityLabelByThreadId: new Map(),
+  liveCommandOutputByThreadId: new Map(),
   inProgressByThreadId: new Map(),
   isLoadingMessages: false,
   isSendingMessage: false,
@@ -688,6 +692,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 // Clear live content
                 state.liveMessagesByThreadId.delete(threadId);
                 state.liveReasoningByThreadId.delete(threadId);
+                state.liveActivityLabelByThreadId.delete(threadId);
+                state.liveCommandOutputByThreadId.delete(threadId);
               });
               get().loadThreads();
               // Reload messages for this thread
@@ -713,6 +719,64 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               set((state) => {
                 const current = state.liveReasoningByThreadId.get(threadId) || '';
                 state.liveReasoningByThreadId.set(threadId, current + delta);
+                state.liveActivityLabelByThreadId.set(threadId, 'Thinking');
+              });
+            }
+            break;
+          }
+
+          case 'item/reasoning/summaryPartAdded': {
+            const { threadId } = (params as { threadId: string }) || {};
+            if (threadId) {
+              set((state) => {
+                const current = state.liveReasoningByThreadId.get(threadId) || '';
+                if (current) {
+                  state.liveReasoningByThreadId.set(threadId, current + '\n\n');
+                }
+              });
+            }
+            break;
+          }
+
+          case 'item/started': {
+            const p = (params as { threadId: string; item?: { type?: string; command?: string } }) || {};
+            const { threadId, item } = p;
+            if (threadId && item?.type) {
+              const itemType = item.type.toLowerCase();
+              let label = '';
+              if (itemType === 'reasoning') label = 'Thinking';
+              else if (itemType === 'agentmessage') label = 'Writing response';
+              else if (itemType === 'commandexecution') label = item.command ? `Running: ${item.command}` : 'Running command';
+              else if (itemType === 'filechange') label = 'Applying changes';
+              else if (itemType === 'webSearch' || itemType === 'websearch') label = 'Searching';
+              if (label) {
+                set((state) => {
+                  state.liveActivityLabelByThreadId.set(threadId, label);
+                });
+              }
+            }
+            break;
+          }
+
+          case 'item/completed': {
+            const { threadId, item } = (params as { threadId: string; item?: { type?: string } }) || {};
+            if (threadId && item?.type?.toLowerCase() === 'commandexecution') {
+              set((state) => {
+                state.liveCommandOutputByThreadId.delete(threadId);
+              });
+            }
+            break;
+          }
+
+          case 'item/commandExecution/outputDelta': {
+            const { threadId, delta } = (params as { threadId: string; delta: string }) || {};
+            if (threadId && delta) {
+              set((state) => {
+                const current = state.liveCommandOutputByThreadId.get(threadId) || '';
+                // Keep last 4000 chars to avoid unbounded growth
+                const next = current + delta;
+                state.liveCommandOutputByThreadId.set(threadId, next.length > 4000 ? next.slice(-4000) : next);
+                state.liveActivityLabelByThreadId.set(threadId, 'Running command');
               });
             }
             break;
@@ -796,6 +860,16 @@ export const selectLiveMessageForSelectedThread = (state: CodexState): string =>
 export const selectLiveReasoningForSelectedThread = (state: CodexState): string => {
   if (!state.selectedThreadId) return '';
   return state.liveReasoningByThreadId.get(state.selectedThreadId) || '';
+};
+
+export const selectLiveActivityLabelForSelectedThread = (state: CodexState): string => {
+  if (!state.selectedThreadId) return '';
+  return state.liveActivityLabelByThreadId.get(state.selectedThreadId) || '';
+};
+
+export const selectLiveCommandOutputForSelectedThread = (state: CodexState): string => {
+  if (!state.selectedThreadId) return '';
+  return state.liveCommandOutputByThreadId.get(state.selectedThreadId) || '';
 };
 
 export const selectIsInProgress = (state: CodexState): boolean => {
