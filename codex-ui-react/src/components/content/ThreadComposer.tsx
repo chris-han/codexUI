@@ -65,6 +65,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   const [fileMentionSuggestions, setFileMentionSuggestions] = useState<ComposerFileSuggestion[]>([]);
   const [highlightedFileIndex, setHighlightedFileIndex] = useState(0);
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<null | 'model' | 'skills' | 'reasoning'>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -149,6 +150,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       if (!(target instanceof Node)) return;
       if (root.contains(target)) return;
       setIsPlusMenuOpen(false);
+      setOpenDropdown(null);
     };
 
     window.addEventListener('pointerdown', handlePointerDown);
@@ -279,6 +281,16 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
   const handleCollaborationModeChange = (value: string) => {
     setSelectedCollaborationMode(value as CollaborationModeKind);
+  };
+
+  const toggleDropdown = (dropdown: 'model' | 'skills' | 'reasoning') => {
+    setIsPlusMenuOpen(false);
+    setOpenDropdown((current) => (current === dropdown ? null : dropdown));
+  };
+
+  const closeMenus = () => {
+    setIsPlusMenuOpen(false);
+    setOpenDropdown(null);
   };
 
   return (
@@ -450,35 +462,40 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         <div ref={menuRef} className="relative shrink-0">
           <button
             type="button"
-            onClick={() => setIsPlusMenuOpen((open) => !open)}
+            onClick={() => {
+              setOpenDropdown(null);
+              setIsPlusMenuOpen((open) => !open);
+            }}
             className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={disabled || isInProgress}
             aria-label="More actions"
           >
-            <span className="relative block h-4 w-4">
-              <span className="absolute left-1/2 top-1/2 h-[1.5px] w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
-              <span className="absolute left-1/2 top-1/2 h-4 w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+            <span className="relative block h-5 w-5">
+              <span className="absolute left-1/2 top-1/2 h-[1.75px] w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+              <span className="absolute left-1/2 top-1/2 h-5 w-[1.75px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
             </span>
           </button>
 
           {isPlusMenuOpen ? (
-            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-3xl bg-[#343434] p-3 text-white shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[260px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-4 text-gray-900 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
               <button
                 type="button"
                 onClick={() => {
                   handleCollaborationModeChange(selectedCollaborationMode === 'plan' ? 'default' : 'plan');
-                  setIsPlusMenuOpen(false);
+                  closeMenus();
                 }}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-white/10"
+                className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
               >
-                <IconLucideSplinePointer className="h-4.5 w-4.5 shrink-0" />
+                <IconLucideSplinePointer className="h-5 w-5 shrink-0" />
                 <span>Plan</span>
               </button>
-              <div className="my-2 h-px bg-white/15" />
+              <div className="my-2 h-px bg-gray-200" />
               <button
                 type="button"
-                onClick={() => uploadInputRef.current?.click()}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-white/10"
+                onClick={() => {
+                  uploadInputRef.current?.click();
+                }}
+                className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
               >
                 <span className="text-lg leading-none">+</span>
                 <span>Upload attachment</span>
@@ -488,67 +505,96 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
 
         <div className="relative min-w-[210px] flex-1 sm:flex-none">
-          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
+          <button
+            type="button"
+            onClick={() => toggleDropdown('model')}
+            className="inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700"
+            disabled={disabled || isInProgress}
+          >
             <span className="truncate">{selectedModelId}</span>
             <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          </span>
-          <select
-            value={selectedModelId}
-            onChange={(e) => setSelectedModelId(e.target.value)}
-            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
-            disabled={disabled || isInProgress}
-            aria-label="Model"
-          >
-            {modelOptions.map((option) => (
-              <option key={`model-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          </button>
+          {openDropdown === 'model' ? (
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[280px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+              {modelOptions.map((option) => (
+                <button
+                  key={`model-${option.value}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedModelId(option.value);
+                    closeMenus();
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
+                    option.value === selectedModelId ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  {option.value === selectedModelId ? <span className="text-gray-400">✓</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="relative min-w-[124px] flex-1">
-          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
+          <button
+            type="button"
+            onClick={() => toggleDropdown('skills')}
+            className="inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700"
+            disabled={disabled || isInProgress || skillOptions.length === 0}
+          >
             <span className="truncate">Skills</span>
             <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          </span>
-          <select
-            value=""
-            onChange={(e) => {
-              handleSkillDropdownChange(e.target.value);
-              e.currentTarget.value = '';
-            }}
-            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
-            disabled={disabled || isInProgress || skillOptions.length === 0}
-            aria-label="Skills"
-          >
-            <option value="">Skills</option>
-            {skillOptions.map((option) => (
-              <option key={`skill-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          </button>
+          {openDropdown === 'skills' ? (
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[280px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+              {skillOptions.map((option) => (
+                <button
+                  key={`skill-${option.value}`}
+                  type="button"
+                  onClick={() => {
+                    handleSkillDropdownChange(option.value);
+                    closeMenus();
+                  }}
+                  className="flex w-full items-center rounded-2xl px-4 py-3 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="relative min-w-[112px]">
-          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
+          <button
+            type="button"
+            onClick={() => toggleDropdown('reasoning')}
+            className="inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700"
+            disabled={disabled || isInProgress}
+          >
             <span className="truncate">{selectedReasoningLabel}</span>
             <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          </span>
-          <select
-            value={selectedReasoningEffort}
-            onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
-            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
-            disabled={disabled || isInProgress}
-            aria-label="Reasoning effort"
-          >
-            {reasoningOptions.map((option) => (
-              <option key={`effort-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          </button>
+          {openDropdown === 'reasoning' ? (
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+              {reasoningOptions.map((option) => (
+                <button
+                  key={`effort-${option.value}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedReasoningEffort(option.value as ReasoningEffort);
+                    closeMenus();
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition ${
+                    option.value === selectedReasoningEffort ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  {option.value === selectedReasoningEffort ? <span className="text-gray-400">✓</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="ml-auto flex items-center gap-2 self-end">
