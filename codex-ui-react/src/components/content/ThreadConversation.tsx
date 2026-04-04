@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
-import { IconTablerArchive, IconTablerGitFork } from '../icons';
+import { IconTablerArchive, IconTablerArrowBackUp, IconTablerCopy, IconTablerGitFork, IconTablerX } from '../icons';
 
 const ReviewPane = lazy(() => import('./ReviewPane'));
 
@@ -12,6 +12,8 @@ function ThreadConversation() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
 
   const selectedThread = useCodexStore(useCallback((state) => {
     if (!threadId) return null;
@@ -55,6 +57,7 @@ function ThreadConversation() {
   const interruptSelectedThreadTurn = useCodexStore((state) => state.interruptSelectedThreadTurn);
   const archiveThreadById = useCodexStore((state) => state.archiveThreadById);
   const forkThreadById = useCodexStore((state) => state.forkThreadById);
+  const rollbackThreadToTurn = useCodexStore((state) => state.rollbackThreadToTurn);
   const respondToServerRequest = useCodexStore((state) => state.respondToServerRequest);
 
   // Load thread when ID changes
@@ -91,6 +94,24 @@ function ThreadConversation() {
 
   const handleFork = async () => {
     await forkThreadById(threadView.id);
+  };
+
+  const handleCopyMessage = useCallback(async (messageId: string, text: string) => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(messageId);
+      window.setTimeout(() => {
+        setCopiedMessageId((current) => (current === messageId ? null : current));
+      }, 1500);
+    } catch (error) {
+      console.error('Failed to copy message:', error);
+    }
+  }, []);
+
+  const handleRollbackMessage = async (messageTurnId?: string) => {
+    if (!threadId || !messageTurnId) return;
+    await rollbackThreadToTurn(threadId, messageTurnId);
   };
 
   if (!threadId) {
@@ -202,12 +223,11 @@ function ThreadConversation() {
                   {message.images && message.images.length > 0 && (
                     <div className="mb-3 grid gap-2 sm:grid-cols-2">
                       {message.images.map((imageUrl) => (
-                        <a
+                        <button
                           key={imageUrl}
-                          href={imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block"
+                          type="button"
+                          onClick={() => setModalImageUrl(imageUrl)}
+                          className="block text-left"
                         >
                           <img
                             className="max-h-64 w-full rounded-xl border border-slate-200 object-cover"
@@ -215,7 +235,7 @@ function ThreadConversation() {
                             alt="Message image preview"
                             loading="lazy"
                           />
-                        </a>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -239,6 +259,30 @@ function ThreadConversation() {
                           {change.path}
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {message.role === 'assistant' && message.text.trim() && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                      {message.turnId ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRollbackMessage(message.turnId)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 hover:bg-gray-50"
+                          title="Rollback to this response"
+                        >
+                          <IconTablerArrowBackUp className="h-3.5 w-3.5" />
+                          Rollback
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyMessage(message.id, message.text)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 hover:bg-gray-50"
+                        title={copiedMessageId === message.id ? 'Copied' : 'Copy response'}
+                      >
+                        <IconTablerCopy className="h-3.5 w-3.5" />
+                        {copiedMessageId === message.id ? 'Copied' : 'Copy'}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -299,7 +343,13 @@ function ThreadConversation() {
                       onClick={() => respondToServerRequest(request.id, true, 'session')}
                       className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary-hover"
                     >
-                      Approve
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => respondToServerRequest(request.id, true, 'always')}
+                      className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
+                    >
+                      Always
                     </button>
                     <button
                       onClick={() => respondToServerRequest(request.id, false, 'session')}
@@ -324,6 +374,28 @@ function ThreadConversation() {
             />
           </div>
         </>
+      )}
+
+      {modalImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-6"
+          onClick={() => setModalImageUrl(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+            onClick={() => setModalImageUrl(null)}
+            aria-label="Close image preview"
+          >
+            <IconTablerX className="h-5 w-5" />
+          </button>
+          <img
+            src={modalImageUrl}
+            alt="Expanded preview"
+            className="max-h-[85vh] max-w-[90vw] rounded-xl object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );

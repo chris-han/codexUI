@@ -149,6 +149,7 @@ export interface CodexActions {
   archiveThreadById: (threadId: string) => Promise<void>;
   renameThreadById: (threadId: string, name: string) => Promise<void>;
   forkThreadById: (threadId: string) => Promise<string | null>;
+  rollbackThreadToTurn: (threadId: string, turnId: string) => Promise<void>;
   interruptSelectedThreadTurn: () => Promise<void>;
 
   // Message actions
@@ -508,6 +509,19 @@ export const useCodexStore = create<CodexState & CodexActions>()(
         } catch (error) {
           console.error('Failed to fork thread:', error);
           return null;
+        }
+      },
+
+      rollbackThreadToTurn: async (threadId, turnId) => {
+        try {
+          await api.rollbackThread(threadId, turnId);
+          await get().loadThreads();
+          await get().loadMessages(threadId);
+        } catch (error) {
+          console.error('Failed to rollback thread:', error);
+          set((state) => {
+            state.error = 'Failed to rollback thread';
+          });
         }
       },
 

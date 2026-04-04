@@ -1349,3 +1349,26 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React thread view includes Vue-style message actions and image modal
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- A thread contains at least one assistant message with text.
+- A message in the thread includes one or more images.
+
+#### Steps
+1. Hover or inspect an assistant message with text.
+2. Use the `Copy` action and confirm the message text is copied.
+3. Use the `Rollback` action on an assistant message and confirm the rollback request is sent for that message turn.
+4. Click a message image preview.
+5. Close the enlarged image preview.
+
+#### Expected Results
+- Assistant messages expose message-level `Copy` and `Rollback` actions.
+- Copy changes to `Copied` briefly after success.
+- Clicking a message image opens a centered modal-style preview instead of navigating away immediately.
+- The modal closes when using the close button or backdrop.
+
+#### Rollback/Cleanup
+- If rollback is triggered during testing, resume or continue the thread as needed afterward.
