@@ -285,6 +285,26 @@ This file tracks manual regression and feature verification steps.
 - Stop the proxy process with `Ctrl+C`.
 - Remove any temporary listener created only for the test.
 
+### Feature: codex-ui-react provider-backed model discovery
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- Codex config uses a `model_provider` entry that exposes a Responses-compatible `/models` endpoint, or the bridge is otherwise reachable for `GET /codex-api/provider-models`.
+
+#### Steps
+1. Start the React bridge server and confirm `GET /codex-api/provider-models` responds with JSON.
+2. If the active provider defines `model_providers.<providerId>.wire_api = "responses"` and `base_url`, confirm the endpoint returns discovered model ids in `data`.
+3. Open the React UI and inspect the model picker options after startup.
+4. If provider discovery is unavailable or returns invalid data, reload the UI and confirm the model picker still shows the base `model/list` results.
+
+#### Expected Results
+- The React bridge exposes `GET /codex-api/provider-models`.
+- Provider-only model ids are appended to the model picker without duplicating existing `model/list` ids.
+- Discovery failures are non-fatal and fall back to the regular Codex `model/list` output.
+
+#### Rollback/Cleanup
+- Restore the prior provider config if a temporary provider was used only for verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).

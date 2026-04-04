@@ -29,11 +29,17 @@ type ThreadListResponse = {
   data: ThreadSummary[];
 };
 
+type ProviderModelsResponse = {
+  data?: unknown;
+};
+
 type WorkspaceRootsState = {
   order: string[];
   labels: Record<string, string>;
   active: string[];
 };
+
+const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? '');
@@ -181,12 +187,38 @@ export async function interruptThreadTurn(threadId: string): Promise<void> {
 export async function getAvailableModelIds(): Promise<string[]> {
   try {
     const result = await rpcCall<{ data?: Array<string | { id?: string; model?: string }> }>('model/list');
-    return (result.data || [])
+    const ids = (result.data || [])
       .map((entry) => {
         if (typeof entry === 'string') return entry;
         return entry.id || entry.model || '';
       })
       .filter(Boolean);
+
+    try {
+      const response = await fetch('/codex-api/provider-models', {
+        signal: AbortSignal.timeout(PROVIDER_MODELS_FETCH_TIMEOUT_MS),
+      });
+
+      let providerPayload: ProviderModelsResponse | null = null;
+      try {
+        providerPayload = await response.json() as ProviderModelsResponse;
+      } catch {
+        providerPayload = null;
+      }
+
+      if (response.ok && Array.isArray(providerPayload?.data)) {
+        for (const candidate of providerPayload.data) {
+          if (typeof candidate !== 'string') continue;
+          const normalized = candidate.trim();
+          if (!normalized || ids.includes(normalized)) continue;
+          ids.push(normalized);
+        }
+      }
+    } catch {
+      // Keep the model picker usable when provider discovery is unavailable.
+    }
+
+    return ids;
   } catch {
     return [];
   }
