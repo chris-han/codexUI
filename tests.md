@@ -241,6 +241,28 @@ This file tracks manual regression and feature verification steps.
 - Stop the dev stack with `Ctrl+C`.
 - Terminate any leftover processes on ports `3000`, `3456`, or `5173` if the shell exits unexpectedly.
 
+### Feature: codex-ui-react thread detail includes persisted turns after send
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- A thread can be created or selected in the UI.
+- The selected model can complete a short prompt successfully.
+
+#### Steps
+1. Open an existing thread or create a new one.
+2. Send a short message such as `hi`.
+3. Wait for the assistant reply to complete.
+4. Refresh the page or reselect the same thread so the UI reloads thread detail from `thread/read`.
+5. Confirm the previously sent user message and assistant reply still render in the conversation.
+
+#### Expected Results
+- The client requests `thread/read` with `includeTurns: true`.
+- Reloading or reselecting the thread preserves the completed conversation instead of showing an empty thread.
+- User messages render from `userMessage.content`, and assistant messages render from `agentMessage.text`.
+
+#### Rollback/Cleanup
+- No cleanup required beyond deleting the test thread if it was created only for verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
