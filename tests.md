@@ -1329,3 +1329,23 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React message renderer matches Vue markdown block formatting
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- A thread contains assistant output covering multiple markdown block types.
+
+#### Steps
+1. Open a thread with assistant text containing headings, blockquotes, unordered lists, ordered lists, task lists, thematic breaks, code fences, markdown links, inline code, italics, strikethrough, and markdown images.
+2. Inspect the rendered message in the React thread view.
+3. Compare the same content against the Vue implementation if needed.
+
+#### Expected Results
+- Headings, blockquotes, unordered lists, ordered lists, task lists, thematic breaks, and fenced code blocks render as structured HTML rather than plain paragraphs.
+- Inline bold, italic, strikethrough, inline code, URLs, and file-style markdown links render with formatting.
+- Markdown images render as visible preview images instead of raw markdown text.
+- Code fences use syntax highlighting via `highlight.js`.
+
+#### Rollback/Cleanup
+- No cleanup required.

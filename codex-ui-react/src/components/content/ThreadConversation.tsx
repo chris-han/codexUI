@@ -199,6 +199,26 @@ function ThreadConversation() {
                       Assistant
                     </div>
                   )}
+                  {message.images && message.images.length > 0 && (
+                    <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                      {message.images.map((imageUrl) => (
+                        <a
+                          key={imageUrl}
+                          href={imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block"
+                        >
+                          <img
+                            className="max-h-64 w-full rounded-xl border border-slate-200 object-cover"
+                            src={imageUrl}
+                            alt="Message image preview"
+                            loading="lazy"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <MessageContent text={message.text} />
                   {message.fileChanges && message.fileChanges.length > 0 && (
                     <div className="mt-2 space-y-1">
