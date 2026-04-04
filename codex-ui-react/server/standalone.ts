@@ -419,52 +419,67 @@ async function readProviderBackedModelIds(): Promise<ProviderModelsResponse> {
     return { data: [], providerId: '', source: 'provider' };
   }
 
+  let baseUrl: string | null = null;
+  let queryParams: unknown = undefined;
+  const headers = new Headers();
   const providers = asRecord(config?.model_providers);
   const provider = asRecord(providers?.[providerId]);
-  if (!provider) {
+  if (provider) {
+    const wireApi = readNonEmptyString(provider.wire_api);
+    if (wireApi !== 'responses') {
+      return { data: [], providerId, source: 'provider' };
+    }
+
+    baseUrl = readNonEmptyString(provider.base_url);
+    if (!baseUrl) {
+      logProviderModelDiscoveryWarning('responses provider is missing base_url', { providerId });
+      return { data: [], providerId, source: 'provider' };
+    }
+
+    const configuredHeaders = asRecord(provider.http_headers);
+    if (configuredHeaders) {
+      for (const [key, rawValue] of Object.entries(configuredHeaders)) {
+        const normalized = normalizeHeaderValue(rawValue);
+        if (!normalized) continue;
+        headers.set(key, normalized);
+      }
+    }
+
+    const bearerToken = readNonEmptyString(provider.experimental_bearer_token);
+    if (bearerToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${bearerToken}`);
+    }
+
+    const envKey = readNonEmptyString(provider.env_key);
+    const envHttpHeaders = asRecord(provider.env_http_headers);
+    if (envKey || envHttpHeaders) {
+      logProviderModelDiscoveryWarning('provider discovery skipped env-backed auth/header expansion', {
+        providerId,
+        hasEnvKey: Boolean(envKey),
+        hasEnvHttpHeaders: Boolean(envHttpHeaders),
+      });
+    }
+
+    queryParams = provider.query_params;
+  } else if (providerId === 'openai') {
+    baseUrl = readNonEmptyString(config?.openai_base_url);
+    if (!baseUrl) {
+      logProviderModelDiscoveryWarning('configured provider is missing from model_providers', { providerId });
+      return { data: [], providerId, source: 'provider' };
+    }
+
+    const legacyApiKey = readNonEmptyString(config?.openai_api_key);
+    if (legacyApiKey && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${legacyApiKey}`);
+    }
+  } else {
     logProviderModelDiscoveryWarning('configured provider is missing from model_providers', { providerId });
     return { data: [], providerId, source: 'provider' };
   }
 
-  const wireApi = readNonEmptyString(provider.wire_api);
-  if (wireApi !== 'responses') {
-    return { data: [], providerId, source: 'provider' };
-  }
-
-  const baseUrl = readNonEmptyString(provider.base_url);
-  if (!baseUrl) {
-    logProviderModelDiscoveryWarning('responses provider is missing base_url', { providerId });
-    return { data: [], providerId, source: 'provider' };
-  }
-
-  const headers = new Headers();
-  const configuredHeaders = asRecord(provider.http_headers);
-  if (configuredHeaders) {
-    for (const [key, rawValue] of Object.entries(configuredHeaders)) {
-      const normalized = normalizeHeaderValue(rawValue);
-      if (!normalized) continue;
-      headers.set(key, normalized);
-    }
-  }
-
-  const bearerToken = readNonEmptyString(provider.experimental_bearer_token);
-  if (bearerToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${bearerToken}`);
-  }
-
-  const envKey = readNonEmptyString(provider.env_key);
-  const envHttpHeaders = asRecord(provider.env_http_headers);
-  if (envKey || envHttpHeaders) {
-    logProviderModelDiscoveryWarning('provider discovery skipped env-backed auth/header expansion', {
-      providerId,
-      hasEnvKey: Boolean(envKey),
-      hasEnvHttpHeaders: Boolean(envHttpHeaders),
-    });
-  }
-
   let requestUrl: URL;
   try {
-    requestUrl = buildProviderModelsUrl(baseUrl, provider.query_params);
+    requestUrl = buildProviderModelsUrl(baseUrl, queryParams);
   } catch (error) {
     logProviderModelDiscoveryWarning('provider /models URL was invalid', {
       providerId,

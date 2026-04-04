@@ -218,6 +218,29 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
+### Feature: Kimi OpenAI-compatible models exposed in React dropdown
+
+#### Prerequisites
+- `codex-ui-react` dev stack is running and reachable at `http://127.0.0.1:5173`.
+- The local Kimi OpenAI-compatible proxy is running on `http://127.0.0.1:3456/v1`.
+- A valid Kimi API key is configured for the proxy.
+
+#### Steps
+1. Request `GET http://127.0.0.1:3456/v1/models` and confirm the response includes `kimi-k2.5`, `kimi-k2-thinking`, `kimi-k2`, and `kimi-for-coding`.
+2. Open the React app and load any thread with the composer visible.
+3. Click `Options` in the composer toolbar to reveal the model selector.
+4. Open the model dropdown and confirm it includes `kimi-k2.5`, `kimi-k2-thinking`, `kimi-k2`, and `kimi-for-coding`.
+5. Start a direct WebSocket `/v1/responses` request against the local proxy using `model: "kimi-k2.5"` and `stream: true`.
+6. Confirm the stream emits `response.reasoning_summary_*` events before `response.output_text.delta`.
+
+#### Expected Results
+- The model dropdown includes the Kimi OpenAI-compatible models exposed by the local proxy.
+- The local proxy exposes the same Kimi model ids from `/v1/models`.
+- A direct `kimi-k2.5` streaming request returns reasoning-summary events before normal text deltas.
+
+#### Rollback/Cleanup
+- Switch the model selector back to the previous model if needed.
+
 ### Feature: codex-ui-react dev startup resolves Codex CLI automatically
 
 #### Prerequisites

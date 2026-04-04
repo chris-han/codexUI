@@ -20,6 +20,12 @@ const AZURE_OPENAI_DEPLOYMENT_NAME =
 const AZURE_OPENAI_API_VERSION =
   process.env.AZURE_OPENAI_API_VERSION?.trim() || '2025-01-01-preview';
 const AZURE_MAX_TOKENS = 4096;
+const KIMI_OPENAI_COMPATIBLE_MODEL_IDS = [
+  'kimi-k2.5',
+  'kimi-k2-thinking',
+  'kimi-k2',
+  'kimi-for-coding',
+] as const;
 
 type KimiHttpResponse = {
   status: number;
@@ -1145,6 +1151,18 @@ async function postToUpstream(chatBody: Record<string, unknown>): Promise<KimiHt
 }
 
 // Handle /responses endpoint
+app.get('/v1/models', (req, res) => {
+  res.json({
+    object: 'list',
+    data: KIMI_OPENAI_COMPATIBLE_MODEL_IDS.map((id) => ({
+      id,
+      object: 'model',
+      created: 0,
+      owned_by: 'moonshot',
+    })),
+  });
+});
+
 app.post('/v1/responses', async (req, res) => {
   try {
     console.log('[proxy] /v1/responses request', {
