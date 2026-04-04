@@ -194,6 +194,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Leave runtime mode and appearance at the previous user preference.
 
+### Feature: React attachment prompt uses staged file paths only
+
+#### Prerequisites
+- React app is running from this repository.
+- A thread is open in the React UI.
+- A non-image local file is available to attach.
+
+#### Steps
+1. In the React chat composer, attach a non-image file from the file picker.
+2. Send a prompt that explicitly asks about the file contents, such as `Read the attached file and summarize it.`
+3. Inspect the `turn/start` request payload in the browser devtools network panel or server logs.
+4. Confirm the first text input includes an `# Attached files` block with the staged absolute server path and a `# User request` section.
+5. Confirm no extra top-level `attachments` field is sent in the `turn/start` request body.
+
+#### Expected Results
+- The React frontend uploads the file and stages it on the server before send.
+- The outgoing prompt text contains the staged absolute path in the attached-files block.
+- The request relies on prompt-visible file paths rather than extra attachment metadata.
+
+#### Rollback/Cleanup
+- Remove any staged test upload files if you do not want them left in the server temp upload directory.
+
 ### Feature: Dark theme states for runtime mode toggle
 
 #### Prerequisites

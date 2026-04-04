@@ -106,11 +106,11 @@ function buildTextWithAttachments(
   files: ComposerFileAttachment[]
 ): string {
   if (files.length === 0) return prompt;
-  let prefix = '# Files mentioned by the user:\n';
+  let prefix = '# Attached files\n';
   for (const file of files) {
-    prefix += `\n## ${file.label}: ${file.path}\n`;
+    prefix += `\n- ${file.label}: ${file.path}\n`;
   }
-  return `${prefix}\n## My request for Codex:\n\n${prompt}\n`;
+  return `${prefix}\n\n# User request\n\n${prompt}\n`;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -347,11 +347,6 @@ export async function startThreadTurn(
   const request = {
     threadId,
     input,
-    attachments: (options?.fileAttachments ?? []).map((file) => ({
-      label: file.label,
-      path: file.path,
-      fsPath: file.fsPath,
-    })),
     model: normalizedModel || undefined,
     effort: options?.reasoningEffort,
     collaborationMode: options?.collaborationMode
