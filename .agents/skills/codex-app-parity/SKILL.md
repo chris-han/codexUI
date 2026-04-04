@@ -218,6 +218,15 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Route-Scoped Thread Shells For Live Streaming (2026-04-04)
+
+- In this React fork, realtime thread deltas can arrive before the thread list/detail hydration finishes for a route-selected thread.
+- A route-scoped placeholder thread shell avoids a false `Thread not found` state and lets live reasoning/output render immediately while metadata is still loading.
+- The conservative behavior is:
+  - create a minimal shell when `/thread/:id` is selected and the thread is not yet present in grouped thread data
+  - keep the shell until real thread data is loaded
+  - render a temporary title such as `Loading thread...` rather than blocking the conversation view
+
 ## Findings: File Change Turn Summaries (2026-03-30)
 
 - Official app-server docs in `openai/codex` confirm that:

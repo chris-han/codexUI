@@ -1224,3 +1224,25 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Restore the previous `codex-ui-react/.codex/config.toml` values if switching back to a different upstream routing setup.
+
+### Feature: Route thread shell keeps live Kimi deltas visible before thread hydration
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- Backend config uses the Kimi proxy via `openai_base_url = http://127.0.0.1:3456/v1`.
+- The selected model is `kimi-k2.5` or `kimi-k2-thinking`.
+
+#### Steps
+1. Create a new thread and navigate to its `/thread/<id>` route immediately.
+2. Submit a message before the thread fully appears in the sidebar or before thread detail hydration finishes.
+3. Watch the thread page while the turn is still running.
+4. Let the turn complete and confirm the thread later materializes normally in the sidebar and header.
+
+#### Expected Results
+- The route does not fall back to `Thread not found` while the thread is still materializing.
+- The page can temporarily show `Loading thread...` and still render the active turn.
+- `Thinking` content streams into the thread while reasoning deltas are arriving.
+- Assistant text also streams into the same thread view before final thread hydration completes.
+
+#### Rollback/Cleanup
+- No cleanup required.

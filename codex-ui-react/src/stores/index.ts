@@ -59,11 +59,40 @@ function removeFromStorage(key: string): void {
   }
 }
 
+function deriveProjectName(cwd: string): string {
+  const parts = cwd.split('/').filter(Boolean);
+  return parts[parts.length - 1] || cwd || 'Thread';
+}
+
+function createThreadShell(params: {
+  threadId: string;
+  cwd: string;
+  title?: string;
+  preview?: string;
+  inProgress?: boolean;
+}): UiThread {
+  const nowIso = new Date().toISOString();
+  const projectName = deriveProjectName(params.cwd);
+  return {
+    id: params.threadId,
+    title: params.title?.trim() || projectName,
+    projectName,
+    cwd: params.cwd,
+    hasWorktree: false,
+    createdAtIso: nowIso,
+    updatedAtIso: nowIso,
+    preview: params.preview || '',
+    unread: false,
+    inProgress: params.inProgress || false,
+  };
+}
+
 // ==================== Store State ====================
 
 export interface CodexState {
   // Project/Thread state
   projectGroups: UiProjectGroup[];
+  threadShellsById: Map<string, UiThread>;
   selectedThreadId: string | null;
   isLoadingThreads: boolean;
 
@@ -169,6 +198,7 @@ export interface CodexActions {
 
 const getInitialState = (): CodexState => ({
   projectGroups: [],
+  threadShellsById: new Map(),
   selectedThreadId: loadFromStorage<string | null>(SELECTED_THREAD_STORAGE_KEY, null),
   isLoadingThreads: false,
 
@@ -261,6 +291,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             groups.forEach((group) => {
               group.threads.forEach((thread) => {
                 state.inProgressByThreadId.set(thread.id, thread.inProgress);
+                state.threadShellsById.delete(thread.id);
               });
             });
 
@@ -269,7 +300,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 group.threads.some((thread) => thread.id === state.selectedThreadId)
               );
               const shouldPreserveSelectedThread =
-                state.isLoadingMessages || state.messagesByThreadId.has(state.selectedThreadId);
+                state.isLoadingMessages ||
+                state.messagesByThreadId.has(state.selectedThreadId) ||
+                state.threadShellsById.has(state.selectedThreadId);
               if (!selectedThreadStillExists && !shouldPreserveSelectedThread) {
                 clearSelectedThreadState(state);
               }
@@ -299,6 +332,21 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
         set((state) => {
           state.selectedThreadId = threadId;
+          if (threadId) {
+            const existsInGroups = state.projectGroups.some((group) =>
+              group.threads.some((thread) => thread.id === threadId)
+            );
+            if (!existsInGroups && !state.threadShellsById.has(threadId)) {
+              state.threadShellsById.set(
+                threadId,
+                createThreadShell({
+                  threadId,
+                  cwd: '',
+                  title: 'Loading thread...',
+                })
+              );
+            }
+          }
         });
         if (threadId) {
           saveToStorage(SELECTED_THREAD_STORAGE_KEY, threadId);
@@ -319,6 +367,16 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           });
           set((state) => {
             if (!thread) {
+              const shell = state.threadShellsById.get(threadId);
+              if (shell) {
+                state.messagesByThreadId.set(threadId, state.messagesByThreadId.get(threadId) || []);
+                upsertThreadIntoGroups(state, {
+                  ...shell,
+                  inProgress: state.inProgressByThreadId.get(threadId) || shell.inProgress,
+                  updatedAtIso: new Date().toISOString(),
+                });
+                return;
+              }
               state.messagesByThreadId.delete(threadId);
               state.hydratedThreadIds.delete(threadId);
               state.liveMessagesByThreadId.delete(threadId);
@@ -331,6 +389,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               return;
             }
             upsertThreadIntoGroups(state, thread);
+            state.threadShellsById.delete(threadId);
             state.messagesByThreadId.set(threadId, messages);
             state.hydratedThreadIds.add(threadId);
           });
@@ -356,6 +415,19 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             model: get().selectedModelId,
             reasoningEffort: get().selectedReasoningEffort,
           });
+
+          set((state) => {
+            const shell = createThreadShell({
+              threadId,
+              cwd,
+              preview: message || '',
+              inProgress: Boolean(message),
+            });
+            state.threadShellsById.set(threadId, shell);
+            upsertThreadIntoGroups(state, shell);
+            state.selectedThreadId = threadId;
+          });
+          saveToStorage(SELECTED_THREAD_STORAGE_KEY, threadId);
 
           // Refresh threads to get the new thread
           await get().loadThreads();
@@ -392,6 +464,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           // Remove from local state
           set((state) => {
             state.hydratedThreadIds.delete(threadId);
+            state.threadShellsById.delete(threadId);
             state.projectGroups = state.projectGroups
               .map((group) => ({
                 ...group,
@@ -857,7 +930,7 @@ export const selectSelectedThread = (state: CodexState): UiThread | null => {
     const thread = group.threads.find((t) => t.id === state.selectedThreadId);
     if (thread) return thread;
   }
-  return null;
+  return state.threadShellsById.get(state.selectedThreadId) || null;
 };
 
 export const selectMessagesForSelectedThread = (state: CodexState): UiMessage[] => {

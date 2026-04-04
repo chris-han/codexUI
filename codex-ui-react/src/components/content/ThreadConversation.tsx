@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useCodexStore, selectSelectedThread, selectMessagesForSelectedThread, selectLiveMessageForSelectedThread, selectLiveReasoningForSelectedThread, selectIsInProgress, selectPendingRequestsForSelectedThread, selectLiveActivityLabelForSelectedThread, selectLiveCommandOutputForSelectedThread } from '../../stores';
+import { useCodexStore } from '../../stores';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
 import { IconTablerArchive, IconTablerGitFork } from '../icons';
@@ -13,14 +13,42 @@ function ThreadConversation() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
 
-  const selectedThread = useCodexStore(selectSelectedThread);
-  const messages = useCodexStore(selectMessagesForSelectedThread);
-  const liveMessage = useCodexStore(selectLiveMessageForSelectedThread);
-  const liveReasoning = useCodexStore(selectLiveReasoningForSelectedThread);
-  const liveActivityLabel = useCodexStore(selectLiveActivityLabelForSelectedThread);
-  const liveCommandOutput = useCodexStore(selectLiveCommandOutputForSelectedThread);
-  const isInProgress = useCodexStore(selectIsInProgress);
-  const pendingRequests = useCodexStore(selectPendingRequestsForSelectedThread);
+  const selectedThread = useCodexStore(useCallback((state) => {
+    if (!threadId) return null;
+    for (const group of state.projectGroups) {
+      const thread = group.threads.find((candidate) => candidate.id === threadId);
+      if (thread) return thread;
+    }
+    return state.threadShellsById.get(threadId) || null;
+  }, [threadId]));
+  const messages = useCodexStore(useCallback((state) => {
+    if (!threadId) return [];
+    return state.messagesByThreadId.get(threadId) || [];
+  }, [threadId]));
+  const liveMessage = useCodexStore(useCallback((state) => {
+    if (!threadId) return '';
+    return state.liveMessagesByThreadId.get(threadId) || '';
+  }, [threadId]));
+  const liveReasoning = useCodexStore(useCallback((state) => {
+    if (!threadId) return '';
+    return state.liveReasoningByThreadId.get(threadId) || '';
+  }, [threadId]));
+  const liveActivityLabel = useCodexStore(useCallback((state) => {
+    if (!threadId) return '';
+    return state.liveActivityLabelByThreadId.get(threadId) || '';
+  }, [threadId]));
+  const liveCommandOutput = useCodexStore(useCallback((state) => {
+    if (!threadId) return '';
+    return state.liveCommandOutputByThreadId.get(threadId) || '';
+  }, [threadId]));
+  const isInProgress = useCodexStore(useCallback((state) => {
+    if (!threadId) return false;
+    return state.inProgressByThreadId.get(threadId) || false;
+  }, [threadId]));
+  const pendingRequests = useCodexStore(useCallback((state) => {
+    if (!threadId) return [];
+    return state.pendingServerRequestsByThreadId.get(threadId) || [];
+  }, [threadId]));
 
   const selectThread = useCodexStore((state) => state.selectThread);
   const sendMessage = useCodexStore((state) => state.sendMessage);
@@ -58,18 +86,14 @@ function ThreadConversation() {
   };
 
   const handleArchive = async () => {
-    if (selectedThread) {
-      await archiveThreadById(selectedThread.id);
-    }
+    await archiveThreadById(threadView.id);
   };
 
   const handleFork = async () => {
-    if (selectedThread) {
-      await forkThreadById(selectedThread.id);
-    }
+    await forkThreadById(threadView.id);
   };
 
-  if (!selectedThread) {
+  if (!threadId) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
         Thread not found
@@ -77,13 +101,26 @@ function ThreadConversation() {
     );
   }
 
+  const threadView = selectedThread || {
+    id: threadId,
+    title: 'Loading thread...',
+    projectName: 'Thread',
+    cwd: '',
+    hasWorktree: false,
+    createdAtIso: '',
+    updatedAtIso: '',
+    preview: '',
+    unread: false,
+    inProgress: isInProgress,
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
           <h1 className="font-semibold text-gray-800 truncate max-w-md">
-            {selectedThread.title}
+            {threadView.title}
           </h1>
           {isInProgress && (
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
@@ -124,8 +161,8 @@ function ThreadConversation() {
       {isReviewOpen ? (
         <Suspense fallback={<div className="flex-1 p-4 text-sm text-gray-500">Loading review pane…</div>}>
           <ReviewPane
-            threadId={selectedThread.id}
-            cwd={selectedThread.cwd}
+            threadId={threadView.id}
+            cwd={threadView.cwd}
             isThreadInProgress={isInProgress}
             onClose={() => setIsReviewOpen(false)}
           />
