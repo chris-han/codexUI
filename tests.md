@@ -1494,3 +1494,25 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary attachment chips before leaving the thread if desired.
+
+### Feature: React composer shell matches Codex web visual treatment more closely
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- A thread or home-route composer is visible.
+
+#### Steps
+1. Open the composer and inspect its shell, placeholder, and control row.
+2. Confirm the placeholder reads `Ask a question with /plan`.
+3. Inspect the dark action row with `+`, model, skills, reasoning, microphone, and send controls.
+4. Open the slash-skill and file-mention popovers if available.
+
+#### Expected Results
+- The composer renders as a dark rounded shell rather than a white card.
+- The placeholder copy and overall surface are closer to the Codex web reference.
+- The control row uses white text on the dark shell with inline chevrons beside labels.
+- The popover menus inherit the dark visual language instead of switching to white cards.
+- A microphone icon is visible in the action cluster even if dictation is not yet enabled.
+
+#### Rollback/Cleanup
+- No cleanup required.
