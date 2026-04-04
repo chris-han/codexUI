@@ -400,12 +400,12 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
-        <div className="relative min-w-[120px]">
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-gray-100 pt-3">
+        <div className="relative min-w-[84px]">
           <select
             value={selectedCollaborationMode}
             onChange={(e) => handleCollaborationModeChange(e.target.value)}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-600 outline-none transition focus:border-gray-300"
             disabled={disabled || isInProgress}
             aria-label="Collaboration mode"
           >
@@ -415,14 +415,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
-        <div className="relative min-w-[240px]">
+        <div className="relative min-w-[210px] flex-1 sm:flex-none">
           <select
             value={selectedModelId}
             onChange={(e) => setSelectedModelId(e.target.value)}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-700 outline-none transition focus:border-gray-300"
             disabled={disabled || isInProgress}
             aria-label="Model"
           >
@@ -432,17 +432,17 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
-        <div className="relative min-w-[160px]">
+        <div className="relative min-w-[124px] flex-1">
           <select
             value=""
             onChange={(e) => {
               handleSkillDropdownChange(e.target.value);
               e.currentTarget.value = '';
             }}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-700 outline-none transition focus:border-gray-300"
             disabled={disabled || isInProgress || skillOptions.length === 0}
             aria-label="Skills"
           >
@@ -453,14 +453,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
-        <div className="relative min-w-[132px]">
+        <div className="relative min-w-[112px]">
           <select
             value={selectedReasoningEffort}
             onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
-            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-4 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
+            className="w-full appearance-none rounded-full border border-gray-200 bg-white px-3 py-1.5 pr-8 text-sm font-normal text-gray-700 outline-none transition focus:border-gray-300"
             disabled={disabled || isInProgress}
             aria-label="Reasoning effort"
           >
@@ -470,10 +470,10 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+          <IconTablerChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 self-end">
           {isInProgress ? (
             <button
               type="button"

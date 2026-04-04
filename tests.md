@@ -1460,7 +1460,8 @@ This file tracks manual regression and feature verification steps.
 
 #### Expected Results
 - The leftmost selector visibly shows `Default` or `Plan` instead of a blank or collapsed control.
-- All selector pills keep readable widths and use a consistent custom-chevron style instead of a broken native-select layout.
+- All selector pills keep readable widths, slimmer heights, and a lighter Vue-style visual weight instead of oversized form controls.
+- The selector row uses a consistent custom-chevron style instead of a broken native-select layout.
 - The console does not warn about duplicate React keys from `ThreadComposer` option rendering.
 - If upstream option data contains malformed rows with missing values, the composer ignores them instead of crashing.
 
