@@ -438,7 +438,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           // Send initial message if provided
           if (message) {
             await api.startThreadTurn(threadId, message, {
-              collaborationMode: get().selectedCollaborationMode,
+              model: get().selectedModelId,
               reasoningEffort: get().selectedReasoningEffort,
             });
           }
@@ -553,7 +553,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           }
 
           await api.startThreadTurn(threadId, message, {
-            collaborationMode: refreshedState.selectedCollaborationMode,
+            model: refreshedState.selectedModelId,
             reasoningEffort: refreshedState.selectedReasoningEffort,
           });
           set((state) => {

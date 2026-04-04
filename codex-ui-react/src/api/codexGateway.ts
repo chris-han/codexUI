@@ -206,7 +206,11 @@ export async function startThread(params: {
   const result = await rpcCall<{ thread?: { id: string }; id?: string }>('thread/start', {
     cwd: params.cwd,
     model: params.model,
-    reasoning_effort: params.reasoningEffort,
+    config: params.reasoningEffort
+      ? { model_reasoning_effort: params.reasoningEffort }
+      : undefined,
+    experimentalRawEvents: false,
+    persistExtendedHistory: true,
   });
   // Handle both formats: { thread: { id } } and { id }
   const threadId = result.thread?.id ?? result.id;
@@ -248,15 +252,15 @@ export async function startThreadTurn(
   threadId: string,
   message: string,
   options?: {
-    collaborationMode?: string;
+    model?: string;
     reasoningEffort?: ReasoningEffort;
   }
 ): Promise<void> {
   const request = {
     threadId,
     input: [{ type: 'text', text: message }],
-    collaboration_mode: options?.collaborationMode,
-    reasoning_effort: options?.reasoningEffort,
+    model: options?.model,
+    effort: options?.reasoningEffort,
   };
 
   try {

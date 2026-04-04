@@ -1285,6 +1285,7 @@ This file tracks manual regression and feature verification steps.
 - The app does not log `Invalid request: missing field keyPath` or `unknown variant setDefaultModel` for model changes.
 - The selected model persists through the supported app-server RPC path.
 - Speed mode writes continue to use a valid config write payload.
+- Sending a new message after changing the model does not fail with `invalid type: string "default", expected struct CollaborationMode`.
 
 #### Rollback/Cleanup
 - Restore the previously selected model if needed.
