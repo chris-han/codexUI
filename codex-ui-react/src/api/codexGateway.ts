@@ -63,7 +63,10 @@ export async function getThreadDetail(threadId: string): Promise<{
   thread: UiThread | null;
 }> {
   try {
-    const result = await rpcCall<ThreadReadResult>('thread/read', { threadId });
+    const result = await rpcCall<ThreadReadResult>('thread/read', {
+      threadId,
+      includeTurns: true,
+    });
     return normalizeThreadDetail(result);
   } catch (error: unknown) {
     // If thread is not loaded, try to resume it first
@@ -72,7 +75,10 @@ export async function getThreadDetail(threadId: string): Promise<{
       try {
         await resumeThread(threadId);
         // Retry read after resume
-        const result = await rpcCall<ThreadReadResult>('thread/read', { threadId });
+        const result = await rpcCall<ThreadReadResult>('thread/read', {
+          threadId,
+          includeTurns: true,
+        });
         return normalizeThreadDetail(result);
       } catch (resumeError: unknown) {
         if (isMissingRolloutError(resumeError)) {
@@ -451,19 +457,19 @@ function normalizeThreadItem(
       return {
         ...base,
         role: 'user' as const,
-        text: item.text || '',
+        text: extractMessageText(item),
       };
     case 'agentMessage':
       return {
         ...base,
         role: 'assistant' as const,
-        text: item.text || '',
+        text: extractMessageText(item),
       };
     case 'systemMessage':
       return {
         ...base,
         role: 'system' as const,
-        text: item.text || '',
+        text: extractMessageText(item),
       };
     default:
       // Handle other item types as needed
@@ -476,6 +482,25 @@ function normalizeThreadItem(
       }
       return null;
   }
+}
+
+function extractMessageText(item: { text?: string; content?: unknown }): string {
+  if (typeof item.text === 'string' && item.text.length > 0) {
+    return item.text;
+  }
+
+  if (!Array.isArray(item.content)) {
+    return '';
+  }
+
+  return item.content
+    .map((part) => {
+      if (!part || typeof part !== 'object') return '';
+      const record = part as Record<string, unknown>;
+      return typeof record.text === 'string' ? record.text : '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function normalizeServerRequest(request: unknown): UiServerRequest | null {
