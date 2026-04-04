@@ -16,18 +16,19 @@
 
 ## Goal
 
-Move attachment understanding entirely to the Codex app-server side.
+Reach CLI-equivalent attachment behavior in the web product without pushing file parsing into the web UI.
 
 The web UI should only:
 - upload/stage local files so they exist on the server
 - attach server-readable paths to the turn request
+- make those staged paths visible in the user-visible prompt text
 - show attachment chips and progress
 
-The app-server and model/tool loop should decide:
-- whether an attachment must be inspected before answering
+The Codex runtime should decide:
+- whether a file must be inspected before answering
 - whether the file can be read directly as text
-- whether extraction/conversion code must be planned and executed
-- how extracted content should be fed back into reasoning
+- whether extraction/conversion steps are needed
+- how extracted content should be used in reasoning
 
 ## Current Vue Contract
 
@@ -48,32 +49,29 @@ The Vue web layer does not:
 - extract `.pdf`
 - decide conversion strategy
 
-## Desired App-Server Behavior
+## Desired Behavior
 
-### 1. Treat attachments as first-class turn inputs
+### 1. Treat staged paths in prompt text as the primary parity mechanism
 
-When `turn/start` includes `attachments`, the app-server should persist them in turn runtime state as structured inputs, not rely only on the prompt prefix.
+The first parity target is not a new app-server attachment protocol. It is making the staged absolute file paths visible in the text input the same way `codex exec` already succeeds.
 
-Recommended normalized attachment record:
-- `label`
-- `path`
-- `fsPath`
-- `extension`
-- `mimeGuess`
-- `sizeBytes`
-- `sourceKind`
-  - `uploaded`
-  - `workspace`
-- `inspectionStatus`
-  - `pending`
-  - `read`
-  - `extracted`
-  - `unsupported`
-  - `failed`
+Recommended prompt shape:
+
+```md
+# Attached files
+
+- Contract: /absolute/server/path/to/file.docx
+
+# User request
+
+Please review the attached contract and assess its validity.
+```
+
+`attachments` metadata may still be sent for UI/client purposes, but it should not be treated as the primary semantic channel unless later app-server work proves necessary.
 
 ### 2. Add attachment-aware planning before answering
 
-If a turn has attachments, the planner should explicitly decide whether inspection is required before answering.
+Once the file path is visible in prompt text, the Codex runtime should be expected to make the inspection decision the same way it already does in CLI and direct app-server text-only tests.
 
 Rules:
 - If the user asks about attachment contents, inspection is mandatory.
@@ -81,79 +79,42 @@ Rules:
 - If the file type is structured/binary such as `.docx`, `.pdf`, `.xlsx`, plan extraction first.
 - If the file type is unsupported, record the limitation and continue with best-effort reasoning.
 
-### 3. Create an internal attachment inspection phase
+These are behavioral expectations, not a commitment to implement a new hardcoded attachment planner immediately.
 
-Before normal response generation, run an internal phase like:
-- `attachment/inspect`
+### 3. Avoid `mention` for local files
 
-This phase should:
-- classify each attachment
-- select a strategy
-- produce a compact inspection artifact for later reasoning
+`mention` should remain reserved for app/plugin semantics. Local file attachments should not be encoded as `UserInput::Mention`.
 
-Outputs per attachment:
-- strategy chosen
-- commands or tools used
-- extracted text or summary
-- truncation information
-- failure details if applicable
+### 4. Use runtime reasoning before adding server-owned file logic
 
-### 4. Use app-server-owned strategies, not web-ui conversions
+The default assumption should now be:
 
-Preferred inspection strategies:
+- text/code/config files will usually be read directly
+- structured files like `.docx` may trigger ad hoc extraction chosen by Codex
+- unsupported files should degrade gracefully
 
-- Text/code/config files:
-  - use built-in filesystem read
+That behavior is already present when path semantics are correct.
 
-- `.docx`:
-  - plan extraction via unzip/XML parsing or a helper script
+### 5. Add app-server-owned augmentation only if parity tests show a gap
 
-- `.pdf`:
-  - plan extraction via available host tools or a helper script
+Only if prompt-visible staged paths are still insufficient should we add app-server-specific behavior such as:
 
-- `.xlsx`:
-  - plan structured extraction via Python/helper script
+- attachment-aware preamble/instructions
+- inspection progress notifications
+- stricter gating when the user explicitly asks about attachment contents
 
-- Unknown binary:
-  - mark unsupported unless the model decides to generate a converter
+### 6. Consider first-class attachment state only as a later product feature
 
-The key point is that the app-server/model loop owns the decision and execution.
+If later needed, a richer attachment subsystem could include:
 
-### 5. Allow the model to generate extraction code when needed
+- normalized attachment state
+- inspection status tracking
+- structured extraction artifacts
+- reusable helper scripts for commonly problematic formats
 
-If no built-in extractor exists for a file type, the app-server should let the model:
-- inspect file extension and basic metadata
-- propose a conversion approach
-- write extraction code or a one-off script
-- run it
-- capture output back into turn state
+But that is no longer the baseline parity plan.
 
-This is where reasoning belongs for `.docx` and other complex formats.
-
-### 6. Add reusable helper scripts on the server side
-
-To avoid repeated ad hoc generation, add a server-owned extractor library over time:
-
-- `server/extractors/docx`
-- `server/extractors/pdf`
-- `server/extractors/xlsx`
-
-The model can call these first, and only generate code when no helper fits.
-
-### 7. Feed extracted content back in a structured way
-
-Do not dump entire documents blindly into the model prompt.
-
-Store:
-- extracted text
-- truncation markers
-- method used
-- page/sheet/section markers where possible
-- extraction errors
-
-Then expose compact context to downstream reasoning.
-
-### 8. Surface progress to the UI via notifications
+### 7. Surface progress to the UI via notifications if useful
 
 Add item/activity notifications such as:
 - `Inspecting attachment`
@@ -162,24 +123,25 @@ Add item/activity notifications such as:
 - `Extracting pdf`
 - `Attachment inspection failed`
 
-The UI remains generic while still showing useful progress.
+These are useful, but optional until the lighter parity path is validated.
 
-### 9. Preserve fallback behavior
+### 8. Preserve fallback behavior
 
 If extraction fails:
 - do not fail the entire turn unless the attachment is essential
-- record failure state
+- record or surface failure state
 - let the model decide whether to ask the user for another format
 
-### 10. Test matrix
+### 9. Test matrix
 
-Add app-server tests for:
+Add parity-focused tests for:
 - text file attachment direct read
-- `.docx` attachment inspection/extraction
+- `.docx` attachment via staged path in prompt text
+- `.pdf` attachment via staged path in prompt text
+- `.xlsx` attachment via staged path in prompt text
 - unsupported binary attachment fallback
 - multiple attachments in one turn
-- interruption during extraction
-- retry behavior after extraction failure
+- interruption during inspection or extraction
 
 ## Recommended Implementation Order
 
@@ -204,4 +166,4 @@ The web UI should not:
 - inline file contents into prompts
 - maintain a file-type extractor registry
 
-Those responsibilities belong to the app-server and the model/tool execution loop.
+Those responsibilities belong to the Codex runtime and, only if needed later, app-server-side augmentation.
