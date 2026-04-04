@@ -73,6 +73,13 @@ type UploadComposerFileResponse = {
   error?: string;
 };
 
+type ExtractTextResponse = {
+  data?: {
+    text?: string;
+  };
+  error?: string;
+};
+
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
   { value: 'default', label: 'Default' },
@@ -94,6 +101,17 @@ type FsReadFileResponse = {
 };
 
 const ATTACHMENT_TEXT_CHAR_LIMIT = 16_000;
+const TEXT_ATTACHMENT_EXTENSIONS = new Set([
+  '.txt', '.md', '.markdown', '.json', '.jsonl', '.yaml', '.yml', '.toml', '.ini', '.cfg',
+  '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.rb', '.php', '.java', '.kt', '.go',
+  '.rs', '.swift', '.c', '.cc', '.cpp', '.h', '.hpp', '.cs', '.sh', '.bash', '.zsh', '.fish',
+  '.sql', '.html', '.css', '.scss', '.less', '.xml', '.csv', '.tsv', '.log', '.env',
+]);
+
+type HydratedComposerAttachment = ComposerFileAttachment & {
+  content?: string | null;
+  contentError?: string | null;
+};
 
 function normalizePlanModeReasoningEffort(
   value: ReasoningEffort | '' | null | undefined
@@ -109,7 +127,7 @@ function normalizeCollaborationModeReasoningEffort(
 
 function buildTextWithAttachments(
   prompt: string,
-  files: Array<ComposerFileAttachment & { content?: string | null; contentError?: string | null }>
+  files: HydratedComposerAttachment[]
 ): string {
   if (files.length === 0) return prompt;
   let prefix = '# Files mentioned by the user:\n';
@@ -140,10 +158,66 @@ function decodeBase64Utf8(dataBase64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+function getAttachmentExtension(path: string): string {
+  const normalizedPath = path.trim().toLowerCase();
+  const lastDot = normalizedPath.lastIndexOf('.');
+  const lastSlash = normalizedPath.lastIndexOf('/');
+  if (lastDot < 0 || lastDot < lastSlash) return '';
+  return normalizedPath.slice(lastDot);
+}
+
+function isTextAttachment(path: string): boolean {
+  return TEXT_ATTACHMENT_EXTENSIONS.has(getAttachmentExtension(path));
+}
+
+async function extractStructuredAttachmentText(path: string): Promise<string | null> {
+  if (!path.toLowerCase().endsWith('.docx')) return null;
+  const response = await fetch('/codex-api/extract-text', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  const payload = await response.json() as ExtractTextResponse;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to extract document text'));
+  }
+  const text = payload.data?.text;
+  return typeof text === 'string' && text.trim() ? text : '';
+}
+
+async function readTextAttachment(path: string): Promise<string> {
+  const result = await rpcCall<FsReadFileResponse>('fs/readFile', { path });
+  return decodeBase64Utf8(result.dataBase64 ?? '');
+}
+
+async function loadAttachmentContent(path: string): Promise<{ content?: string; contentError?: string | null }> {
+  const extension = getAttachmentExtension(path);
+
+  try {
+    if (extension === '.docx') {
+      const text = await extractStructuredAttachmentText(path);
+      if (typeof text === 'string' && text.length > 0) {
+        return { content: text };
+      }
+      return { contentError: 'document text extraction returned no text' };
+    }
+
+    if (isTextAttachment(path)) {
+      return { content: await readTextAttachment(path) };
+    }
+
+    return {};
+  } catch (error) {
+    return {
+      contentError: error instanceof Error ? error.message : 'failed to read file',
+    };
+  }
+}
+
 async function hydrateAttachmentContents(
   files: ComposerFileAttachment[],
   cwd?: string
-): Promise<Array<ComposerFileAttachment & { content?: string | null; contentError?: string | null }>> {
+): Promise<HydratedComposerAttachment[]> {
   return await Promise.all(files.map(async (file) => {
     const resolvedPath = resolveAttachmentPath(file.fsPath || file.path, cwd);
     if (!resolvedPath) {
@@ -152,27 +226,21 @@ async function hydrateAttachmentContents(
         contentError: 'path is not readable from the app server',
       };
     }
-    try {
-      const result = await rpcCall<FsReadFileResponse>('fs/readFile', { path: resolvedPath });
-      const rawText = typeof result.dataBase64 === 'string' ? decodeBase64Utf8(result.dataBase64) : '';
-      const sanitizedText = rawText.replace(/\0/g, '');
-      const content = sanitizedText.length > ATTACHMENT_TEXT_CHAR_LIMIT
-        ? `${sanitizedText.slice(0, ATTACHMENT_TEXT_CHAR_LIMIT)}\n\n[truncated]`
-        : sanitizedText;
-      return {
-        ...file,
-        path: resolvedPath,
-        fsPath: resolvedPath,
-        content,
-      };
-    } catch (error) {
-      return {
-        ...file,
-        path: resolvedPath,
-        fsPath: resolvedPath,
-        contentError: error instanceof Error ? error.message : 'failed to read file',
-      };
-    }
+    const loaded = await loadAttachmentContent(resolvedPath);
+    const sanitizedText = typeof loaded.content === 'string'
+      ? loaded.content.replace(/\0/g, '')
+      : '';
+    const content = sanitizedText.length > ATTACHMENT_TEXT_CHAR_LIMIT
+      ? `${sanitizedText.slice(0, ATTACHMENT_TEXT_CHAR_LIMIT)}\n\n[truncated]`
+      : sanitizedText || undefined;
+
+    return {
+      ...file,
+      path: resolvedPath,
+      fsPath: resolvedPath,
+      content,
+      contentError: loaded.contentError ?? null,
+    };
   }));
 }
 

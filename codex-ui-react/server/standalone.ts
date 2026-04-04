@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
-import { execSync, spawnSync } from 'node:child_process';
+import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
 
@@ -248,6 +248,35 @@ function bufferIndexOf(buf: Buffer, needle: Buffer, start = 0): number {
 function sanitizeUploadFilename(fileName: string): string {
   const sanitized = fileName.replace(/[/\\]/g, '_').trim();
   return sanitized || 'uploaded-file';
+}
+
+function decodeXmlEntities(input: string): string {
+  return input
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, '\'');
+}
+
+function extractDocxText(filePath: string): string {
+  const xml = execFileSync('unzip', ['-p', filePath, 'word/document.xml'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  const withBreaks = xml
+    .replace(/<w:p\b[^>]*>/g, '\n')
+    .replace(/<w:br\b[^>]*\/>/g, '\n')
+    .replace(/<w:tab\b[^>]*\/>/g, '\t');
+
+  const stripped = withBreaks.replace(/<[^>]+>/g, '');
+  const decoded = decodeXmlEntities(stripped);
+  return decoded
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 async function handleFileUpload(req: express.Request, res: express.Response): Promise<void> {
@@ -817,6 +846,38 @@ app.get('/codex-api/browse-directory', async (req, res) => {
 
 app.post('/codex-api/upload-file', async (req, res) => {
   await handleFileUpload(req, res);
+});
+
+app.post('/codex-api/extract-text', async (req, res) => {
+  try {
+    const body = asRecord(req.body);
+    const rawPath = readNonEmptyString(body?.path);
+    if (!rawPath) {
+      res.status(400).json({ error: 'Missing path' });
+      return;
+    }
+
+    const filePath = isAbsolute(rawPath) ? rawPath : resolve(rawPath);
+    const info = await stat(filePath).catch(() => null);
+    if (!info) {
+      res.status(404).json({ error: 'File does not exist' });
+      return;
+    }
+    if (!info.isFile()) {
+      res.status(400).json({ error: 'Path is not a file' });
+      return;
+    }
+
+    if (!filePath.toLowerCase().endsWith('.docx')) {
+      res.status(400).json({ error: 'Unsupported file type' });
+      return;
+    }
+
+    const text = extractDocxText(filePath);
+    res.status(200).json({ data: { text } });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to extract document text') });
+  }
 });
 
 app.post('/codex-api/composer-file-search', async (req, res) => {

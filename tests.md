@@ -1589,3 +1589,23 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary uploaded files from the server temp directory if manual cleanup is desired.
+
+### Feature: React attachment extractor registry handles text and docx inputs
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- An existing thread is open in the React UI.
+- One readable plain-text file and one `.docx` file are available for attachment.
+
+#### Steps
+1. Attach a plain-text file such as `.txt`, `.md`, or `.json` and ask the model to quote a unique line from it.
+2. Attach a `.docx` file with distinctive paragraph text and ask the model to summarize it.
+3. Attach an unsupported binary file type and send a prompt that references it.
+
+#### Expected Results
+- Text-based attachments are read with `fs/readFile` and their contents are inlined into the turn context.
+- `.docx` attachments are extracted into plain text before the turn starts, so the model can respond to the document contents instead of reporting binary/unreadable data.
+- Unsupported binary formats do not crash the request; they fall back to reference-only attachment behavior.
+
+#### Rollback/Cleanup
+- Remove any temporary staged uploads or test files if manual cleanup is desired.
