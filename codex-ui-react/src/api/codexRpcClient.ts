@@ -178,73 +178,11 @@ function createRpcNotificationSubscription(
   let cleanup: (() => void) | null = null;
   let closed = false;
   let reconnectTimer: number | null = null;
-  let bufferedDeltaFlushTimer: number | null = null;
-  const bufferedDeltaNotifications = new Map<string, RpcNotification>();
 
   const clearReconnectTimer = () => {
     if (reconnectTimer === null) return;
     window.clearTimeout(reconnectTimer);
     reconnectTimer = null;
-  };
-
-  const flushBufferedDeltaNotifications = () => {
-    if (bufferedDeltaFlushTimer !== null) {
-      window.clearTimeout(bufferedDeltaFlushTimer);
-      bufferedDeltaFlushTimer = null;
-    }
-    if (bufferedDeltaNotifications.size === 0) {
-      return;
-    }
-    const pending = Array.from(bufferedDeltaNotifications.values());
-    bufferedDeltaNotifications.clear();
-    for (const notification of pending) {
-      onNotification(notification);
-    }
-  };
-
-  const bufferDeltaNotification = (notification: RpcNotification): void => {
-    const paramsRecord =
-      notification.params && typeof notification.params === 'object' && !Array.isArray(notification.params)
-        ? (notification.params as Record<string, unknown>)
-        : null;
-    const threadId =
-      typeof paramsRecord?.threadId === 'string' && paramsRecord.threadId.length > 0
-        ? paramsRecord.threadId
-        : '';
-    const itemId =
-      typeof paramsRecord?.itemId === 'string' && paramsRecord.itemId.length > 0
-        ? paramsRecord.itemId
-        : '';
-    const delta =
-      typeof paramsRecord?.delta === 'string'
-        ? paramsRecord.delta
-        : '';
-
-    const key = `${notification.method}:${threadId}:${itemId}`;
-    const current = bufferedDeltaNotifications.get(key);
-    if (!current) {
-      bufferedDeltaNotifications.set(key, notification);
-    } else {
-      const currentParams =
-        current.params && typeof current.params === 'object' && !Array.isArray(current.params)
-          ? (current.params as Record<string, unknown>)
-          : {};
-      bufferedDeltaNotifications.set(key, {
-        ...notification,
-        params: {
-          ...currentParams,
-          ...paramsRecord,
-          delta: `${typeof currentParams.delta === 'string' ? currentParams.delta : ''}${delta}`,
-        },
-      });
-    }
-
-    if (bufferedDeltaFlushTimer !== null) {
-      return;
-    }
-    bufferedDeltaFlushTimer = window.setTimeout(() => {
-      flushBufferedDeltaNotifications();
-    }, 50);
   };
 
   const scheduleReconnect = (attach: () => void, attempt: number) => {
@@ -260,15 +198,6 @@ function createRpcNotificationSubscription(
   const handleNotificationPayload = (payload: unknown) => {
     const notification = toNotification(payload);
     if (notification) {
-      if (
-        notification.method === 'item/agentMessage/delta' ||
-        notification.method === 'item/reasoning/summaryTextDelta' ||
-        notification.method === 'item/commandExecution/outputDelta'
-      ) {
-        bufferDeltaNotification(notification);
-        return;
-      }
-      flushBufferedDeltaNotifications();
       onNotification(notification);
     }
   };
@@ -319,8 +248,7 @@ function createRpcNotificationSubscription(
 
     cleanup?.();
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/codex-api/ws`;
-    const socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(`${protocol}//${window.location.host}/codex-api/ws`);
     let didOpen = false;
     let intentionallyClosed = false;
     let fallbackTimer: number | null = window.setTimeout(() => {
@@ -385,7 +313,6 @@ function createRpcNotificationSubscription(
   return () => {
     closed = true;
     clearReconnectTimer();
-    flushBufferedDeltaNotifications();
     cleanup?.();
   };
 }

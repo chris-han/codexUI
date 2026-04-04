@@ -1001,16 +1001,18 @@ This file tracks manual regression and feature verification steps.
 #### Prerequisites
 - React Codex UI app running at `http://localhost:5173`.
 - Vite proxy enabled for `/codex-api` with WebSocket forwarding.
-- Browser DevTools Console open.
+- Browser DevTools Console and Network tabs open.
 
 #### Steps
 1. Open the app root page.
 2. Let startup settle.
 3. Inspect console messages and network entries for the notification socket.
+4. If WebSocket is intentionally blocked, verify the fallback event stream request path.
 
 #### Expected Results
 - The app connects to `ws://localhost:5173/codex-api/ws` rather than hard-coding port `3000`.
 - The browser console does not show the previous `ws://localhost:3000/codex-api/ws` warning on startup.
+- The SSE fallback also stays on the app origin as `/codex-api/events`.
 
 #### Rollback/Cleanup
 - No cleanup required.
