@@ -1469,3 +1469,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React composer uses a `+` action menu for plan and attachments
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- A thread or the home composer is visible.
+
+#### Steps
+1. Open the composer and inspect the left side of the control row.
+2. Click the `+` button.
+3. Confirm the menu shows `Plan` and `Upload attachment`.
+4. Click `Plan` once and confirm plan mode is enabled.
+5. Click `Plan` again and confirm it returns to default mode.
+6. Click `Upload attachment` and confirm the browser file picker opens.
+
+#### Expected Results
+- The old visible collaboration-mode selector is no longer shown.
+- A `+` action menu is present instead, matching the Codex web interaction model more closely.
+- `Plan` in the menu toggles the underlying collaboration mode state.
+- When plan mode is active, the composer shows a small `Plan` state chip above the input.
+- `Upload attachment` opens the file picker and selected files appear as attachment chips.
+
+#### Rollback/Cleanup
+- Remove any temporary attachment chips before leaving the thread if desired.

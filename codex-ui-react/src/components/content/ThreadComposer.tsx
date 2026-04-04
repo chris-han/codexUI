@@ -63,14 +63,16 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
   const [fileMentionSuggestions, setFileMentionSuggestions] = useState<ComposerFileSuggestion[]>([]);
   const [highlightedFileIndex, setHighlightedFileIndex] = useState(0);
+  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     availableModelIds,
     selectedModelId,
     selectedReasoningEffort,
     selectedCollaborationMode,
-    availableCollaborationModes,
     installedSkills,
     setSelectedModelId,
     setSelectedReasoningEffort,
@@ -85,24 +87,6 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
     { value: 'high', label: 'High' },
     { value: 'xhigh', label: 'Max' },
   ];
-
-  const collaborationModeOptions = useMemo(
-    () =>
-      dedupeByValue(
-        availableCollaborationModes.map((option) => ({
-          value: typeof option.value === 'string' ? option.value : '',
-          label:
-            option.label?.trim() ||
-            (option.value === 'plan' ? 'Plan' : 'Default'),
-        }))
-      ),
-    [availableCollaborationModes]
-  );
-  const selectedCollaborationModeLabel = useMemo(() => {
-    const selected = collaborationModeOptions.find((option) => option.value === selectedCollaborationMode);
-    if (selected?.label?.trim()) return selected.label.trim();
-    return selectedCollaborationMode === 'plan' ? 'Plan' : 'Default';
-  }, [collaborationModeOptions, selectedCollaborationMode]);
 
   const modelOptions = useMemo(
     () =>
@@ -151,6 +135,20 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   useEffect(() => {
     setHighlightedSkillIndex(0);
   }, [slashQuery]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const root = menuRef.current;
+      if (!root) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (root.contains(target)) return;
+      setIsPlusMenuOpen(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
 
   const fileMentionQuery = useMemo(() => {
     const match = message.match(/(?:^|\s)@([^\s]*)$/);
@@ -244,6 +242,28 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
     setFileAttachments((current) => current.filter((attachment) => attachment.fsPath !== fsPath));
   };
 
+  const handleFilePickerChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+    setFileAttachments((current) => {
+      const existing = new Set(current.map((attachment) => attachment.fsPath));
+      const additions: ComposerFileAttachment[] = [];
+      for (const file of files) {
+        const inferredPath = file.webkitRelativePath || file.name;
+        if (!inferredPath || existing.has(inferredPath)) continue;
+        existing.add(inferredPath);
+        additions.push({
+          label: getBaseName(inferredPath),
+          path: inferredPath,
+          fsPath: inferredPath,
+        });
+      }
+      return [...current, ...additions];
+    });
+    event.target.value = '';
+    setIsPlusMenuOpen(false);
+  };
+
   const handleSkillDropdownChange = (value: string) => {
     if (!value) return;
     const skill = installedSkills.find((candidate) => (candidate.path ?? candidate.id) === value);
@@ -261,6 +281,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       onSubmit={handleSubmit}
       className="relative rounded-3xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
     >
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFilePickerChange}
+      />
+
       {selectedSkills.length > 0 ? (
         <div className="mb-3 flex flex-wrap gap-2">
           {selectedSkills.map((skill) => (
@@ -300,6 +328,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </button>
             </span>
           ))}
+        </div>
+      ) : null}
+
+      {selectedCollaborationMode === 'plan' ? (
+        <div className="mb-3">
+          <span className="inline-flex items-center rounded-full bg-gray-900 px-2.5 py-1 text-xs font-medium text-white">
+            Plan
+          </span>
         </div>
       ) : null}
 
@@ -406,24 +442,41 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-3">
-        <div className="relative min-w-[84px]">
-          <span className="pointer-events-none block truncate pr-4 text-sm font-normal text-gray-500">
-            {selectedCollaborationModeLabel}
-          </span>
-          <select
-            value={selectedCollaborationMode}
-            onChange={(e) => handleCollaborationModeChange(e.target.value)}
-            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsPlusMenuOpen((open) => !open)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-[30px] font-light leading-none text-gray-700 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={disabled || isInProgress}
-            aria-label="Collaboration mode"
+            aria-label="More actions"
           >
-            {collaborationModeOptions.map((option) => (
-              <option key={`mode-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            +
+          </button>
+
+          {isPlusMenuOpen ? (
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-3xl bg-[#343434] p-3 text-white shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+              <button
+                type="button"
+                onClick={() => {
+                  handleCollaborationModeChange(selectedCollaborationMode === 'plan' ? 'default' : 'plan');
+                  setIsPlusMenuOpen(false);
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-white/10"
+              >
+                <span className="text-lg leading-none">{selectedCollaborationMode === 'plan' ? '✓' : '↗'}</span>
+                <span>Plan</span>
+              </button>
+              <div className="my-2 h-px bg-white/15" />
+              <button
+                type="button"
+                onClick={() => uploadInputRef.current?.click()}
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-white/10"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span>Upload attachment</span>
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="relative min-w-[210px] flex-1 sm:flex-none">
