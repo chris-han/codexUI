@@ -1267,3 +1267,24 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Stop the dev processes after verification.
+
+### Feature: Model selection writes through supported app-server config RPCs
+
+#### Prerequisites
+- React Codex UI app running at `http://127.0.0.1:5173`.
+- The backend app-server is initialized and the model dropdown is visible.
+
+#### Steps
+1. Open the model dropdown in the composer toolbar.
+2. Select `kimi-for-coding`.
+3. Repeat with another available model such as `kimi-k2.5` or `gpt-4o`.
+4. If available, switch the speed mode control and watch for RPC failures.
+
+#### Expected Results
+- Selecting a model does not return `500 Internal Server Error`.
+- The app does not log `Invalid request: missing field keyPath` for model changes.
+- The selected model persists through the supported app-server RPC path.
+- Speed mode writes continue to use a valid config write payload.
+
+#### Rollback/Cleanup
+- Restore the previously selected model if needed.

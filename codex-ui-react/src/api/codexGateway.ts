@@ -347,11 +347,27 @@ export async function getCurrentModelConfig(): Promise<{
 }
 
 export async function setDefaultModel(model: string): Promise<void> {
-  await rpcCall('config/value/write', { key: 'model', value: model });
+  await rpcCall('setDefaultModel', { model });
 }
 
 export async function setCodexSpeedMode(speedMode: SpeedMode): Promise<void> {
-  await rpcCall('config/value/write', { key: 'speed_mode', value: speedMode });
+  const normalizedMode: SpeedMode = speedMode === 'fast' ? 'fast' : 'standard';
+  await rpcCall('config/batchWrite', {
+    edits: [
+      {
+        keyPath: 'features.fast_mode',
+        value: true,
+        mergeStrategy: 'upsert',
+      },
+      {
+        keyPath: 'service_tier',
+        value: normalizedMode === 'fast' ? 'fast' : null,
+        mergeStrategy: normalizedMode === 'fast' ? 'upsert' : 'replace',
+      },
+    ],
+    filePath: null,
+    expectedVersion: null,
+  });
 }
 
 // Skills
