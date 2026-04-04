@@ -28,6 +28,10 @@ function ThreadConversation() {
     if (!threadId) return [];
     return state.messagesByThreadId.get(threadId) || [];
   }, [threadId]));
+  const optimisticMessages = useCodexStore(useCallback((state) => {
+    if (!threadId) return [];
+    return state.optimisticMessagesByThreadId.get(threadId) || [];
+  }, [threadId]));
   const liveMessage = useCodexStore(useCallback((state) => {
     if (!threadId) return '';
     return state.liveMessagesByThreadId.get(threadId) || '';
@@ -79,7 +83,7 @@ function ThreadConversation() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, liveMessage, scrollToBottom]);
+  }, [messages, optimisticMessages, liveMessage, liveReasoning, scrollToBottom]);
 
   const handleSendMessage = async (payload: ThreadComposerSubmitPayload) => {
     await sendMessage(payload);
@@ -196,7 +200,7 @@ function ThreadConversation() {
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto p-4 space-y-4"
           >
-            {messages.length === 0 && !liveMessage && (
+            {messages.length === 0 && optimisticMessages.length === 0 && !liveMessage && !liveReasoning && (
               <div className="text-center text-gray-400 py-12">
                 No messages yet. Start the conversation!
               </div>
@@ -284,6 +288,48 @@ function ThreadConversation() {
                         <IconTablerCopy className="h-3.5 w-3.5" />
                         {copiedMessageId === message.id ? 'Copied' : 'Copy'}
                       </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {optimisticMessages.map((message) => (
+              <div
+                key={message.id}
+                className="flex justify-end"
+              >
+                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-white opacity-90">
+                  {message.images && message.images.length > 0 && (
+                    <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                      {message.images.map((imageUrl) => (
+                        <button
+                          key={imageUrl}
+                          type="button"
+                          onClick={() => setModalImageUrl(imageUrl)}
+                          className="block text-left"
+                        >
+                          <img
+                            className="max-h-64 w-full rounded-xl border border-white/20 object-cover"
+                            src={imageUrl}
+                            alt="Message image preview"
+                            loading="lazy"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <MessageContent text={message.text} />
+                  {message.fileAttachments && message.fileAttachments.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {message.fileAttachments.map((attachment) => (
+                        <div
+                          key={`${message.id}-${attachment.path}`}
+                          className="rounded bg-white/10 px-2 py-1 text-xs text-white/90"
+                        >
+                          {attachment.label}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

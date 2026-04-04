@@ -1501,3 +1501,26 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary attachment chips before leaving the thread if desired.
+
+### Feature: React chat shows submitted user input before live thinking
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- An existing thread is open in the React UI.
+- The selected model emits a visible `Thinking` phase before the final response.
+
+#### Steps
+1. Open any existing thread in `codex-ui-react`.
+2. Send a prompt with unique text, for example `display-order-check-001`.
+3. Watch the conversation immediately after pressing send.
+4. Confirm the new user bubble appears in the transcript right away.
+5. While the turn is still running, confirm the `Thinking` block appears below that new user bubble.
+6. Wait for the response to finish and confirm the temporary user bubble is replaced by the persisted user turn without duplication.
+
+#### Expected Results
+- The user input appears immediately after submit, before any live thinking UI.
+- The `Thinking` block renders after the new user message, matching the Vue ordering.
+- When the turn completes, the conversation shows one user message for that prompt and no duplicate optimistic row.
+
+#### Rollback/Cleanup
+- No cleanup required.

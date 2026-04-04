@@ -7,6 +7,8 @@ import { enableMapSet } from 'immer';
 enableMapSet();
 import type {
   CollaborationModeKind,
+  ComposerFileAttachment,
+  ComposerSkillSelection,
   ReasoningEffort,
   RpcNotification,
   SkillInfo,
@@ -99,6 +101,7 @@ export interface CodexState {
 
   // Message state
   messagesByThreadId: Map<string, UiMessage[]>;
+  optimisticMessagesByThreadId: Map<string, UiMessage[]>;
   hydratedThreadIds: Set<string>;
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
@@ -208,6 +211,7 @@ const getInitialState = (): CodexState => ({
   isLoadingThreads: false,
 
   messagesByThreadId: new Map(),
+  optimisticMessagesByThreadId: new Map(),
   hydratedThreadIds: new Set(),
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
@@ -268,6 +272,60 @@ function normalizeComposerPayload(
     fileAttachments: payload?.fileAttachments ?? [],
     skills: payload?.skills ?? [],
   };
+}
+
+function createOptimisticUserMessage(params: {
+  threadId: string;
+  text: string;
+  imageUrls: string[];
+  fileAttachments: ComposerFileAttachment[];
+  skills: ComposerSkillSelection[];
+}): UiMessage {
+  return {
+    id: `optimistic-user-${params.threadId}-${Date.now()}`,
+    role: 'user',
+    text: params.text,
+    images: params.imageUrls,
+    fileAttachments: [
+      ...params.fileAttachments.map((attachment) => ({
+        label: attachment.label,
+        path: attachment.path,
+      })),
+      ...params.skills.map((skill) => ({
+        label: `@${skill.name}`,
+        path: skill.path,
+      })),
+    ],
+    messageType: 'optimistic',
+  };
+}
+
+function pushOptimisticMessage(
+  state: CodexState,
+  threadId: string,
+  payload: ThreadComposerSubmitPayload
+): void {
+  const hasVisibleContent =
+    payload.text.trim().length > 0 ||
+    payload.imageUrls.length > 0 ||
+    payload.fileAttachments.length > 0 ||
+    payload.skills.length > 0;
+
+  if (!hasVisibleContent) return;
+
+  const nextMessage = createOptimisticUserMessage({
+    threadId,
+    text: payload.text,
+    imageUrls: payload.imageUrls,
+    fileAttachments: payload.fileAttachments,
+    skills: payload.skills,
+  });
+  const existing = state.optimisticMessagesByThreadId.get(threadId) || [];
+  state.optimisticMessagesByThreadId.set(threadId, [...existing, nextMessage]);
+}
+
+function clearOptimisticMessages(state: CodexState, threadId: string): void {
+  state.optimisticMessagesByThreadId.delete(threadId);
 }
 
 function upsertThreadIntoGroups(state: CodexState, thread: UiThread): void {
@@ -403,6 +461,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 return;
               }
               state.messagesByThreadId.delete(threadId);
+              state.optimisticMessagesByThreadId.delete(threadId);
               state.hydratedThreadIds.delete(threadId);
               state.liveMessagesByThreadId.delete(threadId);
               state.liveReasoningByThreadId.delete(threadId);
@@ -416,6 +475,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             upsertThreadIntoGroups(state, thread);
             state.threadShellsById.delete(threadId);
             state.messagesByThreadId.set(threadId, messages);
+            clearOptimisticMessages(state, threadId);
             state.hydratedThreadIds.add(threadId);
           });
         } catch (error) {
@@ -463,6 +523,10 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
           // Send initial message if provided
           if (submitPayload.text || submitPayload.skills.length > 0 || submitPayload.fileAttachments.length > 0 || submitPayload.imageUrls.length > 0) {
+            set((state) => {
+              pushOptimisticMessage(state, threadId, submitPayload);
+              state.inProgressByThreadId.set(threadId, true);
+            });
             await api.startThreadTurn(threadId, submitPayload.text, {
               model: get().selectedModelId,
               reasoningEffort: get().selectedReasoningEffort,
@@ -495,6 +559,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           set((state) => {
             state.hydratedThreadIds.delete(threadId);
             state.threadShellsById.delete(threadId);
+            state.optimisticMessagesByThreadId.delete(threadId);
             state.projectGroups = state.projectGroups
               .map((group) => ({
                 ...group,
@@ -596,6 +661,10 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             throw new Error(`Thread is unavailable: ${threadId}`);
           }
 
+          set((state) => {
+            pushOptimisticMessage(state, threadId, submitPayload);
+            state.inProgressByThreadId.set(threadId, true);
+          });
           await api.startThreadTurn(threadId, submitPayload.text, {
             model: refreshedState.selectedModelId,
             reasoningEffort: refreshedState.selectedReasoningEffort,
@@ -610,6 +679,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
         } catch (error) {
           console.error('Failed to send message:', error);
           set((state) => {
+            clearOptimisticMessages(state, threadId);
+            state.inProgressByThreadId.delete(threadId);
             state.error = 'Failed to send message';
           });
         } finally {
@@ -814,6 +885,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             if (threadId) {
               set((state) => {
                 state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, false);
+                clearOptimisticMessages(state, threadId);
                 // Clear live content
                 const liveMessagesByThreadId = new Map(state.liveMessagesByThreadId);
                 liveMessagesByThreadId.delete(threadId);
