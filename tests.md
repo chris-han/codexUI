@@ -241,6 +241,25 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Switch the model selector back to the previous model if needed.
 
+### Feature: Kimi upstream requests identify as Roo Code
+
+#### Prerequisites
+- `codex-ui-react` proxy code is available locally.
+- Kimi upstream requests are routed through [kimiProxy.ts](/home/chris/repo/codexUI/codex-ui-react/server/kimiProxy.ts).
+
+#### Steps
+1. Open [kimiProxy.ts](/home/chris/repo/codexUI/codex-ui-react/server/kimiProxy.ts) and locate the Kimi upstream header construction in `buildUpstreamTarget`.
+2. Confirm the Kimi request headers include `Authorization`, `User-Agent`, and `X-Client-Name`.
+3. Verify `User-Agent` is set to `RooCode/1.0.0`.
+4. Verify `X-Client-Name` is set to `roo-code`.
+
+#### Expected Results
+- All upstream Kimi Code chat-completions requests include Roo Code identification headers.
+- The Roo Code identification values are centralized and not duplicated as ad hoc string literals.
+
+#### Rollback/Cleanup
+- Revert the header constants only if Kimi upstream integration requirements change.
+
 ### Feature: codex-ui-react dev startup resolves Codex CLI automatically
 
 #### Prerequisites

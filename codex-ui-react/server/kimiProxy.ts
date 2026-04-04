@@ -26,6 +26,8 @@ const KIMI_OPENAI_COMPATIBLE_MODEL_IDS = [
   'kimi-k2',
   'kimi-for-coding',
 ] as const;
+const KIMI_ROO_CODE_USER_AGENT = 'RooCode/1.0.0';
+const KIMI_ROO_CODE_CLIENT_NAME = 'roo-code';
 
 type KimiHttpResponse = {
   status: number;
@@ -387,8 +389,8 @@ function buildUpstreamTarget(chatBody: Record<string, unknown>): UpstreamTarget 
     headers: [
       'Content-Type: application/json',
       `Authorization: Bearer ${KIMI_API_KEY}`,
-      'User-Agent: RooCode/1.0.0',
-      'X-Client-Name: roo-code',
+      `User-Agent: ${KIMI_ROO_CODE_USER_AGENT}`,
+      `X-Client-Name: ${KIMI_ROO_CODE_CLIENT_NAME}`,
     ],
     body: {
       ...chatBody,
