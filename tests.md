@@ -892,6 +892,26 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup required.
 
+### Feature: RPC bridge includes params for no-arg methods
+
+#### Prerequisites
+- React Codex UI dev server is running so `http://localhost:3000/codex-api/rpc` is reachable.
+- The bundled backend bridge is connected to the Codex app-server.
+
+#### Steps
+1. Open a terminal in the repo root.
+2. Run `curl -s -X POST http://localhost:3000/codex-api/rpc -H 'Content-Type: application/json' -d '{"method":"model/list"}'`.
+3. Run `curl -s -X POST http://localhost:3000/codex-api/rpc -H 'Content-Type: application/json' -d '{"method":"model/list","params":{}}'`.
+4. Compare the two responses.
+
+#### Expected Results
+- The backend bridge forwards both requests without returning `missing field params`.
+- Neither request returns HTTP 500 because `params` is always included in the JSON-RPC payload sent to the app-server.
+- The response body contains a normal RPC `result` envelope for both commands.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
 ### Feature: New thread creation navigates to the created thread
 
 #### Prerequisites

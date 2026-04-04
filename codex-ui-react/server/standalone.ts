@@ -379,7 +379,7 @@ class CodexBridge {
     }
 
     const id = ++this.requestId;
-    const request: JsonRpcCall = { jsonrpc: '2.0', id, method, params };
+    const request: JsonRpcCall = { jsonrpc: '2.0', id, method, params: params ?? {} };
 
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
