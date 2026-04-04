@@ -218,6 +218,29 @@ This file tracks manual regression and feature verification steps.
 
 ### Feature: Thinking block stays available after assistant content appears
 
+### Feature: Live execution progress timeline during attachment processing
+
+#### Prerequisites
+- App server is running from this repository on port `4173`.
+- A thread is open in the React UI.
+- The file `/home/chris/repo/codexUI/user_threads/contract/云卷合同（北京索阳科技开发有限公司）-KW20260226 -FINAL.docx` exists on disk.
+
+#### Steps
+1. Open the contract thread or any thread that can access the composer.
+2. Click `Upload attachment` in the composer and select `/home/chris/repo/codexUI/user_threads/contract/云卷合同（北京索阳科技开发有限公司）-KW20260226 -FINAL.docx`.
+3. Send a prompt that forces the agent to inspect the attachment, such as `Read the attached contract and assess whether it looks valid. Do not stop at thinking; actually execute the file-reading step.`
+4. Watch the live area above the assistant response while the turn is running.
+5. Wait for the response to complete.
+
+#### Expected Results
+- The frontend shows a live execution progress panel while the turn is running.
+- The progress panel lists concrete events such as request submission, reasoning, command execution, search, file changes, or approval waits when those events occur.
+- The live reasoning card header uses the current live activity label instead of always showing only `Thinking`.
+- The assistant completes the turn instead of leaving the user with only a thinking state.
+
+#### Rollback/Cleanup
+- Remove the uploaded attachment chip before leaving the thread if the file should not remain attached for later prompts.
+
 #### Prerequisites
 - React app is running from this repository.
 - An active thread is open.

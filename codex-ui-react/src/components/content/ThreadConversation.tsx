@@ -21,9 +21,16 @@ type ReasoningPanelProps = {
   text: string;
   defaultCollapsed?: boolean;
   isLive?: boolean;
+  label?: string;
 };
 
-function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = false }: ReasoningPanelProps) {
+function ReasoningPanel({
+  messageId,
+  text,
+  defaultCollapsed = true,
+  isLive = false,
+  label = 'Thinking',
+}: ReasoningPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
   useEffect(() => {
@@ -50,7 +57,7 @@ function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = fal
           )}
           <span className="inline-flex items-center gap-1.5">
             <span className={`h-1.5 w-1.5 rounded-full bg-blue-400 ${isLive ? 'animate-pulse' : ''}`} />
-            Thinking
+            {label}
           </span>
         </div>
         <span className="text-[11px] text-blue-500">
@@ -62,6 +69,41 @@ function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = fal
           <MessageContent text={text} />
         </div>
       )}
+    </div>
+  );
+}
+
+type LiveProgressPanelProps = {
+  label: string;
+  events: string[];
+};
+
+function LiveProgressPanel({ label, events }: LiveProgressPanelProps) {
+  if (!label && events.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-start">
+      <div className="w-full max-w-[90%] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-700">
+          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          {label || 'Working...'}
+        </div>
+        {events.length > 0 ? (
+          <div className="space-y-1">
+            {events.map((event, index) => (
+              <div
+                key={`${event}-${index}`}
+                className="flex items-start gap-2 text-xs text-slate-600"
+              >
+                <span className={`mt-1 h-1.5 w-1.5 rounded-full ${index === events.length - 1 ? 'bg-primary' : 'bg-slate-300'}`} />
+                <span>{event}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -101,6 +143,10 @@ function ThreadConversation() {
   const liveActivityLabel = useCodexStore(useCallback((state) => {
     if (!threadId) return '';
     return state.liveActivityLabelByThreadId.get(threadId) || '';
+  }, [threadId]));
+  const liveActivityEvents = useCodexStore(useCallback((state) => {
+    if (!threadId) return [];
+    return state.liveActivityEventsByThreadId.get(threadId) || [];
   }, [threadId]));
   const liveCommandOutput = useCodexStore(useCallback((state) => {
     if (!threadId) return '';
@@ -409,6 +455,13 @@ function ThreadConversation() {
               </div>
             )}
 
+            {(isInProgress || liveActivityEvents.length > 0 || liveActivityLabel) && (
+              <LiveProgressPanel
+                label={liveActivityLabel || 'Working...'}
+                events={liveActivityEvents}
+              />
+            )}
+
             {/* Live reasoning */}
             {liveReasoning && (
               <div className="flex justify-start">
@@ -418,6 +471,7 @@ function ThreadConversation() {
                     text={liveReasoning}
                     defaultCollapsed={Boolean(liveMessage.trim())}
                     isLive
+                    label={liveActivityLabel || 'Thinking'}
                   />
                 </div>
               </div>

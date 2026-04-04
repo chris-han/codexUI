@@ -106,6 +106,7 @@ export interface CodexState {
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
   liveActivityLabelByThreadId: Map<string, string>;
+  liveActivityEventsByThreadId: Map<string, string[]>;
   liveCommandOutputByThreadId: Map<string, string>;
   inProgressByThreadId: Map<string, boolean>;
   activeTurnIdByThreadId: Map<string, string>;
@@ -217,6 +218,7 @@ const getInitialState = (): CodexState => ({
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
   liveActivityLabelByThreadId: new Map(),
+  liveActivityEventsByThreadId: new Map(),
   liveCommandOutputByThreadId: new Map(),
   inProgressByThreadId: new Map(),
   activeTurnIdByThreadId: new Map(),
@@ -339,6 +341,39 @@ function setPendingTurnRequest(
 
 function clearPendingTurnRequest(state: CodexState, threadId: string): void {
   state.pendingTurnRequestsByThreadId.delete(threadId);
+}
+
+function pushLiveActivityEvent(state: CodexState, threadId: string, event: string): void {
+  const normalizedEvent = event.trim();
+  if (!normalizedEvent) return;
+  const current = state.liveActivityEventsByThreadId.get(threadId) || [];
+  if (current[current.length - 1] === normalizedEvent) return;
+  state.liveActivityEventsByThreadId = new Map(state.liveActivityEventsByThreadId).set(
+    threadId,
+    [...current, normalizedEvent].slice(-8)
+  );
+}
+
+function clearLiveActivityState(state: CodexState, threadId: string): void {
+  const liveMessagesByThreadId = new Map(state.liveMessagesByThreadId);
+  liveMessagesByThreadId.delete(threadId);
+  state.liveMessagesByThreadId = liveMessagesByThreadId;
+
+  const liveReasoningByThreadId = new Map(state.liveReasoningByThreadId);
+  liveReasoningByThreadId.delete(threadId);
+  state.liveReasoningByThreadId = liveReasoningByThreadId;
+
+  const liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId);
+  liveActivityLabelByThreadId.delete(threadId);
+  state.liveActivityLabelByThreadId = liveActivityLabelByThreadId;
+
+  const liveActivityEventsByThreadId = new Map(state.liveActivityEventsByThreadId);
+  liveActivityEventsByThreadId.delete(threadId);
+  state.liveActivityEventsByThreadId = liveActivityEventsByThreadId;
+
+  const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
+  liveCommandOutputByThreadId.delete(threadId);
+  state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
 }
 
 function setActiveTurnId(state: CodexState, threadId: string, turnId?: string | null): void {
@@ -718,6 +753,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           set((state) => {
             clearPendingTurnRequest(state, threadId);
             setActiveTurnId(state, threadId, null);
+            clearLiveActivityState(state, threadId);
             state.inProgressByThreadId.delete(threadId);
             state.error = 'Failed to send message';
           });
@@ -913,6 +949,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               set((state) => {
                 state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, true);
                 setActiveTurnId(state, threadId, (params as { threadId: string; turnId?: string }).turnId);
+                state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Starting');
+                pushLiveActivityEvent(state, threadId, 'Request submitted');
               });
               get().loadThreads();
             }
@@ -926,19 +964,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, false);
                 clearPendingTurnRequest(state, threadId);
                 setActiveTurnId(state, threadId, null);
-                // Clear live content
-                const liveMessagesByThreadId = new Map(state.liveMessagesByThreadId);
-                liveMessagesByThreadId.delete(threadId);
-                state.liveMessagesByThreadId = liveMessagesByThreadId;
-                const liveReasoningByThreadId = new Map(state.liveReasoningByThreadId);
-                liveReasoningByThreadId.delete(threadId);
-                state.liveReasoningByThreadId = liveReasoningByThreadId;
-                const liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId);
-                liveActivityLabelByThreadId.delete(threadId);
-                state.liveActivityLabelByThreadId = liveActivityLabelByThreadId;
-                const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
-                liveCommandOutputByThreadId.delete(threadId);
-                state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
+                clearLiveActivityState(state, threadId);
               });
               get().loadThreads();
               // Reload messages for this thread
@@ -965,6 +991,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 const current = state.liveReasoningByThreadId.get(threadId) || '';
                 state.liveReasoningByThreadId = new Map(state.liveReasoningByThreadId).set(threadId, current + delta);
                 state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Thinking');
+                pushLiveActivityEvent(state, threadId, 'Reasoning in progress');
               });
             }
             break;
@@ -989,14 +1016,21 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             if (threadId && item?.type) {
               const itemType = item.type.toLowerCase();
               let label = '';
+              let event = '';
               if (itemType === 'reasoning') label = 'Thinking';
               else if (itemType === 'agentmessage') label = 'Writing response';
               else if (itemType === 'commandexecution') label = item.command ? `Running: ${item.command}` : 'Running command';
               else if (itemType === 'filechange') label = 'Applying changes';
               else if (itemType === 'webSearch' || itemType === 'websearch') label = 'Searching';
+              if (itemType === 'reasoning') event = 'Started reasoning';
+              else if (itemType === 'agentmessage') event = 'Started drafting response';
+              else if (itemType === 'commandexecution') event = item.command ? `Running command: ${item.command}` : 'Running command';
+              else if (itemType === 'filechange') event = 'Applying file changes';
+              else if (itemType === 'websearch') event = 'Running web search';
               if (label) {
                 set((state) => {
                   state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, label);
+                  if (event) pushLiveActivityEvent(state, threadId, event);
                 });
               }
             }
@@ -1005,11 +1039,25 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
           case 'item/completed': {
             const { threadId, item } = (params as { threadId: string; item?: { type?: string } }) || {};
-            if (threadId && item?.type?.toLowerCase() === 'commandexecution') {
+            const itemType = item?.type?.toLowerCase();
+            if (threadId && itemType === 'commandexecution') {
               set((state) => {
                 const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
                 liveCommandOutputByThreadId.delete(threadId);
                 state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
+                pushLiveActivityEvent(state, threadId, 'Command completed');
+              });
+            } else if (threadId && itemType === 'websearch') {
+              set((state) => {
+                pushLiveActivityEvent(state, threadId, 'Search completed');
+              });
+            } else if (threadId && itemType === 'filechange') {
+              set((state) => {
+                pushLiveActivityEvent(state, threadId, 'File changes applied');
+              });
+            } else if (threadId && itemType === 'agentmessage') {
+              set((state) => {
+                pushLiveActivityEvent(state, threadId, 'Response ready');
               });
             }
             break;
@@ -1027,6 +1075,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                   next.length > 4000 ? next.slice(-4000) : next
                 );
                 state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Running command');
+                pushLiveActivityEvent(state, threadId, 'Streaming command output');
               });
             }
             break;
@@ -1038,6 +1087,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               set((state) => {
                 const existing = state.pendingServerRequestsByThreadId.get(request.threadId) || [];
                 state.pendingServerRequestsByThreadId.set(request.threadId, [...existing, request]);
+                state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(request.threadId, 'Waiting for approval');
+                pushLiveActivityEvent(state, request.threadId, `Waiting for approval: ${request.method}`);
               });
             }
             break;
