@@ -4,9 +4,67 @@ import { useCodexStore } from '../../stores';
 import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
-import { IconTablerArchive, IconTablerArrowBackUp, IconTablerCopy, IconTablerGitFork, IconTablerX } from '../icons';
+import {
+  IconTablerArchive,
+  IconTablerArrowBackUp,
+  IconTablerChevronDown,
+  IconTablerChevronRight,
+  IconTablerCopy,
+  IconTablerGitFork,
+  IconTablerX,
+} from '../icons';
 
 const ReviewPane = lazy(() => import('./ReviewPane'));
+
+type ReasoningPanelProps = {
+  messageId: string;
+  text: string;
+  defaultCollapsed?: boolean;
+  isLive?: boolean;
+};
+
+function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = false }: ReasoningPanelProps) {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+
+  useEffect(() => {
+    setIsCollapsed(defaultCollapsed);
+  }, [defaultCollapsed, messageId]);
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50">
+      <button
+        type="button"
+        onClick={() => setIsCollapsed((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        aria-expanded={!isCollapsed}
+      >
+        <div className="flex items-center gap-2 text-xs font-medium text-blue-600">
+          {isCollapsed ? (
+            <IconTablerChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <IconTablerChevronDown className="h-3.5 w-3.5" />
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full bg-blue-400 ${isLive ? 'animate-pulse' : ''}`} />
+            Thinking
+          </span>
+        </div>
+        <span className="text-[11px] text-blue-500">
+          {isCollapsed ? 'Show' : 'Hide'}
+        </span>
+      </button>
+      {!isCollapsed && (
+        <div className="border-t border-blue-100 px-4 py-3">
+          <MessageContent text={text} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ThreadConversation() {
   const { threadId } = useParams<{ threadId: string }>();
@@ -225,6 +283,13 @@ function ThreadConversation() {
                       Assistant
                     </div>
                   )}
+                  {message.role === 'assistant' && message.reasoningText ? (
+                    <ReasoningPanel
+                      messageId={message.id}
+                      text={message.reasoningText}
+                      defaultCollapsed={Boolean(message.text.trim())}
+                    />
+                  ) : null}
                   {message.images && message.images.length > 0 && (
                     <div className="mb-3 grid gap-2 sm:grid-cols-2">
                       {message.images.map((imageUrl) => (
@@ -347,12 +412,13 @@ function ThreadConversation() {
             {/* Live reasoning */}
             {liveReasoning && (
               <div className="flex justify-start">
-                <div className="max-w-[80%] bg-blue-50 border border-blue-100 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="text-xs font-medium text-blue-500 mb-1 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-                    Thinking
-                  </div>
-                  <MessageContent text={liveReasoning} />
+                <div className="max-w-[80%] rounded-2xl rounded-bl-md">
+                  <ReasoningPanel
+                    messageId={`${threadId}-live-reasoning`}
+                    text={liveReasoning}
+                    defaultCollapsed={Boolean(liveMessage.trim())}
+                    isLive
+                  />
                 </div>
               </div>
             )}

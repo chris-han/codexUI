@@ -190,6 +190,7 @@ export type UiMessage = {
   id: string
   role: 'user' | 'assistant' | 'system'
   text: string
+  reasoningText?: string
   images?: string[]
   fileAttachments?: UiFileAttachment[]
   fileChanges?: UiFileChange[]

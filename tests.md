@@ -216,6 +216,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove any staged test upload files if you do not want them left in the server temp upload directory.
 
+### Feature: Thinking block stays available after assistant content appears
+
+#### Prerequisites
+- React app is running from this repository.
+- An active thread is open.
+- Use a model/runtime path that streams reasoning summaries before the final answer.
+
+#### Steps
+1. Send a prompt that reliably produces visible reasoning plus a normal final answer.
+2. While the turn is still streaming and assistant content has started appearing, inspect the `Thinking` panel above the live answer.
+3. Wait for the turn to finish.
+4. Confirm the final assistant message still includes a `Thinking` panel.
+5. Toggle the `Thinking` panel open and closed.
+
+#### Expected Results
+- The `Thinking` panel is not removed when assistant content starts streaming.
+- After completion, the assistant message still retains the reasoning summary in a collapsed panel.
+- The panel can be expanded to inspect the full reasoning summary and collapsed again.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: Dark theme states for runtime mode toggle
 
 #### Prerequisites

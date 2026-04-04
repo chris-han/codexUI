@@ -984,11 +984,32 @@ function normalizeThreadDetail(result: ThreadReadResult): {
   // Convert turns to messages
   for (let turnIndex = 0; turnIndex < turns.length; turnIndex++) {
     const turn = turns[turnIndex];
+    let pendingReasoningText = '';
     for (const item of turn.items) {
-      const message = normalizeThreadItem(item, turn.id, turnIndex);
+      if (item.type === 'reasoning') {
+        pendingReasoningText = extractReasoningText(item);
+        continue;
+      }
+
+      const message = normalizeThreadItem(item, turn.id, turnIndex, pendingReasoningText);
       if (message) {
         messages.push(message);
+        if (message.role === 'assistant' && pendingReasoningText) {
+          pendingReasoningText = '';
+        }
       }
+    }
+
+    if (pendingReasoningText) {
+      messages.push({
+        id: `${turn.id}-reasoning`,
+        role: 'assistant',
+        text: '',
+        reasoningText: pendingReasoningText,
+        turnId: turn.id,
+        turnIndex,
+        messageType: 'reasoning',
+      });
     }
   }
 
@@ -1012,7 +1033,8 @@ function normalizeThreadDetail(result: ThreadReadResult): {
 function normalizeThreadItem(
   item: { id: string; type: string; text?: string; content?: unknown },
   turnId: string,
-  turnIndex: number
+  turnIndex: number,
+  reasoningText = ''
 ): UiMessage | null {
   const base = {
     id: item.id,
@@ -1032,6 +1054,7 @@ function normalizeThreadItem(
         ...base,
         role: 'assistant' as const,
         text: extractMessageText(item),
+        reasoningText,
       };
     case 'systemMessage':
       return {
@@ -1050,6 +1073,17 @@ function normalizeThreadItem(
       }
       return null;
   }
+}
+
+function extractReasoningText(item: { text?: string; content?: unknown; summary?: string[] }): string {
+  if (Array.isArray(item.summary)) {
+    const summaryText = item.summary.filter((part): part is string => typeof part === 'string').join('\n\n').trim();
+    if (summaryText) {
+      return summaryText;
+    }
+  }
+
+  return extractMessageText(item);
 }
 
 function extractMessageText(item: { text?: string; content?: unknown }): string {
