@@ -13,24 +13,21 @@ function ThreadConversation() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
 
-  const store = useCodexStore();
-  const selectedThread = selectSelectedThread(store);
-  const messages = selectMessagesForSelectedThread(store);
-  const liveMessage = selectLiveMessageForSelectedThread(store);
-  const liveReasoning = selectLiveReasoningForSelectedThread(store);
-  const liveActivityLabel = selectLiveActivityLabelForSelectedThread(store);
-  const liveCommandOutput = selectLiveCommandOutputForSelectedThread(store);
-  const isInProgress = selectIsInProgress(store);
-  const pendingRequests = selectPendingRequestsForSelectedThread(store);
+  const selectedThread = useCodexStore(selectSelectedThread);
+  const messages = useCodexStore(selectMessagesForSelectedThread);
+  const liveMessage = useCodexStore(selectLiveMessageForSelectedThread);
+  const liveReasoning = useCodexStore(selectLiveReasoningForSelectedThread);
+  const liveActivityLabel = useCodexStore(selectLiveActivityLabelForSelectedThread);
+  const liveCommandOutput = useCodexStore(selectLiveCommandOutputForSelectedThread);
+  const isInProgress = useCodexStore(selectIsInProgress);
+  const pendingRequests = useCodexStore(selectPendingRequestsForSelectedThread);
 
-  const {
-    selectThread,
-    sendMessage,
-    interruptSelectedThreadTurn,
-    archiveThreadById,
-    forkThreadById,
-    respondToServerRequest,
-  } = store;
+  const selectThread = useCodexStore((state) => state.selectThread);
+  const sendMessage = useCodexStore((state) => state.sendMessage);
+  const interruptSelectedThreadTurn = useCodexStore((state) => state.interruptSelectedThreadTurn);
+  const archiveThreadById = useCodexStore((state) => state.archiveThreadById);
+  const forkThreadById = useCodexStore((state) => state.forkThreadById);
+  const respondToServerRequest = useCodexStore((state) => state.respondToServerRequest);
 
   // Load thread when ID changes
   useEffect(() => {

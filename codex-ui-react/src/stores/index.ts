@@ -677,7 +677,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             const { threadId } = (params as { threadId: string }) || {};
             if (threadId) {
               set((state) => {
-                state.inProgressByThreadId.set(threadId, true);
+                state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, true);
               });
               get().loadThreads();
             }
@@ -688,12 +688,20 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             const { threadId } = (params as { threadId: string }) || {};
             if (threadId) {
               set((state) => {
-                state.inProgressByThreadId.set(threadId, false);
+                state.inProgressByThreadId = new Map(state.inProgressByThreadId).set(threadId, false);
                 // Clear live content
-                state.liveMessagesByThreadId.delete(threadId);
-                state.liveReasoningByThreadId.delete(threadId);
-                state.liveActivityLabelByThreadId.delete(threadId);
-                state.liveCommandOutputByThreadId.delete(threadId);
+                const liveMessagesByThreadId = new Map(state.liveMessagesByThreadId);
+                liveMessagesByThreadId.delete(threadId);
+                state.liveMessagesByThreadId = liveMessagesByThreadId;
+                const liveReasoningByThreadId = new Map(state.liveReasoningByThreadId);
+                liveReasoningByThreadId.delete(threadId);
+                state.liveReasoningByThreadId = liveReasoningByThreadId;
+                const liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId);
+                liveActivityLabelByThreadId.delete(threadId);
+                state.liveActivityLabelByThreadId = liveActivityLabelByThreadId;
+                const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
+                liveCommandOutputByThreadId.delete(threadId);
+                state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
               });
               get().loadThreads();
               // Reload messages for this thread
@@ -707,7 +715,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             if (threadId && delta) {
               set((state) => {
                 const current = state.liveMessagesByThreadId.get(threadId) || '';
-                state.liveMessagesByThreadId.set(threadId, current + delta);
+                state.liveMessagesByThreadId = new Map(state.liveMessagesByThreadId).set(threadId, current + delta);
               });
             }
             break;
@@ -718,8 +726,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             if (threadId && delta) {
               set((state) => {
                 const current = state.liveReasoningByThreadId.get(threadId) || '';
-                state.liveReasoningByThreadId.set(threadId, current + delta);
-                state.liveActivityLabelByThreadId.set(threadId, 'Thinking');
+                state.liveReasoningByThreadId = new Map(state.liveReasoningByThreadId).set(threadId, current + delta);
+                state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Thinking');
               });
             }
             break;
@@ -731,7 +739,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               set((state) => {
                 const current = state.liveReasoningByThreadId.get(threadId) || '';
                 if (current) {
-                  state.liveReasoningByThreadId.set(threadId, current + '\n\n');
+                  state.liveReasoningByThreadId = new Map(state.liveReasoningByThreadId).set(threadId, current + '\n\n');
                 }
               });
             }
@@ -751,7 +759,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               else if (itemType === 'webSearch' || itemType === 'websearch') label = 'Searching';
               if (label) {
                 set((state) => {
-                  state.liveActivityLabelByThreadId.set(threadId, label);
+                  state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, label);
                 });
               }
             }
@@ -762,7 +770,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             const { threadId, item } = (params as { threadId: string; item?: { type?: string } }) || {};
             if (threadId && item?.type?.toLowerCase() === 'commandexecution') {
               set((state) => {
-                state.liveCommandOutputByThreadId.delete(threadId);
+                const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
+                liveCommandOutputByThreadId.delete(threadId);
+                state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
               });
             }
             break;
@@ -775,8 +785,11 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 const current = state.liveCommandOutputByThreadId.get(threadId) || '';
                 // Keep last 4000 chars to avoid unbounded growth
                 const next = current + delta;
-                state.liveCommandOutputByThreadId.set(threadId, next.length > 4000 ? next.slice(-4000) : next);
-                state.liveActivityLabelByThreadId.set(threadId, 'Running command');
+                state.liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId).set(
+                  threadId,
+                  next.length > 4000 ? next.slice(-4000) : next
+                );
+                state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Running command');
               });
             }
             break;
