@@ -1547,27 +1547,6 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup required.
 
-### Feature: React attached files are pre-read into turn context when path is resolvable
-
-#### Prerequisites
-- `codex-ui-react` is running locally.
-- An existing thread is open in the React UI.
-- A readable text file exists inside the thread working directory, for example `<cwd>/attachment-read-check.txt`.
-
-#### Steps
-1. Create a small text file in the active thread working directory with distinctive content, for example `attachment-read-check-001`.
-2. In the React composer, attach that file using `@` file mention search so the attachment path is absolute and server-resolvable.
-3. Send a prompt asking the model to quote or summarize the attached file contents.
-4. Repeat with a file-picker attachment whose path is not resolvable by the app server.
-
-#### Expected Results
-- For the `@`-attached file, the gateway reads the file before `turn/start` and the model can answer using the file contents immediately.
-- Large attached files are truncated before being inlined into the prompt.
-- For attachments that are not readable by server path, the request still sends successfully and falls back to path-reference behavior instead of crashing.
-
-#### Rollback/Cleanup
-- Remove any temporary verification files created for the test.
-
 ### Feature: React file-picker attachments are staged to a server-readable path
 
 #### Prerequisites
@@ -1580,32 +1559,13 @@ This file tracks manual regression and feature verification steps.
 2. Select a local file from the machine using the browser file picker.
 3. Confirm the attachment appears as a chip in the composer.
 4. Send a prompt asking the model to inspect the attached file.
-5. If the file is text-based, confirm the model can reference its content without the earlier `No such file or directory` attachment error.
+5. Repeat with an `@` file mention attachment from the thread working directory.
 
 #### Expected Results
 - The file picker uploads the selected file to a temp server directory before the turn is sent.
 - The attachment chip stores a real server-side path, not just the browser filename.
-- The app no longer reports `Attached file contents (unavailable: No such file or directory)` for picker-uploaded files solely because the path was client-local.
+- The React web UI behaves like the Vue UI contract: it uploads/stages files and passes attachment paths to the turn request, but it does not extract `.docx`, `.pdf`, or other file formats in the web layer.
+- Picker-uploaded files and `@`-attached workspace files both reach the Codex app-server as attachment references for the app-server/LLM to reason about.
 
 #### Rollback/Cleanup
 - Remove any temporary uploaded files from the server temp directory if manual cleanup is desired.
-
-### Feature: React attachment extractor registry handles text and docx inputs
-
-#### Prerequisites
-- `codex-ui-react` is running locally.
-- An existing thread is open in the React UI.
-- One readable plain-text file and one `.docx` file are available for attachment.
-
-#### Steps
-1. Attach a plain-text file such as `.txt`, `.md`, or `.json` and ask the model to quote a unique line from it.
-2. Attach a `.docx` file with distinctive paragraph text and ask the model to summarize it.
-3. Attach an unsupported binary file type and send a prompt that references it.
-
-#### Expected Results
-- Text-based attachments are read with `fs/readFile` and their contents are inlined into the turn context.
-- `.docx` attachments are extracted into plain text before the turn starts, so the model can respond to the document contents instead of reporting binary/unreadable data.
-- Unsupported binary formats do not crash the request; they fall back to reference-only attachment behavior.
-
-#### Rollback/Cleanup
-- Remove any temporary staged uploads or test files if manual cleanup is desired.
