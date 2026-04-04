@@ -450,11 +450,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           <button
             type="button"
             onClick={() => setIsPlusMenuOpen((open) => !open)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-[30px] font-light leading-none text-gray-700 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={disabled || isInProgress}
             aria-label="More actions"
           >
-            +
+            <span className="relative block h-4 w-4">
+              <span className="absolute left-1/2 top-1/2 h-[1.5px] w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+              <span className="absolute left-1/2 top-1/2 h-4 w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+            </span>
           </button>
 
           {isPlusMenuOpen ? (

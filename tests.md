@@ -1487,6 +1487,7 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - The old visible collaboration-mode selector is no longer shown.
 - A `+` action menu is present instead, matching the Codex web interaction model more closely.
+- The `+` button keeps its circular background at rest and the plus glyph remains visually centered inside the circle.
 - `Plan` in the menu toggles the underlying collaboration mode state.
 - When plan mode is active, the composer shows a small `Plan` state chip above the input.
 - `Upload attachment` opens the file picker and selected files appear as attachment chips.
