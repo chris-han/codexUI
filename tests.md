@@ -1463,7 +1463,7 @@ This file tracks manual regression and feature verification steps.
 - The collaboration mode label remains visible even if the native browser select does not paint its own selected text reliably.
 - The selector row uses flatter inline-style controls rather than large pill-shaped form fields.
 - The selector row uses a consistent custom-chevron style instead of a broken native-select layout.
-- The chevron icon for each selector sits close to its text label instead of floating with excessive right-side gap.
+- The chevron icon for each selector sits immediately beside its text label rather than aligning to the far edge of the control width.
 - The console does not warn about duplicate React keys from `ThreadComposer` option rendering.
 - If upstream option data contains malformed rows with missing values, the composer ignores them instead of crashing.
 

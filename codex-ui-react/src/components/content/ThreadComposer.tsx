@@ -111,6 +111,10 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       ),
     [installedSkills]
   );
+  const selectedReasoningLabel = useMemo(() => {
+    const selected = reasoningOptions.find((option) => option.value === selectedReasoningEffort);
+    return selected?.label ?? 'Medium';
+  }, [selectedReasoningEffort]);
 
   const slashQuery = useMemo(() => {
     const trimmed = message.trimStart();
@@ -480,10 +484,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
 
         <div className="relative min-w-[210px] flex-1 sm:flex-none">
+          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
+            <span className="truncate">{selectedModelId}</span>
+            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          </span>
           <select
             value={selectedModelId}
             onChange={(e) => setSelectedModelId(e.target.value)}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
+            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
             disabled={disabled || isInProgress}
             aria-label="Model"
           >
@@ -493,17 +501,20 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="relative min-w-[124px] flex-1">
+          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
+            <span className="truncate">Skills</span>
+            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          </span>
           <select
             value=""
             onChange={(e) => {
               handleSkillDropdownChange(e.target.value);
               e.currentTarget.value = '';
             }}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
+            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
             disabled={disabled || isInProgress || skillOptions.length === 0}
             aria-label="Skills"
           >
@@ -514,14 +525,17 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="relative min-w-[112px]">
+          <span className="pointer-events-none inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700">
+            <span className="truncate">{selectedReasoningLabel}</span>
+            <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          </span>
           <select
             value={selectedReasoningEffort}
             onChange={(e) => setSelectedReasoningEffort(e.target.value as ReasoningEffort)}
-            className="w-full appearance-none border-0 bg-transparent px-0 py-0 pr-4 text-sm font-normal text-gray-700 outline-none transition hover:text-gray-900"
+            className="absolute inset-0 w-full cursor-pointer appearance-none border-0 bg-transparent px-0 py-0 opacity-0 outline-none"
             disabled={disabled || isInProgress}
             aria-label="Reasoning effort"
           >
@@ -531,7 +545,6 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </option>
             ))}
           </select>
-          <IconTablerChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         <div className="ml-auto flex items-center gap-2 self-end">
