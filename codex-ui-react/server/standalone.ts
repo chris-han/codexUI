@@ -6,8 +6,9 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir, stat } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -23,6 +24,18 @@ type ProviderModelsResponse = {
   data: string[];
   providerId: string;
   source: 'provider';
+};
+
+type DirectoryBrowseEntry = {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+};
+
+type DirectoryBrowseResponse = {
+  path: string;
+  parentPath: string | null;
+  entries: DirectoryBrowseEntry[];
 };
 
 // Check and free port 3000 before starting
@@ -139,6 +152,51 @@ function normalizeProviderModelsData(payload: unknown): string[] {
   }
 
   return ids;
+}
+
+function normalizeLocalPath(rawPath: string): string {
+  const trimmed = rawPath.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('file://')) {
+    try {
+      return decodeURIComponent(trimmed.replace(/^file:\/\//u, ''));
+    } catch {
+      return trimmed.replace(/^file:\/\//u, '');
+    }
+  }
+  return trimmed;
+}
+
+async function readDirectoryEntries(directoryPath: string): Promise<DirectoryBrowseEntry[]> {
+  const rows = await readdir(directoryPath, { withFileTypes: true });
+  const entries = rows
+    .filter((row) => row.isDirectory())
+    .map((row) => ({
+      name: row.name,
+      path: join(directoryPath, row.name),
+      isDirectory: true,
+    }));
+
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  return entries;
+}
+
+async function browseDirectory(rawPath: string): Promise<DirectoryBrowseResponse> {
+  const normalizedPath = normalizeLocalPath(rawPath) || homedir();
+  const directoryPath = normalizedPath.startsWith('/') ? normalizedPath : homedir();
+  const directoryStat = await stat(directoryPath);
+  if (!directoryStat.isDirectory()) {
+    throw new Error('Expected directory path');
+  }
+
+  const entries = await readDirectoryEntries(directoryPath);
+  const parentPath = directoryPath === '/' ? null : dirname(directoryPath);
+
+  return {
+    path: directoryPath,
+    parentPath,
+    entries,
+  };
 }
 
 function resolveCodexInvocation(): CommandInvocation {
@@ -530,6 +588,20 @@ app.get('/codex-api/provider-models', async (req, res) => {
     res.json(data);
   } catch (error) {
     res.json({ data: [], providerId: '', source: 'provider' });
+  }
+});
+
+app.get('/codex-api/home-directory', async (req, res) => {
+  res.json({ data: { path: homedir() } });
+});
+
+app.get('/codex-api/browse-directory', async (req, res) => {
+  try {
+    const rawPath = typeof req.query.path === 'string' ? req.query.path : '';
+    const data = await browseDirectory(rawPath);
+    res.json({ data });
+  } catch (error) {
+    res.status(400).json({ error: getErrorMessage(error, 'Failed to browse directory') });
   }
 });
 

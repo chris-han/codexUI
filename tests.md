@@ -305,6 +305,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Restore the prior provider config if a temporary provider was used only for verification.
 
+### Feature: codex-ui-react directory browser for new thread location
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- `GET /codex-api/browse-directory` is reachable from the React app.
+- At least one accessible directory exists under `/home/chris/repo/codexUI/user_threads` or the configured starting path.
+
+#### Steps
+1. Open the `New Thread` dialog in the React UI.
+2. Verify the dialog shows the current parent folder path and a list of child directories instead of only a fixed base path hint.
+3. Click into a child directory and confirm the displayed parent path updates.
+4. Click `Up` and confirm the dialog returns to the parent directory.
+5. Enter a new folder name, create the thread, and confirm the thread starts inside the selected parent folder.
+
+#### Expected Results
+- The dialog can browse directories via the bridge instead of assuming a single fixed parent path.
+- Directory navigation updates the destination path before thread creation.
+- Creating a thread uses the currently browsed parent directory plus the entered folder name.
+
+#### Rollback/Cleanup
+- Delete any temporary test folder/thread created only for verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
