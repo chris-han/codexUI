@@ -87,11 +87,35 @@ function isMissingRolloutError(error: unknown): boolean {
   return getErrorMessage(error).includes('no rollout found for thread id');
 }
 
+function isThreadNotMaterializedYetError(error: unknown): boolean {
+  const message = getErrorMessage(error);
+  return (
+    message.includes('not materialized yet') ||
+    message.includes('includeTurns is unavailable before first user message')
+  );
+}
+
 // Thread management
 export async function getThreadGroups(): Promise<UiProjectGroup[]> {
   const response = await rpcCall<ThreadListResponse>('thread/list', { includeArchived: false });
   const threads = response.data || [];
   return normalizeThreadsToProjectGroups(threads);
+}
+
+async function getEmptyThreadDetailFromList(threadId: string): Promise<{
+  messages: UiMessage[];
+  thread: UiThread | null;
+}> {
+  try {
+    const response = await rpcCall<ThreadListResponse>('thread/list', { includeArchived: false });
+    const summary = (response.data || []).find((thread) => thread.id === threadId);
+    return {
+      messages: [],
+      thread: summary ? normalizeThreadSummaryToUiThread(summary) : null,
+    };
+  } catch {
+    return { messages: [], thread: null };
+  }
 }
 
 export async function getThreadDetail(threadId: string): Promise<{
@@ -117,12 +141,18 @@ export async function getThreadDetail(threadId: string): Promise<{
         });
         return normalizeThreadDetail(result);
       } catch (resumeError: unknown) {
+        if (isThreadNotMaterializedYetError(resumeError)) {
+          return await getEmptyThreadDetailFromList(threadId);
+        }
         if (isMissingRolloutError(resumeError)) {
           console.warn('Thread has no resumable rollout, clearing selection:', threadId);
           return { messages: [], thread: null };
         }
         console.error('Failed to resume thread:', resumeError);
       }
+    }
+    if (isThreadNotMaterializedYetError(error)) {
+      return await getEmptyThreadDetailFromList(threadId);
     }
     console.error('Failed to load thread detail:', error);
     return { messages: [], thread: null };
@@ -615,19 +645,8 @@ function normalizeThreadsToProjectGroups(threads: ThreadSummary[]): UiProjectGro
   const groups = new Map<string, UiThread[]>();
 
   for (const thread of threads) {
-    const projectName = extractProjectName(thread.cwd);
-    const uiThread: UiThread = {
-      id: thread.id,
-      title: thread.title || thread.name || thread.preview || 'Untitled',
-      projectName,
-      cwd: thread.cwd,
-      hasWorktree: false, // Will be populated later
-      createdAtIso: new Date(thread.createdAt * 1000).toISOString(),
-      updatedAtIso: new Date(thread.updatedAt * 1000).toISOString(),
-      preview: thread.preview || '',
-      unread: false, // Will be computed based on read state
-      inProgress: false, // Will be updated via notifications
-    };
+    const uiThread = normalizeThreadSummaryToUiThread(thread);
+    const projectName = uiThread.projectName;
 
     if (!groups.has(projectName)) {
       groups.set(projectName, []);
@@ -644,6 +663,22 @@ function normalizeThreadsToProjectGroups(threads: ThreadSummary[]): UiProjectGro
   }));
 }
 
+function normalizeThreadSummaryToUiThread(thread: ThreadSummary): UiThread {
+  const projectName = extractProjectName(thread.cwd);
+  return {
+    id: thread.id,
+    title: thread.title || thread.name || thread.preview || 'Untitled',
+    projectName,
+    cwd: thread.cwd,
+    hasWorktree: false,
+    createdAtIso: new Date(thread.createdAt * 1000).toISOString(),
+    updatedAtIso: new Date(thread.updatedAt * 1000).toISOString(),
+    preview: thread.preview || '',
+    unread: false,
+    inProgress: false,
+  };
+}
+
 function normalizeThreadDetail(result: ThreadReadResult): {
   messages: UiMessage[];
   thread: UiThread | null;
@@ -654,10 +689,11 @@ function normalizeThreadDetail(result: ThreadReadResult): {
 
   const thread = result.thread;
   const messages: UiMessage[] = [];
+  const turns = Array.isArray(thread.turns) ? thread.turns : [];
 
   // Convert turns to messages
-  for (let turnIndex = 0; turnIndex < thread.turns.length; turnIndex++) {
-    const turn = thread.turns[turnIndex];
+  for (let turnIndex = 0; turnIndex < turns.length; turnIndex++) {
+    const turn = turns[turnIndex];
     for (const item of turn.items) {
       const message = normalizeThreadItem(item, turn.id, turnIndex);
       if (message) {
@@ -677,7 +713,7 @@ function normalizeThreadDetail(result: ThreadReadResult): {
     updatedAtIso: new Date(thread.updatedAt * 1000).toISOString(),
     preview: thread.preview || '',
     unread: false,
-    inProgress: thread.turns.some((t) => t.status === 'in_progress'),
+    inProgress: turns.some((t) => t.status === 'in_progress'),
   };
 
   return { messages, thread: uiThread };

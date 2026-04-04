@@ -424,6 +424,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup is required beyond removing any temporary test messages if they were created only for verification.
 
+### Feature: codex-ui-react empty new thread selection fallback
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- The React UI can create a new thread without sending an initial user message.
+
+#### Steps
+1. Open the `New Thread` dialog in the React UI.
+2. Create a new thread in a valid folder but leave the initial message empty.
+3. Confirm the new thread becomes selected immediately after creation.
+4. Check the browser console and confirm it does not leave the thread unselected after a `thread/read` materialization error.
+5. Send the first user message in that thread.
+6. Confirm the conversation loads normally after the first message is sent.
+
+#### Expected Results
+- A newly created empty thread remains selected even if `thread/read` with `includeTurns: true` reports that the thread is not materialized yet.
+- The UI falls back to the thread shell from `thread/list` instead of clearing the selected thread.
+- Once the first user message is sent, the thread detail loads with turns as normal.
+
+#### Rollback/Cleanup
+- Delete the temporary test thread if it was created only for verification.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
