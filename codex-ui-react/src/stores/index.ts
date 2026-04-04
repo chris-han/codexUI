@@ -101,6 +101,7 @@ export interface CodexState {
   hydratedThreadIds: Set<string>;
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
+  isReasoningActiveByThreadId: Map<string, boolean>;
   liveActivityLabelByThreadId: Map<string, string>;
   liveCommandOutputByThreadId: Map<string, string>;
   inProgressByThreadId: Map<string, boolean>;
@@ -206,6 +207,7 @@ const getInitialState = (): CodexState => ({
   hydratedThreadIds: new Set(),
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
+  isReasoningActiveByThreadId: new Map(),
   liveActivityLabelByThreadId: new Map(),
   liveCommandOutputByThreadId: new Map(),
   inProgressByThreadId: new Map(),
@@ -381,6 +383,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               state.hydratedThreadIds.delete(threadId);
               state.liveMessagesByThreadId.delete(threadId);
               state.liveReasoningByThreadId.delete(threadId);
+              state.isReasoningActiveByThreadId.delete(threadId);
               state.inProgressByThreadId.delete(threadId);
               state.pendingServerRequestsByThreadId.delete(threadId);
               if (state.selectedThreadId === threadId) {
@@ -769,6 +772,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 const liveReasoningByThreadId = new Map(state.liveReasoningByThreadId);
                 liveReasoningByThreadId.delete(threadId);
                 state.liveReasoningByThreadId = liveReasoningByThreadId;
+                const isReasoningActiveByThreadId = new Map(state.isReasoningActiveByThreadId);
+                isReasoningActiveByThreadId.delete(threadId);
+                state.isReasoningActiveByThreadId = isReasoningActiveByThreadId;
                 const liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId);
                 liveActivityLabelByThreadId.delete(threadId);
                 state.liveActivityLabelByThreadId = liveActivityLabelByThreadId;
@@ -800,6 +806,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               set((state) => {
                 const current = state.liveReasoningByThreadId.get(threadId) || '';
                 state.liveReasoningByThreadId = new Map(state.liveReasoningByThreadId).set(threadId, current + delta);
+                state.isReasoningActiveByThreadId = new Map(state.isReasoningActiveByThreadId).set(threadId, true);
                 state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Thinking');
               });
             }
@@ -833,6 +840,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               if (label) {
                 set((state) => {
                   state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, label);
+                  if (itemType === 'reasoning') {
+                    state.isReasoningActiveByThreadId = new Map(state.isReasoningActiveByThreadId).set(threadId, true);
+                  }
                 });
               }
             }
@@ -846,6 +856,13 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
                 liveCommandOutputByThreadId.delete(threadId);
                 state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
+              });
+            } else if (threadId && item?.type?.toLowerCase() === 'reasoning') {
+              set((state) => {
+                state.isReasoningActiveByThreadId = new Map(state.isReasoningActiveByThreadId).set(threadId, false);
+                if (state.liveMessagesByThreadId.get(threadId)) {
+                  state.liveActivityLabelByThreadId = new Map(state.liveActivityLabelByThreadId).set(threadId, 'Writing response');
+                }
               });
             }
             break;
