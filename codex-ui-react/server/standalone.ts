@@ -94,6 +94,14 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function isThreadNotMaterializedYetError(error: unknown): boolean {
+  const message = getErrorMessage(error, '');
+  return (
+    message.includes('not materialized yet') ||
+    message.includes('includeTurns is unavailable before first user message')
+  );
+}
+
 function logProviderModelDiscoveryWarning(message: string, details: Record<string, unknown>): void {
   console.warn('[codex-provider-models]', message, details);
 }
@@ -536,8 +544,27 @@ app.post('/codex-api/rpc', async (req, res) => {
   try {
     const { method, params } = req.body;
     const result = await bridge.call(method, params);
-    res.json({ result });
+    res.status(200).json({ result });
   } catch (error) {
+    const { method, params } = req.body ?? {};
+    if (
+      method === 'thread/read' &&
+      params &&
+      typeof params === 'object' &&
+      (params as Record<string, unknown>).includeTurns === true &&
+      isThreadNotMaterializedYetError(error)
+    ) {
+      try {
+        const fallbackParams = { ...(params as Record<string, unknown>) };
+        delete fallbackParams.includeTurns;
+        const result = await bridge.call('thread/read', fallbackParams);
+        res.status(200).json({ result });
+        return;
+      } catch (fallbackError) {
+        res.status(500).json({ error: String(fallbackError) });
+        return;
+      }
+    }
     res.status(500).json({ error: String(error) });
   }
 });

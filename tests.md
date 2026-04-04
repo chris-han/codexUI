@@ -443,6 +443,11 @@ This file tracks manual regression and feature verification steps.
 - The UI falls back to the thread shell from `thread/list` instead of clearing the selected thread.
 - Once the first user message is sent, the thread detail loads with turns as normal.
 
+#### Additional RPC Check
+1. Create a new empty thread and capture its thread id.
+2. Call `POST /codex-api/rpc` with method `thread/read` and params `{ "threadId": "<id>", "includeTurns": true }`.
+3. Confirm the React standalone bridge responds with HTTP `200` and an empty thread shell instead of exposing the raw materialization `500` to the browser.
+
 #### Rollback/Cleanup
 - Delete the temporary test thread if it was created only for verification.
 
