@@ -347,7 +347,13 @@ export async function getCurrentModelConfig(): Promise<{
 }
 
 export async function setDefaultModel(model: string): Promise<void> {
-  await rpcCall('setDefaultModel', { model });
+  await rpcCall('config/value/write', {
+    keyPath: 'model',
+    value: model,
+    mergeStrategy: 'upsert',
+    filePath: null,
+    expectedVersion: null,
+  });
 }
 
 export async function setCodexSpeedMode(speedMode: SpeedMode): Promise<void> {
