@@ -13,22 +13,24 @@ function SkillCard({ skill, onClick }: SkillCardProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-md transition-all"
+      className="w-full overflow-hidden text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-md transition-all"
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold text-gray-800">{title}</h3>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-3">
+            <h3 className="min-w-0 flex-1 break-words font-semibold text-gray-800">{title}</h3>
+            {skill.isInstalled && (
+              <span className="shrink-0 self-start px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
+                Installed
+              </span>
+            )}
+          </div>
           {skill.description && (
             <p className="text-sm text-gray-500 mt-1 line-clamp-2">
               {skill.description}
             </p>
           )}
         </div>
-        {skill.isInstalled && (
-          <span className="px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
-            Installed
-          </span>
-        )}
       </div>
     </button>
   );

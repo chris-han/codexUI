@@ -472,6 +472,25 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup is required beyond leaving the Skills Hub route.
 
+### Feature: codex-ui-react Skills Hub installed badge layout
+
+#### Prerequisites
+- The React app stack is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- At least one installed skill with a long title is visible in the Skills Hub grid.
+
+#### Steps
+1. Navigate to the Skills Hub route in the React UI.
+2. Find an installed skill card with a long name.
+3. Verify the `Installed` badge remains inside the card border at normal desktop width.
+4. Narrow the window or use a tighter column layout and verify the badge still stays inside the card.
+
+#### Expected Results
+- The installed badge does not overflow past the right edge of the skill card.
+- Long skill titles wrap within the card instead of pushing the badge outside the border.
+
+#### Rollback/Cleanup
+- No cleanup is required beyond leaving the Skills Hub route.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).
