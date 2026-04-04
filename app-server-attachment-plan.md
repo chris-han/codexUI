@@ -1,5 +1,19 @@
 # App-Server Attachment Handling Plan
 
+> Superseded in part by [`cli-app-server-parity-analysis.md`](./cli-app-server-parity-analysis.md).
+>
+> Revision note:
+> after tracing the local `codex` source and testing both `codex exec` and
+> `codex app-server`, the recommended parity path is no longer "build a new
+> first-class attachment planner first". The more accurate first step is:
+>
+> - keep web upload/staging
+> - expose staged server file paths in the user-visible text prompt
+> - do not use `mention` as the transport for local file attachments
+>
+> A deeper app-server attachment subsystem should only be pursued if that
+> lighter CLI-aligned approach proves insufficient.
+
 ## Goal
 
 Move attachment understanding entirely to the Codex app-server side.
