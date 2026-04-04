@@ -113,7 +113,7 @@ function HomeScreen() {
             </div>
           </div>
 
-          <div className="mx-auto mt-20 max-w-2xl rounded-3xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
+          <div className="mx-auto mt-20 max-w-2xl">
             <ThreadComposer
               onSend={handleSend}
               onInterrupt={() => {}}
