@@ -262,6 +262,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup required beyond deleting the test thread if it was created only for verification.
 
+### Feature: codex-ui-react proxy startup clears stale port 3456 listeners
+
+#### Prerequisites
+- The React app project exists at `/home/chris/repo/codexUI/codex-ui-react`.
+- `bun` is installed.
+- Port `3456` can be occupied by a stale local process before startup.
+
+#### Steps
+1. Start any temporary listener on port `3456`.
+2. From `/home/chris/repo/codexUI/codex-ui-react`, run `bun run proxy`.
+3. Watch the proxy startup logs.
+4. Confirm the proxy takes over port `3456` instead of exiting with `Failed to start server. Is port 3456 in use?`.
+
+#### Expected Results
+- The proxy detects the existing listener on port `3456`.
+- The stale listener is terminated before the new proxy binds the port.
+- `bun run proxy` starts successfully and logs the proxy URL.
+
+#### Rollback/Cleanup
+- Stop the proxy process with `Ctrl+C`.
+- Remove any temporary listener created only for the test.
+
 #### Prerequisites
 - `pnpm` is installed globally (`npm i -g pnpm` or via corepack).
 - Repository is cloned and `node_modules/` does not exist (or may be stale).

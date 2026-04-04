@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { execSync } from 'node:child_process';
 import { WebSocketServer, type RawData } from 'ws';
 
 const app = express();
@@ -45,6 +46,38 @@ type KimiToolMapping = {
   originalToSanitized: Map<string, string>;
   sanitizedToOriginal: Map<string, string>;
 };
+
+function ensurePortFree(port: number): void {
+  try {
+    const pid = execSync(`lsof -ti:${port}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+    if (!pid) {
+      return;
+    }
+
+    console.log(`[proxy] killing process ${pid} on port ${port}`);
+    try {
+      execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+    } catch {
+      // Ignore kill failures and let listen surface the real error if needed.
+    }
+
+    let attempts = 0;
+    while (attempts < 10) {
+      try {
+        execSync(`lsof -i:${port}`, { stdio: 'ignore' });
+        attempts += 1;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      } catch {
+        break;
+      }
+    }
+  } catch {
+    // Port is already free.
+  }
+}
 
 function normalizeChatRole(role: unknown): 'system' | 'user' | 'assistant' | 'tool' {
   if (typeof role !== 'string') {
@@ -766,7 +799,8 @@ wsServer.on('connection', (ws, req) => {
   });
 });
 
-const PORT = process.env.PROXY_PORT || 3456;
+const PORT = Number(process.env.PROXY_PORT || 3456);
+ensurePortFree(PORT);
 server.listen(PORT, () => {
   console.log(`Kimi proxy server running on http://localhost:${PORT}`);
   console.log(`Proxying /v1/responses to Kimi /chat/completions`);
