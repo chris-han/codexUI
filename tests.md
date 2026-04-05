@@ -1851,3 +1851,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React folder rows show rename and delete menu
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- The sidebar contains one or more folder/project groups.
+
+#### Steps
+1. Hover a folder row in the sidebar and click the `...` button on the right.
+2. Confirm a dropdown opens with `Rename` and `Delete`.
+3. Click `Rename`, enter a new display name, and confirm the folder row label updates.
+4. Refresh the page and confirm the renamed folder label persists.
+5. Re-open the same folder menu and click `Delete`, then confirm the hide/delete prompt.
+6. Accept the prompt and confirm the folder disappears from the sidebar.
+7. Refresh the page and confirm the deleted folder remains hidden.
+
+#### Expected Results
+- Each folder row exposes a three-dots menu with `Rename` and `Delete`.
+- `Rename` updates the displayed folder label without breaking the threads under that folder.
+- `Delete` hides the folder from the sidebar after confirmation.
+- Rename and delete state persist across reloads in the React UI.
+
+#### Rollback/Cleanup
+- Clear `codex-ui-react.project-labels.v1` and `codex-ui-react.hidden-projects.v1` from browser localStorage if you want to restore original folder labels and visibility.
