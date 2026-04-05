@@ -1743,3 +1743,24 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React new-thread toolbar action uses Lucide SquarePen
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- Any page that renders the compact sidebar/header toolbar is accessible.
+
+#### Steps
+1. Open the home route on desktop and inspect the compact toolbar in the sidebar header.
+2. Confirm the rightmost new-thread action uses the Lucide `SquarePen` glyph instead of the previous Tabler pencil icon.
+3. Collapse the sidebar or switch to a mobile viewport.
+4. Confirm the same `SquarePen` icon appears in the compact header toolbar there as well.
+5. Click the icon and confirm navigation still goes to the home/new-thread screen.
+
+#### Expected Results
+- The new-thread action consistently renders with the Lucide `SquarePen` icon in sidebar and compact headers.
+- Icon sizing and stroke weight remain visually aligned with the adjacent toolbar icons.
+- Clicking the icon still starts the new-thread flow without behavior regression.
+
+#### Rollback/Cleanup
+- No cleanup required.

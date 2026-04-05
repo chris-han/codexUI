@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
+import { SquarePen } from 'lucide-react';
 import {
-  IconTablerFilePencil,
   IconTablerLayoutSidebar,
   IconTablerLayoutSidebarFilled,
 } from '../icons';
@@ -46,7 +46,7 @@ function SidebarThreadControls({
           aria-label="Start new thread"
           title="Start new thread"
         >
-          <IconTablerFilePencil className="h-4 w-4" />
+          <SquarePen className="h-4 w-4" strokeWidth={1.8} />
         </button>
       ) : null}
     </div>
