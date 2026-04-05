@@ -1885,11 +1885,12 @@ This file tracks manual regression and feature verification steps.
 #### Steps
 1. Open the sidebar and locate a collapsed folder row.
 2. Expand the folder.
-3. Inspect the folder icon in the expanded state.
+3. Inspect the folder row in the expanded state.
 
 #### Expected Results
+- Folder rows no longer render chevron expand/collapse icons.
 - Collapsed folders keep the existing closed-folder icon.
-- Expanded folders render with the Lucide `FolderOpen` icon.
+- Expanded folders render with the Lucide `FolderOpen` icon in the same neutral gray tone instead of switching to green.
 
 #### Rollback/Cleanup
 - No cleanup required.

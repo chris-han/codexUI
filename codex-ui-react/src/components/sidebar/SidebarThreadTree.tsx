@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import type { UiProjectGroup, UiThread } from '../../types/codex';
 import {
-  IconTablerChevronDown,
-  IconTablerChevronRight,
   IconTablerDots,
   IconTablerFolder,
 } from '../icons';
@@ -175,16 +173,11 @@ function SidebarThreadTree({
             <div data-project-menu-root="true" className="group relative flex items-center gap-1 rounded-md pr-1 hover:bg-gray-100">
               <button
                 onClick={() => toggleGroup(group.projectName)}
-                className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-sm font-medium text-gray-700 transition-colors"
+                className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-sm font-medium text-gray-700 transition-colors"
                 title={projectLabel}
               >
                 {isExpanded ? (
-                  <IconTablerChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                ) : (
-                  <IconTablerChevronRight className="w-3.5 h-3.5 text-gray-400" />
-                )}
-                {isExpanded ? (
-                  <FolderOpen className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                  <FolderOpen className="h-4 w-4 text-gray-400" strokeWidth={1.8} />
                 ) : (
                   <IconTablerFolder className="w-4 h-4 text-gray-400" />
                 )}
