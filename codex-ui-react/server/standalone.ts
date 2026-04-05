@@ -13,15 +13,8 @@ import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './rev
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
+const CODEX_HOME = join(__dirname, '..', '.codex');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
-
-function resolveCodexHome(): string {
-  const explicit = process.env.CODEXUI_REACT_CODEX_HOME?.trim() || process.env.CODEX_HOME?.trim();
-  if (explicit) return explicit;
-  return join(homedir(), '.codex');
-}
-
-const CODEX_HOME = resolveCodexHome();
 
 type CommandInvocation = {
   command: string;
@@ -582,31 +575,9 @@ function resolveSkillInstallerScriptPath(): string | null {
   return null;
 }
 
-async function detectUserSkillsDir(bridge: CodexBridge): Promise<string> {
-  try {
-    const result = await bridge.call('skills/list', {}) as {
-      data?: Array<{ skills?: Array<{ scope?: string; path?: string }> }>;
-    };
-    for (const entry of result.data ?? []) {
-      for (const skill of entry.skills ?? []) {
-        if (skill.scope !== 'user' || !skill.path) continue;
-        const normalized = skill.path.endsWith('/SKILL.md')
-          ? skill.path.slice(0, -'/SKILL.md'.length)
-          : skill.path;
-        const lastSlash = normalized.lastIndexOf('/');
-        if (lastSlash > 0) {
-          return normalized.slice(0, lastSlash);
-        }
-      }
-    }
-  } catch {
-    // fall back
-  }
-  return getSkillsInstallDir();
-}
-
 async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, InstalledSkillInfo>> {
   const installed = new Map<string, InstalledSkillInfo>();
+  const localSkillsDir = getSkillsInstallDir();
   try {
     const result = await bridge.call('skills/list', {}) as {
       data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }>;
@@ -614,9 +585,11 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
     for (const entry of result.data ?? []) {
       for (const skill of entry.skills ?? []) {
         if (!skill.name) continue;
+        const normalizedPath = typeof skill.path === 'string' ? skill.path.trim() : '';
+        if (normalizedPath && !normalizedPath.startsWith(`${localSkillsDir}/`)) continue;
         installed.set(skill.name, {
           name: skill.name,
-          path: skill.path ?? '',
+          path: normalizedPath,
           enabled: skill.enabled !== false,
         });
       }
@@ -1419,7 +1392,7 @@ app.post('/codex-api/skills-hub/install', async (req, res) => {
       throw new Error('Python 3 is required to install skills');
     }
 
-    const installDir = await detectUserSkillsDir(bridge);
+    const installDir = getSkillsInstallDir();
     await mkdir(installDir, { recursive: true });
     const skillDir = join(installDir, name);
     if (existsSync(skillDir)) {
