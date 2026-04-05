@@ -1894,3 +1894,28 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React chat code blocks render with read-only CodeMirror
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- A thread is available where you can send or inspect assistant messages containing fenced code blocks.
+
+#### Steps
+1. Open a thread and send or load a message containing a fenced code block, for example a short TypeScript or Bash snippet.
+2. Confirm the code block renders inside a dark editor-style surface rather than plain `pre/code`.
+3. Confirm syntax highlighting appears for a supported language such as TypeScript, JavaScript, JSON, or Bash.
+4. Click the `Copy` button in the code block header and confirm the code content is copied.
+5. Click inside the block and confirm it does not become editable.
+6. Confirm non-code markdown in the same message still renders as before.
+
+#### Expected Results
+- Fenced code blocks render with a read-only CodeMirror viewer.
+- Code blocks keep the language label when one is present.
+- Supported languages receive syntax highlighting.
+- The `Copy` button copies the full code block and briefly changes to `Copied`.
+- The viewer is selectable but not editable, and no editor-style line-number gutter is shown.
+- Paragraphs, lists, tables, and inline code outside fenced blocks are unchanged.
+
+#### Rollback/Cleanup
+- No cleanup required.

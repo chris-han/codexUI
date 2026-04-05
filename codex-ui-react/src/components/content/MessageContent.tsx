@@ -1,5 +1,10 @@
-import hljs from 'highlight.js/lib/common';
-import type { CSSProperties, ReactNode } from 'react';
+import { LanguageDescription, type LanguageSupport } from '@codemirror/language';
+import { languages } from '@codemirror/language-data';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { EditorView } from '@codemirror/view';
+import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+
+const CodeMirror = lazy(() => import('@uiw/react-codemirror'));
 
 type InlineToken =
   | { kind: 'text'; value: string }
@@ -69,22 +74,6 @@ function normalizeCodeLanguage(language: string): string {
   const token = language.trim().split(/\s+/u)[0]?.toLowerCase() ?? '';
   if (!token) return '';
   return aliases[token] ?? token;
-}
-
-function highlightCode(language: string, value: string): string {
-  const normalizedLanguage = normalizeCodeLanguage(language);
-  if (!normalizedLanguage) return hljs.highlightAuto(value).value;
-  try {
-    if (hljs.getLanguage(normalizedLanguage)) {
-      return hljs.highlight(value, {
-        language: normalizedLanguage,
-        ignoreIllegals: true,
-      }).value;
-    }
-  } catch {
-    // Fall back to auto/plain highlighting below.
-  }
-  return hljs.highlightAuto(value).value;
 }
 
 function splitMarkdownTableRow(line: string): string[] | null {
@@ -432,6 +421,142 @@ function listItemParagraphs(item: ListItem, keyPrefix: string): ReactNode {
   ));
 }
 
+const codeBlockExtensions = [
+  EditorView.lineWrapping,
+  EditorView.theme({
+    '&': {
+      backgroundColor: 'transparent',
+      fontSize: '12px',
+    },
+    '.cm-scroller': {
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
+      lineHeight: '1.5rem',
+      overflow: 'auto',
+    },
+    '.cm-content': {
+      padding: '0.75rem 1rem',
+    },
+    '.cm-line': {
+      padding: '0',
+    },
+    '.cm-activeLine, .cm-activeLineGutter': {
+      backgroundColor: 'transparent',
+    },
+    '&.cm-focused': {
+      outline: 'none',
+    },
+    '.cm-selectionBackground': {
+      backgroundColor: 'rgba(148,163,184,0.35) !important',
+    },
+  }),
+];
+
+function CodeBlock({ language, value }: { language: string; value: string }) {
+  const normalizedLanguage = normalizeCodeLanguage(language);
+  const [copied, setCopied] = useState(false);
+  const [languageSupport, setLanguageSupport] = useState<LanguageSupport | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLanguageSupport() {
+      if (!normalizedLanguage) {
+        setLanguageSupport(null);
+        return;
+      }
+
+      try {
+        const description = LanguageDescription.matchLanguageName(languages, normalizedLanguage, true);
+        if (!description) {
+          setLanguageSupport(null);
+          return;
+        }
+        const support = await description.load();
+        if (!cancelled) {
+          setLanguageSupport(support);
+        }
+      } catch {
+        if (!cancelled) {
+          setLanguageSupport(null);
+        }
+      }
+    }
+
+    void loadLanguageSupport();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedLanguage]);
+
+  useEffect(() => {
+    if (!copied) return undefined;
+    const timer = window.setTimeout(() => setCopied(false), 1200);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const extensions = useMemo(
+    () => (languageSupport ? [...codeBlockExtensions, languageSupport] : codeBlockExtensions),
+    [languageSupport]
+  );
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-gray-950 text-gray-100">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+        <div className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+          {normalizedLanguage || 'code'}
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-medium text-gray-300 transition hover:bg-white/5 hover:text-white"
+          aria-label="Copy code block"
+          title="Copy code"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <Suspense
+        fallback={(
+          <pre className="overflow-x-auto px-4 py-3 text-xs leading-6 text-gray-100">
+            <code>{value}</code>
+          </pre>
+        )}
+      >
+        <CodeMirror
+          value={value}
+          theme={oneDark}
+          editable={false}
+          readOnly
+          extensions={extensions}
+          basicSetup={{
+            lineNumbers: false,
+            foldGutter: false,
+            dropCursor: false,
+            allowMultipleSelections: false,
+            indentOnInput: false,
+            bracketMatching: false,
+            closeBrackets: false,
+            autocompletion: false,
+            highlightActiveLine: false,
+            highlightActiveLineGutter: false,
+            searchKeymap: false,
+          }}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
 type MessageContentProps = {
   text: string;
 };
@@ -544,16 +669,7 @@ function MessageContent({ text }: MessageContentProps) {
 
         if (block.kind === 'codeBlock') {
           return (
-            <div key={`code:${blockIndex}`} className="overflow-hidden rounded-xl border border-black/5 bg-gray-950 text-gray-100">
-              {block.language ? (
-                <div className="border-b border-white/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-gray-400">
-                  {block.language}
-                </div>
-              ) : null}
-              <pre className="overflow-x-auto px-4 py-3 text-xs leading-6">
-                <code className="hljs" dangerouslySetInnerHTML={{ __html: highlightCode(block.language, block.value) }} />
-              </pre>
-            </div>
+            <CodeBlock key={`code:${blockIndex}`} language={block.language} value={block.value} />
           );
         }
 
