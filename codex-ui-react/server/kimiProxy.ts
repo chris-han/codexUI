@@ -61,6 +61,13 @@ type KimiToolMapping = {
   sanitizedToOriginal: Map<string, string>;
 };
 
+type StoredResponseContext = {
+  instructions: string | null;
+  inputItems: any[];
+};
+
+const storedResponses = new Map<string, StoredResponseContext>();
+
 function ensurePortFree(port: number): void {
   try {
     const pid = execSync(`lsof -ti:${port}`, {
@@ -141,6 +148,89 @@ function toPlainTextContent(content: unknown): string {
     })
     .filter(Boolean)
     .join('\n');
+}
+
+function buildToolCallReasoningContent(item: Record<string, unknown>, toolName: string): string {
+  if (typeof item.reasoning_content === 'string' && item.reasoning_content.trim().length > 0) {
+    return item.reasoning_content;
+  }
+
+  if (typeof item.reasoning === 'string' && item.reasoning.trim().length > 0) {
+    return item.reasoning;
+  }
+
+  const normalizedToolName = toolName.trim();
+  if (normalizedToolName.length > 0) {
+    return `Continuing with tool call ${normalizedToolName} to make progress on the request.`;
+  }
+
+  return 'Continuing with the prior tool call to make progress on the request.';
+}
+
+function parseHeaderEntries(headers: string[]): Record<string, string> {
+  const parsedHeaders: Record<string, string> = {};
+
+  for (const header of headers) {
+    const separatorIndex = header.indexOf(':');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const name = header.slice(0, separatorIndex).trim();
+    const value = header.slice(separatorIndex + 1).trim();
+    if (!name) {
+      continue;
+    }
+    parsedHeaders[name] = value;
+  }
+
+  return parsedHeaders;
+}
+
+function normalizeResponseInputItems(input: unknown): any[] {
+  if (typeof input === 'string') {
+    return input.length > 0 ? [{ type: 'text', text: input }] : [];
+  }
+
+  if (Array.isArray(input)) {
+    return input.filter(Boolean);
+  }
+
+  return [];
+}
+
+function hydrateRequestBodyFromPreviousResponse(body: any) {
+  const previousResponseId =
+    typeof body?.previous_response_id === 'string' && body.previous_response_id.length > 0
+      ? body.previous_response_id
+      : null;
+  const previousContext = previousResponseId ? storedResponses.get(previousResponseId) : undefined;
+  const mergedBody = { ...body };
+  const currentInputItems = normalizeResponseInputItems(body?.input);
+
+  if (previousContext) {
+    mergedBody.input = [...previousContext.inputItems, ...currentInputItems];
+    if (!mergedBody.instructions && previousContext.instructions) {
+      mergedBody.instructions = previousContext.instructions;
+    }
+  } else if (Array.isArray(body?.input) || typeof body?.input === 'string') {
+    mergedBody.input = currentInputItems;
+  }
+
+  return {
+    mergedBody,
+    previousResponseId,
+  };
+}
+
+function storeCompletedResponseContext(responseId: string, requestBody: any, output: unknown): void {
+  storedResponses.set(responseId, {
+    instructions: typeof requestBody?.instructions === 'string' ? requestBody.instructions : null,
+    inputItems: [
+      ...normalizeResponseInputItems(requestBody?.input),
+      ...(Array.isArray(output) ? output : []),
+    ],
+  });
 }
 
 function sanitizeToolName(name: string, usedNames: Set<string>): string {
@@ -327,6 +417,7 @@ function convertToChatFormat(body: any) {
           messages.push({ role: 'user', content: directUserParts.join('\n') });
           directUserParts.length = 0;
         }
+        const record = item as Record<string, unknown>;
         const callId = typeof item.call_id === 'string' && item.call_id ? item.call_id : `call_${messages.length}`;
         const rawName = typeof item.name === 'string' ? item.name : '';
         const mappedName = toolMapping.originalToSanitized.get(rawName) || rawName;
@@ -336,6 +427,7 @@ function convertToChatFormat(body: any) {
         messages.push({
           role: 'assistant',
           content: null,
+          reasoning_content: buildToolCallReasoningContent(record, rawName),
           tool_calls: [{ id: callId, type: 'function', function: { name: mappedName, arguments: argsStr } }],
         });
         continue;
@@ -629,6 +721,7 @@ function emitStreamingResponseFromChatData(
 }
 
 function createResponseStreamEmitter(
+  requestBody: any,
   sink: StreamingSink,
   toolMapping: KimiToolMapping,
   model: string
@@ -876,6 +969,24 @@ function createResponseStreamEmitter(
         });
       }
 
+      for (const [outputIndex, item] of finalOutput.entries()) {
+        if (!item || item.type === 'reasoning') {
+          continue;
+        }
+
+        const isStreamedMessageItem =
+          item.type === 'message' && messageOpened && outputIndex === (messageOutputIndex ?? 0);
+        if (isStreamedMessageItem) {
+          continue;
+        }
+
+        writeEvent({
+          type: 'response.output_item.done',
+          output_index: outputIndex,
+          item,
+        });
+      }
+
       const completedResponse = {
         id: responseId,
         object: 'response',
@@ -900,6 +1011,8 @@ function createResponseStreamEmitter(
         user: null,
         metadata: {},
       };
+
+      storeCompletedResponseContext(responseId, requestBody, completedResponse.output);
 
       writeEvent({
         type: 'response.completed',
@@ -952,83 +1065,65 @@ async function postToUpstreamStream(
     url: target.url,
     hasTools: Array.isArray(target.body.tools) && target.body.tools.length > 0,
   });
+  const response = await fetch(target.url, {
+    method: 'POST',
+    headers: parseHeaderEntries(target.headers),
+    body: JSON.stringify(target.body),
+    signal: AbortSignal.timeout(120_000),
+  });
 
-  return new Promise((resolve, reject) => {
-    const args = [
-      '--silent',
-      '--show-error',
-      '--no-buffer',
-      '--location',
-      '--max-time',
-      '120',
-      '-X',
-      'POST',
-      target.url,
-      '--data',
-      JSON.stringify(target.body),
-    ];
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `Upstream streaming request failed with status ${response.status}`);
+  }
 
-    for (const header of target.headers) {
-      args.splice(args.length - 2, 0, '-H', header);
+  if (!response.body) {
+    throw new Error('Upstream streaming response body is missing');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let stdoutBuffer = '';
+
+  const flushBuffer = () => {
+    let boundaryIndex = stdoutBuffer.indexOf('\n\n');
+    while (boundaryIndex !== -1) {
+      const rawEvent = stdoutBuffer.slice(0, boundaryIndex);
+      stdoutBuffer = stdoutBuffer.slice(boundaryIndex + 2);
+      const dataLines = rawEvent
+        .split(/\r?\n/u)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim());
+      if (dataLines.length > 0) {
+        handlers.onSseEvent(dataLines.join('\n'));
+      }
+      boundaryIndex = stdoutBuffer.indexOf('\n\n');
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
     }
 
-    const child = spawn('curl', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    stdoutBuffer += decoder.decode(value, { stream: true });
+    flushBuffer();
+  }
 
-    let stdoutBuffer = '';
-    let stderr = '';
-
-    const flushBuffer = () => {
-      let boundaryIndex = stdoutBuffer.indexOf('\n\n');
-      while (boundaryIndex !== -1) {
-        const rawEvent = stdoutBuffer.slice(0, boundaryIndex);
-        stdoutBuffer = stdoutBuffer.slice(boundaryIndex + 2);
-        const dataLines = rawEvent
-          .split(/\r?\n/u)
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice(5).trim());
-        if (dataLines.length > 0) {
-          handlers.onSseEvent(dataLines.join('\n'));
-        }
-        boundaryIndex = stdoutBuffer.indexOf('\n\n');
-      }
-    };
-
-    child.stdout.on('data', (chunk) => {
-      stdoutBuffer += chunk.toString();
-      flushBuffer();
-    });
-
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', (error) => {
-      reject(error);
-    });
-
-    child.on('close', (code) => {
-      flushBuffer();
-
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || `curl exited with code ${code}`));
-        return;
-      }
-
-      handlers.onDone();
-      resolve();
-    });
-  });
+  stdoutBuffer += decoder.decode();
+  flushBuffer();
+  handlers.onDone();
 }
 
 async function streamChatCompletionsAsResponses(
+  requestBody: any,
   chatBody: Record<string, unknown>,
   sink: StreamingSink,
   toolMapping: KimiToolMapping
 ): Promise<void> {
   const model = typeof chatBody.model === 'string' ? chatBody.model : 'kimi-for-coding';
-  const emitter = createResponseStreamEmitter(sink, toolMapping, model);
+  const emitter = createResponseStreamEmitter(requestBody, sink, toolMapping, model);
   const toolCallsByIndex = new Map<number, Record<string, unknown>>();
   const finalMessage: Record<string, unknown> = { role: 'assistant', content: '', tool_calls: [] };
   console.log('[proxy] streaming request', {
@@ -1265,18 +1360,21 @@ app.get('/v1/models', (req, res) => {
 
 app.post('/v1/responses', async (req, res) => {
   try {
+    const { mergedBody, previousResponseId } = hydrateRequestBodyFromPreviousResponse(req.body);
     console.log('[proxy] /v1/responses request', {
-      model: req.body?.model,
-      stream: req.body?.stream,
-      inputType: Array.isArray(req.body?.input) ? 'array' : typeof req.body?.input,
-      toolCount: Array.isArray(req.body?.tools) ? req.body.tools.length : 0,
+      model: mergedBody?.model,
+      stream: mergedBody?.stream,
+      inputType: Array.isArray(mergedBody?.input) ? 'array' : typeof mergedBody?.input,
+      toolCount: Array.isArray(mergedBody?.tools) ? mergedBody.tools.length : 0,
+      previousResponseId,
     });
-    const { chatBody, toolMapping } = convertToChatFormat(req.body);
+    const { chatBody, toolMapping } = convertToChatFormat(mergedBody);
     if (chatBody.stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       await streamChatCompletionsAsResponses(
+        mergedBody,
         chatBody,
         {
           websocketMode: false,
@@ -1310,6 +1408,7 @@ app.post('/v1/responses', async (req, res) => {
 
     const requestId = Date.now().toString();
     const responseData = convertToResponseFormat(JSON.parse(bodyText), requestId, toolMapping);
+    storeCompletedResponseContext(responseData.id, mergedBody, responseData.output);
 
     res.json(responseData);
   } catch (error) {
@@ -1321,17 +1420,20 @@ app.post('/v1/responses', async (req, res) => {
 async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('ws').WebSocket>, raw: RawData) {
   try {
     const body = JSON.parse(raw.toString());
+    const { mergedBody, previousResponseId } = hydrateRequestBodyFromPreviousResponse(body);
     console.log('[proxy] ws /v1/responses request', {
-      type: body?.type,
-      model: body?.model,
-      stream: body?.stream,
-      inputType: Array.isArray(body?.input) ? 'array' : typeof body?.input,
-      toolCount: Array.isArray(body?.tools) ? body.tools.length : 0,
+      type: mergedBody?.type,
+      model: mergedBody?.model,
+      stream: mergedBody?.stream,
+      inputType: Array.isArray(mergedBody?.input) ? 'array' : typeof mergedBody?.input,
+      toolCount: Array.isArray(mergedBody?.tools) ? mergedBody.tools.length : 0,
+      previousResponseId,
     });
 
-    const { chatBody, toolMapping } = convertToChatFormat(body);
+    const { chatBody, toolMapping } = convertToChatFormat(mergedBody);
     if (chatBody.stream) {
       await streamChatCompletionsAsResponses(
+        mergedBody,
         chatBody,
         {
           websocketMode: true,
@@ -1366,7 +1468,9 @@ async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('w
     }
 
     const requestId = Date.now().toString();
-    ws.send(JSON.stringify(convertToResponseFormat(JSON.parse(bodyText), requestId, toolMapping)));
+    const responseData = convertToResponseFormat(JSON.parse(bodyText), requestId, toolMapping);
+    storeCompletedResponseContext(responseData.id, mergedBody, responseData.output);
+    ws.send(JSON.stringify(responseData));
   } catch (error) {
     console.error('[proxy] ws error', error);
     ws.send(

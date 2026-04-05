@@ -1666,3 +1666,33 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary uploaded attachment files if manual cleanup is desired.
+
+### Feature: kimiProxy resumes previous_response_id turns for full-auto docx analysis
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- The kimi proxy is running on port `3456`.
+- Windows host Chrome remote debugging is available at `http://127.0.0.1:9222`.
+- A thread is available in the React UI with `Full Auto` mode enabled.
+- A `.docx` contract file is available for upload.
+
+#### Steps
+1. Open the target thread in the React UI.
+2. Enable `Full Auto` from the composer actions menu.
+3. Upload the `.docx` contract file through the composer.
+4. Send a prompt that requires reading the attachment first, for example `检查这份合同文件并分析其有效性`.
+5. Watch the proxy log for three phases:
+6. Confirm the first streamed request emits a `tool_calls` finish reason.
+7. Confirm the follow-up websocket request includes a non-null `previousResponseId`.
+8. Confirm `convertToChatFormat` shows the follow-up request expanded back into full history instead of only `function_call_output`.
+9. In the browser, wait for the assistant to render a substantive contract analysis instead of stopping after the initial extraction plan.
+
+#### Expected Results
+- The proxy surfaces streamed `function_call` items as `response.output_item.done`, so Codex executes the tool call.
+- The proxy stores completed response context and rehydrates follow-up requests when `previous_response_id` is present.
+- The follow-up kimi request completes with a final assistant answer instead of stalling after the tool call.
+- The React thread shows a contract analysis result for the uploaded `.docx` attachment.
+
+#### Rollback/Cleanup
+- Close any extra remote Chrome tabs opened during Playwright verification if desired.
+- Remove temporary uploaded attachment files if manual cleanup is desired.
