@@ -131,11 +131,13 @@ function buildTextWithAttachments(
     STRUCTURED_ATTACHMENT_EXTENSIONS.has(getFileExtension(file.path))
   );
   let prefix = '# Attachment instructions\n\n';
-  prefix += '- The attached files are intended inputs for this request.\n';
-  prefix += '- Inspect the attached files before answering when the request depends on their contents.\n';
+  prefix += '- The attached files are required inputs for this request.\n';
+  prefix += '- If the request depends on the attached file contents, inspect the files before answering.\n';
+  prefix += '- Do not stop after saying that you will inspect the files. Use the available tools now to read or extract them before continuing.\n';
   if (includesStructuredAttachment) {
-    prefix += '- For structured attachments such as .docx, .pdf, or spreadsheets, inspect or extract the file contents before answering.\n';
+    prefix += '- For structured attachments such as .docx, .pdf, or spreadsheets, extract the file contents first, then analyze them.\n';
   }
+  prefix += '- If inspection or extraction fails, say so explicitly and explain what prevented access.\n';
   prefix += '\n# Attached files\n';
   for (const file of files) {
     prefix += `\n- ${file.label}: ${file.path}\n`;

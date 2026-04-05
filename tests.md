@@ -1661,7 +1661,8 @@ This file tracks manual regression and feature verification steps.
 - The React client sends the `default` collaboration mode preset even in Full Auto, so Codex receives the built-in mode instructions instead of only an approval override.
 - The prompt text includes an attachment instruction block that tells Codex the uploaded files are intended inputs and should be inspected before answering when the request depends on their contents.
 - Structured attachments such as `.docx` receive an explicit extract/inspect hint in the prompt prefix.
-- The agent is more likely to proceed into attachment inspection or extraction instead of stopping at a passive `Thinking` phase with no execution.
+- The attachment instruction block tells Codex to actually use tools immediately rather than only narrating that it will inspect the file.
+- The agent does not remain stuck on a passive `Thinking` phase after a planning sentence; either command execution becomes visible or a final analysis appears.
 
 #### Rollback/Cleanup
 - Remove any temporary uploaded attachment files if manual cleanup is desired.
