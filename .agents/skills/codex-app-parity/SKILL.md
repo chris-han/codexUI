@@ -218,6 +218,15 @@ If a finding conflicts with current official docs or current official code, trea
   - Run build/typecheck.
   - Run Playwright in headless mode and capture a screenshot showing sidebar order.
 
+## Findings: Reasoning Panel Folding (2026-04-05)
+
+- Current official Codex docs did not expose a specific public UX contract for collapsed reasoning/code previews.
+- The local `openai/codex` workspace copy available here does not include a renderer/webview implementation to mirror for this interaction.
+- For reasoning-panel UI changes in this repo, use the existing local interaction model as the baseline and prefer minimal changes:
+  - keep the panel collapsible
+  - prefer folded previews over fully hiding content when the user request is about visibility
+  - verify the collapsed and expanded labels and states with Playwright screenshots
+
 ## Findings: Route-Scoped Thread Shells For Live Streaming (2026-04-04)
 
 - In this React fork, realtime thread deltas can arrive before the thread list/detail hydration finishes for a route-selected thread.

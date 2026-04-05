@@ -1696,3 +1696,26 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Close any extra remote Chrome tabs opened during Playwright verification if desired.
 - Remove temporary uploaded attachment files if manual cleanup is desired.
+
+### Feature: React thinking panels fold instead of fully hiding generated content
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- A thread is available with an assistant response that includes a visible `Thinking` section.
+
+#### Steps
+1. Open a thread that contains an assistant message with a `Thinking` panel.
+2. Observe the panel in its default collapsed state.
+3. Confirm the panel still shows the beginning of the thinking content instead of hiding the body completely.
+4. Click the panel toggle.
+5. Confirm the full reasoning content expands.
+6. Click the toggle again.
+
+#### Expected Results
+- The collapsed state shows a folded preview of the thinking content with a fade at the bottom.
+- The toggle labels read `Expand` when folded and `Fold` when expanded.
+- Expanding reveals the full content without changing the message text below it.
+- Folding again returns to the preview state rather than hiding the content entirely.
+
+#### Rollback/Cleanup
+- No cleanup required.

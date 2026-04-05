@@ -58,14 +58,20 @@ function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = fal
           </span>
         </div>
         <span className="text-[11px] text-blue-500">
-          {isCollapsed ? 'Show' : 'Hide'}
+          {isCollapsed ? 'Expand' : 'Fold'}
         </span>
       </button>
-      {!isCollapsed && (
-        <div className="border-t border-blue-100 px-4 py-3">
+      <div className="border-t border-blue-100 px-4 py-3">
+        <div className={isCollapsed ? 'relative max-h-40 overflow-hidden' : ''}>
           <MessageContent text={text} />
+          {isCollapsed ? (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-b from-transparent to-blue-50"
+            />
+          ) : null}
         </div>
-      )}
+      </div>
     </div>
   );
 }
