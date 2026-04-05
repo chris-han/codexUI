@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Folder } from 'lucide-react';
 import type { UiProjectGroup, UiThread } from '../../types/codex';
 import {
   IconTablerDots,
@@ -179,7 +179,7 @@ function SidebarThreadTree({
                 {isExpanded ? (
                   <FolderOpen className="h-4 w-4 text-gray-400" strokeWidth={1.8} />
                 ) : (
-                  <IconTablerFolder className="w-4 h-4 text-gray-400" />
+                  <Folder className="w-4 h-4 text-gray-400" />
                 )}
                 <span className="truncate flex-1 text-left">
                   {projectLabel}
