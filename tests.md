@@ -1875,3 +1875,21 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Clear `codex-ui-react.project-labels.v1` and `codex-ui-react.hidden-projects.v1` from browser localStorage if you want to restore original folder labels and visibility.
+
+### Feature: React expanded folder rows use Lucide FolderOpen
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- The sidebar contains at least one folder group.
+
+#### Steps
+1. Open the sidebar and locate a collapsed folder row.
+2. Expand the folder.
+3. Inspect the folder icon in the expanded state.
+
+#### Expected Results
+- Collapsed folders keep the existing closed-folder icon.
+- Expanded folders render with the Lucide `FolderOpen` icon.
+
+#### Rollback/Cleanup
+- No cleanup required.

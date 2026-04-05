@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
+import { FolderOpen } from 'lucide-react';
 import type { UiProjectGroup, UiThread } from '../../types/codex';
 import {
   IconTablerChevronDown,
   IconTablerChevronRight,
   IconTablerDots,
   IconTablerFolder,
-  IconTablerFolderOpen,
 } from '../icons';
 
 const PROJECT_LABELS_STORAGE_KEY = 'codex-ui-react.project-labels.v1';
@@ -184,7 +184,7 @@ function SidebarThreadTree({
                   <IconTablerChevronRight className="w-3.5 h-3.5 text-gray-400" />
                 )}
                 {isExpanded ? (
-                  <IconTablerFolderOpen className="w-4 h-4 text-primary" />
+                  <FolderOpen className="h-4 w-4 text-primary" strokeWidth={1.8} />
                 ) : (
                   <IconTablerFolder className="w-4 h-4 text-gray-400" />
                 )}
