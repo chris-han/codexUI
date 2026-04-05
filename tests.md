@@ -243,6 +243,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Uninstall any test skill you installed during verification.
 
+### Feature: React standalone uses global Codex skills by default
+
+#### Prerequisites
+- React app is running from `codex-ui-react/`.
+- At least one skill exists under the global Codex home at `~/.codex/skills`.
+- `CODEXUI_REACT_CODEX_HOME` is unset unless you are explicitly testing the override behavior.
+
+#### Steps
+1. Start the React standalone server normally without setting `CODEXUI_REACT_CODEX_HOME`.
+2. Open the React `Skills Hub`.
+3. Confirm a skill that exists only under `~/.codex/skills` appears in the installed section.
+4. Install a marketplace skill from the React `Skills Hub`.
+5. Confirm the installed skill is written under `~/.codex/skills`, not `codex-ui-react/.codex/skills`.
+6. Restart the React standalone server and reload the `Skills Hub`.
+7. Optionally restart with `CODEXUI_REACT_CODEX_HOME=/some/other/path` and confirm the installed list switches to that custom Codex home.
+
+#### Expected Results
+- The React standalone server uses global `~/.codex` as its default Codex home.
+- The installed skills list includes globally installed user skills.
+- Newly installed skills from the React UI persist into the global Codex home unless an override env var is set.
+- Setting `CODEXUI_REACT_CODEX_HOME` overrides the default global home cleanly.
+
+#### Rollback/Cleanup
+- Unset `CODEXUI_REACT_CODEX_HOME` after override testing.
+- Remove any test skill you installed if it was only needed for verification.
+
 ### Feature: Thinking block stays available after assistant content appears
 
 #### Prerequisites

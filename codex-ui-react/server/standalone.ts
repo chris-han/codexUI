@@ -13,8 +13,15 @@ import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './rev
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
-const CODEX_HOME = join(__dirname, '..', '.codex');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
+
+function resolveCodexHome(): string {
+  const explicit = process.env.CODEXUI_REACT_CODEX_HOME?.trim() || process.env.CODEX_HOME?.trim();
+  if (explicit) return explicit;
+  return join(homedir(), '.codex');
+}
+
+const CODEX_HOME = resolveCodexHome();
 
 type CommandInvocation = {
   command: string;
