@@ -1442,3 +1442,38 @@ function extractProjectName(cwd: string): string {
   const parts = cwd.split('/');
   return parts[parts.length - 1] || cwd;
 }
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export type CodexUiSettingsInfo = {
+  codexHome: string;
+  savedCodexHome: string | null;
+  defaultCodexHome: string;
+  skillsDir: string;
+  settingsFile: string;
+};
+
+export async function getSettings(): Promise<CodexUiSettingsInfo> {
+  const response = await fetch('/codex-api/settings');
+  const payload = await response.json() as { data?: CodexUiSettingsInfo; error?: string };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.error ?? 'Failed to load settings');
+  }
+  return payload.data;
+}
+
+export async function saveSettings(params: { codexHome?: string }): Promise<{ restartRequired: boolean; message: string }> {
+  const response = await fetch('/codex-api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  const payload = await response.json() as { ok?: boolean; restartRequired?: boolean; message?: string; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'Failed to save settings');
+  }
+  return {
+    restartRequired: payload.restartRequired ?? false,
+    message: payload.message ?? 'Settings saved.',
+  };
+}

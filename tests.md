@@ -245,32 +245,6 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Uninstall any test skill you installed during verification.
 
-### Feature: React Skills Hub installs large marketplace skills without Python helper
-
-#### Prerequisites
-- React app server is running from `codex-ui-react/`.
-- Network access to `https://api.github.com` and `https://raw.githubusercontent.com` is available.
-- The local skills directory `codex-ui-react/.codex/skills/` is writable.
-- The marketplace contains `axelhu/superpowers-brainstorming`.
-
-#### Steps
-1. Open the React `Skills Hub` screen.
-2. Search for `superpowers-brainstorming`.
-3. Open the `superpowers-brainstorming` skill detail modal from owner `axelhu`.
-4. Click `Install` and wait for the request to finish.
-5. Confirm the skill appears in the installed section.
-6. Verify `codex-ui-react/.codex/skills/superpowers-brainstorming/SKILL.md` exists on disk.
-7. Click `Uninstall` for the same skill and confirm the installed entry disappears.
-
-#### Expected Results
-- Install succeeds without requiring the external Python `skill-installer` helper.
-- The install completes by downloading only the selected skill directory, not the full marketplace repository.
-- If install fails mid-download, any previously installed copy is left intact until a full replacement is ready.
-- Uninstall still removes the local installed copy.
-
-#### Rollback/Cleanup
-- Remove `codex-ui-react/.codex/skills/superpowers-brainstorming/` if it remains after the test.
-
 ### Feature: Thinking block stays available after assistant content appears
 
 #### Prerequisites
@@ -2104,3 +2078,36 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: Configurable CODEX_HOME (Settings pane)
+
+#### Prerequisites
+- `codex-ui-react` server is running (port 4173).
+- The default local `.codex` directory exists at `codex-ui-react/.codex`.
+
+#### Steps
+1. Click the **Settings** gear icon in the top-left sidebar toolbar.
+2. Confirm the Settings page loads with three info rows: **Active now**, **Skills dir**, and **Default**.
+3. Verify **Active now** shows `…/codex-ui-react/.codex` (the default local path).
+4. Click the folder browse button (folder icon) next to the override field.
+5. Navigate the directory browser and click **Select** on a target directory (e.g. `/home/chris/.codex`).
+6. Confirm the input field is now populated with the selected path.
+7. Click **Save**.
+8. Confirm a yellow/amber "Settings saved. Restart the server for changes to take effect." confirmation banner appears.
+9. Restart the server (`bun run build` then restart tmux session).
+10. Return to Settings — confirm **Active now** shows the newly saved path and **Skills dir** reflects `$newPath/skills`.
+11. Click **Reset to default**, then **Save**.
+12. Confirm the saved override is cleared; after restart, the path returns to the default local `.codex`.
+
+#### Expected Results
+- Settings page is accessible via the gear icon in the sidebar.
+- Current `CODEX_HOME`, Skills dir, and Default path are displayed as read-only info.
+- Override path can be set via text input or directory browser.
+- Saving persists to `.codex-ui-settings.json` next to the server.
+- Restart causes the new `CODEX_HOME` to be active and reflected in the Settings page.
+- Resetting clears the saved override, restoring the default local path after restart.
+- The `CODEXUI_CODEX_HOME` environment variable still overrides any saved setting.
+
+#### Rollback/Cleanup
+- Delete `codex-ui-react/.codex-ui-settings.json` to revert to defaults.
+- Restart the server.

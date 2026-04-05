@@ -7,6 +7,7 @@ import DesktopLayout from './components/layout/DesktopLayout';
 const ThreadConversation = lazy(() => import('./components/content/ThreadConversation'));
 const SkillsHub = lazy(() => import('./components/content/SkillsHub'));
 const HomeScreen = lazy(() => import('./components/content/HomeScreen'));
+const SettingsPane = lazy(() => import('./components/content/SettingsPane'));
 
 function App() {
   const store = useCodexStore();
@@ -82,6 +83,14 @@ function App() {
           element={(
             <Suspense fallback={<div className="p-8 text-gray-500">Loading skills…</div>}>
               <SkillsHub />
+            </Suspense>
+          )}
+        />
+        <Route
+          path="settings"
+          element={(
+            <Suspense fallback={<div className="p-8 text-gray-500">Loading settings…</div>}>
+              <SettingsPane />
             </Suspense>
           )}
         />

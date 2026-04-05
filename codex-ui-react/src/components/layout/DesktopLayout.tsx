@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { SquareLibrary } from 'lucide-react';
+import { SquareLibrary, Settings } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -33,6 +33,7 @@ function DesktopLayout() {
   } = useCodexStore();
 
   const isSkillsRoute = location.pathname === '/skills';
+  const isSettingsRoute = location.pathname === '/settings';
   const projectEntries = buildProjectEntries(workspaceRootsState, projectGroups);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -133,6 +134,13 @@ function DesktopLayout() {
     navigate('/skills');
   };
 
+  const handleNavigateSettings = () => {
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
+    navigate('/settings');
+  };
+
   const sidebar = (
     <section className="flex h-full flex-col bg-gray-100">
       <div className="flex min-h-12 items-center px-2 pb-2 pt-3 sm:min-h-14 sm:px-3 sm:pt-4">
@@ -143,6 +151,9 @@ function DesktopLayout() {
         >
           <SidebarToolbarAction label="Skills Hub" onClick={handleNavigateSkills} isActive={isSkillsRoute}>
             <SquareLibrary className="h-4 w-4" strokeWidth={1.8} />
+          </SidebarToolbarAction>
+          <SidebarToolbarAction label="Settings" onClick={handleNavigateSettings} isActive={isSettingsRoute}>
+            <Settings className="h-4 w-4" strokeWidth={1.8} />
           </SidebarToolbarAction>
           <SidebarToolbarAction label="Search threads" onClick={handleToggleSidebarSearch}>
             <IconTablerSearch className="h-4 w-4" />
