@@ -39,7 +39,7 @@ function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = fal
   }
 
   return (
-    <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50">
+    <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50">
       <button
         type="button"
         onClick={() => setIsCollapsed((value) => !value)}

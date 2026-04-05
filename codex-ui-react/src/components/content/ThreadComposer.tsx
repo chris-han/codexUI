@@ -70,6 +70,10 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const modelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const skillsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const reasoningButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ left: number; bottom: number } | null>(null);
 
   const {
     availableModelIds,
@@ -288,12 +292,21 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
   const toggleDropdown = (dropdown: 'model' | 'skills' | 'reasoning') => {
     setIsPlusMenuOpen(false);
-    setOpenDropdown((current) => (current === dropdown ? null : dropdown));
+    const isClosing = openDropdown === dropdown;
+    setOpenDropdown(isClosing ? null : dropdown);
+    if (!isClosing) {
+      const ref = dropdown === 'model' ? modelButtonRef : dropdown === 'skills' ? skillsButtonRef : reasoningButtonRef;
+      const rect = ref.current?.getBoundingClientRect();
+      if (rect) {
+        setDropdownPosition({ left: rect.left, bottom: window.innerHeight - rect.top + 12 });
+      }
+    }
   };
 
   const closeMenus = () => {
     setIsPlusMenuOpen(false);
     setOpenDropdown(null);
+    setDropdownPosition(null);
   };
 
   return (
@@ -534,6 +547,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         <div className="flex min-w-0 items-center gap-6">
           <div className="relative min-w-[120px]">
             <button
+              ref={modelButtonRef}
               type="button"
               onClick={() => toggleDropdown('model')}
               className="inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700"
@@ -542,8 +556,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <span className="truncate">{selectedModelId}</span>
               <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             </button>
-            {openDropdown === 'model' ? (
-              <div className="fixed bottom-auto left-auto z-[100] min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]" style={{ top: 'auto', left: 'auto', transform: 'translateY(-100%)', marginTop: '-12px' }}>
+            {openDropdown === 'model' && dropdownPosition ? (
+              <div className="fixed z-[100] min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]" style={{ left: dropdownPosition.left, bottom: dropdownPosition.bottom }}>
                 <div className="max-h-72 overflow-y-auto pr-1">
                   {modelOptions.map((option) => (
                     <button
@@ -568,6 +582,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
           <div className="relative min-w-[54px]">
             <button
+              ref={skillsButtonRef}
               type="button"
               onClick={() => toggleDropdown('skills')}
               className="inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700"
@@ -576,8 +591,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <span className="truncate">Skills</span>
               <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             </button>
-            {openDropdown === 'skills' ? (
-              <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+            {openDropdown === 'skills' && dropdownPosition ? (
+              <div className="fixed z-[100] min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]" style={{ left: dropdownPosition.left, bottom: dropdownPosition.bottom }}>
                 <div className="max-h-72 overflow-y-auto pr-1">
                   {skillOptions.map((option) => (
                     <button
@@ -599,6 +614,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
           <div className="relative min-w-[92px]">
             <button
+              ref={reasoningButtonRef}
               type="button"
               onClick={() => toggleDropdown('reasoning')}
               className="inline-flex items-center gap-1 truncate text-sm font-normal text-gray-700"
@@ -607,8 +623,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <span className="truncate">{selectedReasoningLabel}</span>
               <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             </button>
-            {openDropdown === 'reasoning' ? (
-              <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+            {openDropdown === 'reasoning' && dropdownPosition ? (
+              <div className="fixed z-[100] min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]" style={{ left: dropdownPosition.left, bottom: dropdownPosition.bottom }}>
                 <div className="max-h-72 overflow-y-auto pr-1">
                   {reasoningOptions.map((option) => (
                     <button
