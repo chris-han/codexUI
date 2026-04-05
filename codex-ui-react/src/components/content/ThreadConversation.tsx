@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { SquareLibrary } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
@@ -377,6 +378,9 @@ function ThreadConversation() {
             onToggleSidebar={toggleSidebar}
             onNewThread={() => navigate('/')}
           >
+            <SidebarToolbarAction label="Skills Hub" onClick={() => navigate('/skills')}>
+              <SquareLibrary className="h-4 w-4" strokeWidth={1.8} />
+            </SidebarToolbarAction>
             <SidebarToolbarAction label="Search threads" onClick={openSidebarSearch}>
               <IconTablerSearch className="h-4 w-4" />
             </SidebarToolbarAction>

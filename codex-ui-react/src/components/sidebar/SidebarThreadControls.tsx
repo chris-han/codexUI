@@ -57,16 +57,22 @@ export function SidebarToolbarAction({
   children,
   label,
   onClick,
+  isActive = false,
 }: {
   children: ReactNode;
   label: string;
   onClick: () => void;
+  isActive?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent text-gray-600 transition hover:border-gray-200 hover:bg-gray-50"
+      className={`flex h-7 w-7 items-center justify-center rounded-md border transition ${
+        isActive
+          ? 'border-gray-200 bg-white text-gray-900 shadow-sm'
+          : 'border-transparent bg-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+      }`}
       aria-label={label}
       title={label}
     >

@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react';
+import { SquareLibrary } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -82,6 +83,9 @@ function DesktopLayout() {
           onToggleSidebar={() => setSidebarCollapsed(!isSidebarCollapsed)}
           onNewThread={handleNewThread}
         >
+          <SidebarToolbarAction label="Skills Hub" onClick={handleNavigateSkills} isActive={isSkillsRoute}>
+            <SquareLibrary className="h-4 w-4" strokeWidth={1.8} />
+          </SidebarToolbarAction>
           <SidebarToolbarAction label="Search threads" onClick={handleToggleSidebarSearch}>
             <IconTablerSearch className="h-4 w-4" />
           </SidebarToolbarAction>
@@ -113,20 +117,6 @@ function DesktopLayout() {
           </div>
         </div>
       ) : null}
-
-      <div className="px-3 pb-2">
-        <button
-          type="button"
-          onClick={handleNavigateSkills}
-          className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-            isSkillsRoute
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-700 hover:bg-white/80'
-          }`}
-        >
-          Skills Hub
-        </button>
-      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SidebarThreadTree

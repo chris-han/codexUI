@@ -1764,3 +1764,26 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React toolbar uses SquareLibrary for Skills navigation
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- The compact toolbar is visible in the sidebar header or a collapsed/mobile content header.
+
+#### Steps
+1. Open the home route on desktop and inspect the compact toolbar.
+2. Confirm the toolbar order is sidebar toggle, `SquareLibrary`, search, then new-thread.
+3. Verify there is no separate `Skills Hub` text button below the toolbar.
+4. Click the `SquareLibrary` button and confirm navigation goes to `/skills`.
+5. On the `Skills` route, confirm the same `SquareLibrary` button renders in its active state.
+6. Collapse the sidebar or switch to a mobile viewport and confirm the compact content header keeps the same `SquareLibrary` placement to the left of search.
+
+#### Expected Results
+- Skills navigation is represented by a `SquareLibrary` icon button placed immediately left of the search button.
+- The previous standalone `Skills Hub` text button is removed.
+- The icon button remains clickable in sidebar and compact headers.
+- On the `Skills` route, the `SquareLibrary` button shows the active styling.
+
+#### Rollback/Cleanup
+- No cleanup required.
