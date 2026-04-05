@@ -1787,3 +1787,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React mobile composer uses card-style layout
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- A page with the chat composer is open.
+
+#### Steps
+1. Switch the browser to a mobile-sized viewport.
+2. Open a page that renders the composer, such as the home screen or an existing thread.
+3. Inspect the composer container.
+4. Confirm the text area occupies the upper portion of the card with the placeholder `Type a message... (/ for skills)`.
+5. Confirm the lower row shows `+`, model, `Skills`, and reasoning controls.
+6. Confirm the bottom-right area shows separate circular microphone and send buttons.
+7. Return to a desktop-width viewport and confirm the original desktop composer layout still renders.
+
+#### Expected Results
+- Mobile composer renders as a larger rounded card with the input field above the controls.
+- The mobile placeholder text matches the shortened skills-focused copy.
+- The control row stays below the text area, while microphone and send actions sit at the bottom right.
+- Desktop layout remains unchanged.
+
+#### Rollback/Cleanup
+- No cleanup required.

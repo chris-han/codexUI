@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCodexStore } from '../../stores';
 import { searchComposerFiles, uploadComposerFile, type ComposerFileSuggestion } from '../../api/codexGateway';
 import type {
@@ -11,6 +12,7 @@ import type {
 import {
   IconTablerArrowUp,
   IconTablerChevronDown,
+  IconTablerMicrophone,
   IconLucideSplinePointer,
   IconTablerPlayerStopFilled,
   IconTablerX,
@@ -58,6 +60,7 @@ function dedupeByValue<T extends { value?: string | null }>(items: T[]): Array<T
 }
 
 function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: ThreadComposerProps) {
+  const isMobile = useIsMobile();
   const [message, setMessage] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<Array<{ name: string; path: string }>>([]);
   const [fileAttachments, setFileAttachments] = useState<ComposerFileAttachment[]>([]);
@@ -309,10 +312,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
     setDropdownPosition(null);
   };
 
+  const textAreaPlaceholder = disabled ? 'Loading...' : `Type a message...${isMobile ? ' (/ for skills)' : ' (@ for files, / for skills)'}`;
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative h-full flex flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
+      className={`relative flex h-full flex-col rounded-[2rem] border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] ${
+        isMobile ? 'p-5' : 'p-4'
+      }`}
     >
       {uploadError ? (
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -431,10 +438,14 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               handleSubmit();
             }
           }}
-          placeholder={disabled ? 'Loading...' : 'Type a message... (@ for files, / for skills)'}
+          placeholder={textAreaPlaceholder}
           disabled={disabled || isInProgress}
-          className="h-full min-h-[56px] w-full resize-none border-0 bg-transparent px-2 py-2 pr-12 text-[15px] text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50"
-          rows={2}
+          className={`w-full resize-none border-0 bg-transparent text-[15px] text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50 ${
+            isMobile
+              ? 'h-full min-h-[132px] px-0 py-0'
+              : 'h-full min-h-[56px] px-2 py-2 pr-12'
+          }`}
+          rows={isMobile ? 4 : 2}
         />
 
         {slashSkillOptions.length > 0 ? (
@@ -482,15 +493,20 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         ) : null}
       </div>
 
-      <div ref={controlsRef} className="mt-3 flex items-center gap-4 border-t border-gray-100 pt-3 relative">
-        <div className="relative flex items-center shrink-0">
+      <div
+        ref={controlsRef}
+        className={`relative mt-3 border-t border-gray-100 pt-3 ${
+          isMobile ? 'flex flex-col gap-4' : 'flex items-center gap-4'
+        }`}
+      >
+        <div className={`relative flex items-center shrink-0 ${isMobile ? 'order-1' : ''}`}>
           <button
             type="button"
             onClick={() => {
               setOpenDropdown(null);
               setIsPlusMenuOpen((open) => !open);
             }}
-            className="inline-flex h-6 w-6 items-end justify-center rounded-full bg-transparent text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 pb-[6px]"
+            className="inline-flex h-6 w-6 items-end justify-center rounded-full bg-transparent pb-[6px] text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={disabled || isInProgress}
             aria-label="More actions"
           >
@@ -544,7 +560,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           ) : null}
         </div>
 
-        <div className="flex min-w-0 items-center gap-6">
+        <div className={`flex min-w-0 items-center ${isMobile ? 'order-2 gap-5' : 'gap-6'}`}>
           <div className="relative min-w-[120px]">
             <button
               ref={modelButtonRef}
@@ -648,27 +664,60 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2 self-end">
-          {isInProgress ? (
+        {isMobile ? (
+          <div className="order-3 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onInterrupt}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
-              title="Stop"
+              disabled
+              aria-label="Microphone"
+              title="Microphone"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-700 opacity-70"
             >
-              <IconTablerPlayerStopFilled className="h-4 w-4" />
+              <IconTablerMicrophone className="h-5 w-5" />
             </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!canSubmit || disabled}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-              title="Send"
-            >
-              <IconTablerArrowUp className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+            {isInProgress ? (
+              <button
+                type="button"
+                onClick={onInterrupt}
+                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
+                title="Stop"
+              >
+                <IconTablerPlayerStopFilled className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSubmit || disabled}
+                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 text-gray-700 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Send"
+              >
+                <IconTablerArrowUp className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="ml-auto flex items-center gap-2 self-end">
+            {isInProgress ? (
+              <button
+                type="button"
+                onClick={onInterrupt}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
+                title="Stop"
+              >
+                <IconTablerPlayerStopFilled className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSubmit || disabled}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                title="Send"
+              >
+                <IconTablerArrowUp className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </form>
   );
