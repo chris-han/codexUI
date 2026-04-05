@@ -216,6 +216,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove any staged test upload files if you do not want them left in the server temp upload directory.
 
+### Feature: React Skills Hub marketplace installs local skills
+
+#### Prerequisites
+- React app is running from `codex-ui-react/`.
+- Codex CLI is available to the React standalone server.
+- Python 3 is installed.
+- A skill installer script exists under `~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py` or the React app `CODEX_HOME`.
+
+#### Steps
+1. Open the React `Skills Hub` screen.
+2. Confirm the page shows an installed section and a marketplace list with search and sort controls.
+3. Search for a known marketplace skill and open its detail modal.
+4. Click `Install` and wait for the action to complete.
+5. Confirm the skill moves into the installed section and no longer appears in the marketplace list.
+6. Verify the installed skill folder now exists in the local skills directory used by the React standalone server.
+7. Re-open the skill detail modal from the installed section and click `Uninstall`.
+
+#### Expected Results
+- The React Skills Hub loads marketplace entries from the skills repository.
+- Installing a skill writes it into the local skills folder and refreshes the installed skills list.
+- Uninstalling removes the local skill folder and refreshes the installed skills list.
+- The skill detail modal can show remote or local `SKILL.md` content.
+
+#### Rollback/Cleanup
+- Uninstall any test skill you installed during verification.
+
 ### Feature: Thinking block stays available after assistant content appears
 
 #### Prerequisites

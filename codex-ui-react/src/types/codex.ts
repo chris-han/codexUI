@@ -317,6 +317,19 @@ export type SkillInfo = {
   enabled?: boolean
 }
 
+export type SkillMarketplaceInfo = {
+  name: string
+  owner: string
+  description?: string
+  displayName?: string
+  publishedAt?: number
+  avatarUrl?: string
+  url: string
+  installed: boolean
+  path?: string
+  enabled?: boolean
+}
+
 export type ThreadComposerSubmitPayload = {
   text: string
   imageUrls: string[]

@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
@@ -446,6 +446,314 @@ function resolveCodexInvocation(): CommandInvocation {
   throw new Error(
     'Unable to find a runnable Codex CLI. Install `codex` globally or ensure `bunx --bun @openai/codex` works.',
   );
+}
+
+type SkillHubEntry = {
+  name: string;
+  owner: string;
+  description: string;
+  displayName: string;
+  publishedAt: number;
+  avatarUrl: string;
+  url: string;
+  installed: boolean;
+  path?: string;
+  enabled?: boolean;
+};
+
+type SkillsTreeEntry = {
+  name: string;
+  owner: string;
+  url: string;
+};
+
+type SkillsTreeCache = {
+  entries: SkillsTreeEntry[];
+  fetchedAt: number;
+};
+
+type InstalledSkillInfo = {
+  name: string;
+  path: string;
+  enabled: boolean;
+};
+
+type MetaJson = {
+  displayName?: string;
+  description?: string;
+  latest?: { publishedAt?: number };
+};
+
+const HUB_SKILLS_OWNER = 'openclaw';
+const HUB_SKILLS_REPO = 'skills';
+const TREE_CACHE_TTL_MS = 5 * 60 * 1000;
+let skillsTreeCache: SkillsTreeCache | null = null;
+const metaCache = new Map<string, { description: string; displayName: string; publishedAt: number }>();
+
+function getSkillsInstallDir(): string {
+  return join(CODEX_HOME, 'skills');
+}
+
+function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
+  if (payload instanceof Error && payload.message.trim().length > 0) {
+    return payload.message;
+  }
+  const record = asRecord(payload);
+  if (!record) return fallback;
+  const error = record.error;
+  if (typeof error === 'string' && error.trim().length > 0) return error;
+  const nested = asRecord(error);
+  if (nested && typeof nested.message === 'string' && nested.message.trim().length > 0) {
+    return nested.message;
+  }
+  return fallback;
+}
+
+async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  await new Promise<void>((resolvePromise, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      proc.kill('SIGKILL');
+      reject(new Error(`Command timed out after ${timeoutMs}ms (${command} ${args.join(' ')})`));
+    }, timeoutMs);
+
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n');
+      reject(new Error(details || `Command failed (${command} ${args.join(' ')})`));
+    });
+  });
+}
+
+function resolvePythonCommand(): CommandInvocation | null {
+  const candidates: CommandInvocation[] = [
+    { command: 'python3', args: [] },
+    { command: 'python', args: [] },
+  ];
+  for (const candidate of candidates) {
+    if (canRunCommand(candidate.command, [...candidate.args, '--version'])) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveSkillInstallerScriptPath(): string | null {
+  const candidates = [
+    join(homedir(), '.codex', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(CODEX_HOME, 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(homedir(), '.cursor', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+async function detectUserSkillsDir(bridge: CodexBridge): Promise<string> {
+  try {
+    const result = await bridge.call('skills/list', {}) as {
+      data?: Array<{ skills?: Array<{ scope?: string; path?: string }> }>;
+    };
+    for (const entry of result.data ?? []) {
+      for (const skill of entry.skills ?? []) {
+        if (skill.scope !== 'user' || !skill.path) continue;
+        const normalized = skill.path.endsWith('/SKILL.md')
+          ? skill.path.slice(0, -'/SKILL.md'.length)
+          : skill.path;
+        const lastSlash = normalized.lastIndexOf('/');
+        if (lastSlash > 0) {
+          return normalized.slice(0, lastSlash);
+        }
+      }
+    }
+  } catch {
+    // fall back
+  }
+  return getSkillsInstallDir();
+}
+
+async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, InstalledSkillInfo>> {
+  const installed = new Map<string, InstalledSkillInfo>();
+  try {
+    const result = await bridge.call('skills/list', {}) as {
+      data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }>;
+    };
+    for (const entry of result.data ?? []) {
+      for (const skill of entry.skills ?? []) {
+        if (!skill.name) continue;
+        installed.set(skill.name, {
+          name: skill.name,
+          path: skill.path ?? '',
+          enabled: skill.enabled !== false,
+        });
+      }
+    }
+  } catch {
+    // fall through to disk scan
+  }
+
+  if (installed.size > 0) return installed;
+
+  try {
+    const rows = await readdir(getSkillsInstallDir(), { withFileTypes: true });
+    for (const row of rows) {
+      if (!row.isDirectory() || row.name.startsWith('.')) continue;
+      const skillPath = join(getSkillsInstallDir(), row.name, 'SKILL.md');
+      try {
+        const info = await stat(skillPath);
+        if (!info.isFile()) continue;
+        installed.set(row.name, { name: row.name, path: skillPath, enabled: true });
+      } catch {
+        // ignore invalid entry
+      }
+    }
+  } catch {
+    // ignore missing dir
+  }
+
+  return installed;
+}
+
+async function ghFetch(url: string): Promise<Response> {
+  return fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'codex-ui-react',
+    },
+  });
+}
+
+async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
+  if (skillsTreeCache && Date.now() - skillsTreeCache.fetchedAt < TREE_CACHE_TTL_MS) {
+    return skillsTreeCache.entries;
+  }
+
+  const response = await ghFetch(`https://api.github.com/repos/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/git/trees/main?recursive=1`);
+  if (!response.ok) {
+    throw new Error(`GitHub tree API returned ${response.status}`);
+  }
+  const payload = await response.json() as { tree?: Array<{ path: string; type: string }> };
+  const metaPattern = /^skills\/([^/]+)\/([^/]+)\/_meta\.json$/;
+  const entries: SkillsTreeEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const node of payload.tree ?? []) {
+    const match = metaPattern.exec(node.path);
+    if (!match) continue;
+    const owner = match[1];
+    const name = match[2];
+    const key = `${owner}/${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({
+      owner,
+      name,
+      url: `https://github.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/tree/main/skills/${owner}/${name}`,
+    });
+  }
+
+  skillsTreeCache = { entries, fetchedAt: Date.now() };
+  return entries;
+}
+
+async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
+  const batch = entries.filter((entry) => !metaCache.has(`${entry.owner}/${entry.name}`)).slice(0, 50);
+  await Promise.allSettled(batch.map(async (entry) => {
+    const response = await fetch(`https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${entry.owner}/${entry.name}/_meta.json`);
+    if (!response.ok) return;
+    const meta = await response.json() as MetaJson;
+    metaCache.set(`${entry.owner}/${entry.name}`, {
+      description: typeof meta.description === 'string' ? meta.description : '',
+      displayName: typeof meta.displayName === 'string' ? meta.displayName : '',
+      publishedAt: meta.latest?.publishedAt ?? 0,
+    });
+  }));
+}
+
+function buildSkillHubEntry(entry: SkillsTreeEntry): SkillHubEntry {
+  const meta = metaCache.get(`${entry.owner}/${entry.name}`);
+  return {
+    name: entry.name,
+    owner: entry.owner,
+    description: meta?.description ?? '',
+    displayName: meta?.displayName ?? '',
+    publishedAt: meta?.publishedAt ?? 0,
+    avatarUrl: `https://github.com/${entry.owner}.png?size=40`,
+    url: entry.url,
+    installed: false,
+  };
+}
+
+function searchSkillsHub(entries: SkillsTreeEntry[], query: string, limit: number, sort: 'date' | 'name', installed: Map<string, InstalledSkillInfo>): SkillHubEntry[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const rows = entries
+    .map((entry) => {
+      const base = buildSkillHubEntry(entry);
+      const installInfo = installed.get(entry.name);
+      return installInfo ? { ...base, installed: true, path: installInfo.path, enabled: installInfo.enabled } : base;
+    })
+    .filter((entry) => {
+      if (!normalizedQuery) return true;
+      const haystack = [
+        entry.name,
+        entry.owner,
+        entry.displayName,
+        entry.description,
+      ].join(' ').toLowerCase();
+      return haystack.includes(normalizedQuery);
+    })
+    .filter((entry) => !entry.installed);
+
+  rows.sort((left, right) => {
+    if (sort === 'name') {
+      return left.name.localeCompare(right.name);
+    }
+    return (right.publishedAt ?? 0) - (left.publishedAt ?? 0) || left.name.localeCompare(right.name);
+  });
+
+  return rows.slice(0, limit);
+}
+
+function extractSkillDescriptionFromMarkdown(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  let inCodeFence = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.startsWith('```')) {
+      inCodeFence = !inCodeFence;
+      continue;
+    }
+    if (inCodeFence || !line || line.startsWith('#') || line.startsWith('>')) continue;
+    if (line.startsWith('- ') || line.startsWith('* ')) continue;
+    return line;
+  }
+  return '';
 }
 
 // Simple Codex Bridge - spawns codex app-server and proxies requests
@@ -1001,6 +1309,158 @@ app.post('/codex-api/composer-file-search', async (req, res) => {
     res.json({ data });
   } catch (error) {
     res.status(500).json({ error: getErrorMessage(error, 'Failed to search files') });
+  }
+});
+
+app.get('/codex-api/skills-hub', async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q : '';
+    const sort = req.query.sort === 'name' ? 'name' : 'date';
+    const limitRaw = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 100;
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 200);
+    const [allEntries, installed] = await Promise.all([
+      fetchSkillsTree(),
+      scanInstalledSkills(bridge),
+    ]);
+    await fetchMetaBatch(allEntries);
+
+    const installedEntries = Array.from(installed.values()).map((skill) => {
+      const treeEntry = allEntries.find((entry) => entry.name === skill.name);
+      const base = treeEntry
+        ? buildSkillHubEntry(treeEntry)
+        : {
+            name: skill.name,
+            owner: 'local',
+            description: '',
+            displayName: '',
+            publishedAt: 0,
+            avatarUrl: '',
+            url: '',
+            installed: true,
+          };
+      return {
+        ...base,
+        installed: true,
+        path: skill.path,
+        enabled: skill.enabled,
+      };
+    });
+
+    res.json({
+      data: searchSkillsHub(allEntries, query, limit, sort, installed),
+      installed: installedEntries,
+      total: allEntries.length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessageFromPayload(error, 'Failed to fetch skills hub') });
+  }
+});
+
+app.get('/codex-api/skills-hub/readme', async (req, res) => {
+  try {
+    const owner = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+    const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+    const installed = req.query.installed === 'true';
+    const skillPath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+
+    if (!owner || !name) {
+      res.status(400).json({ error: 'Missing owner or name' });
+      return;
+    }
+
+    if (installed && skillPath) {
+      const localSkillPath = skillPath.endsWith('/SKILL.md') ? skillPath : `${skillPath}/SKILL.md`;
+      const content = await readFile(localSkillPath, 'utf8');
+      res.json({
+        content,
+        description: extractSkillDescriptionFromMarkdown(content),
+        source: 'local',
+      });
+      return;
+    }
+
+    const response = await fetch(`https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${owner}/${name}/SKILL.md`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch SKILL.md: ${response.status}`);
+    }
+    const content = await response.text();
+    res.json({
+      content,
+      description: extractSkillDescriptionFromMarkdown(content),
+      source: 'remote',
+    });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessageFromPayload(error, 'Failed to fetch skill details') });
+  }
+});
+
+app.post('/codex-api/skills-hub/install', async (req, res) => {
+  try {
+    const owner = typeof req.body?.owner === 'string' ? req.body.owner.trim() : '';
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!owner || !name) {
+      res.status(400).json({ error: 'Missing owner or name' });
+      return;
+    }
+
+    const installerScript = resolveSkillInstallerScriptPath();
+    if (!installerScript) {
+      throw new Error('Skill installer script not found');
+    }
+    const python = resolvePythonCommand();
+    if (!python) {
+      throw new Error('Python 3 is required to install skills');
+    }
+
+    const installDir = await detectUserSkillsDir(bridge);
+    await mkdir(installDir, { recursive: true });
+    const skillDir = join(installDir, name);
+    if (existsSync(skillDir)) {
+      await rm(skillDir, { recursive: true, force: true });
+    }
+
+    await runCommand(python.command, [
+      ...python.args,
+      installerScript,
+      '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
+      '--path', `skills/${owner}/${name}`,
+      '--dest', installDir,
+      '--method', 'git',
+    ], { timeoutMs: 90_000 });
+
+    try {
+      await bridge.call('skills/list', { forceReload: true });
+    } catch {
+      // ignore reload failures
+    }
+
+    res.json({ ok: true, path: skillDir });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessageFromPayload(error, 'Failed to install skill') });
+  }
+});
+
+app.post('/codex-api/skills-hub/uninstall', async (req, res) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const path = typeof req.body?.path === 'string' ? req.body.path.trim() : '';
+    const normalizedPath = path.endsWith('/SKILL.md') ? path.slice(0, -'/SKILL.md'.length) : path;
+    const target = normalizedPath || (name ? join(getSkillsInstallDir(), name) : '');
+    if (!target) {
+      res.status(400).json({ error: 'Missing name or path' });
+      return;
+    }
+
+    await rm(target, { recursive: true, force: true });
+    try {
+      await bridge.call('skills/list', { forceReload: true });
+    } catch {
+      // ignore reload failures
+    }
+
+    res.json({ ok: true, deletedPath: target });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessageFromPayload(error, 'Failed to uninstall skill') });
   }
 });
 

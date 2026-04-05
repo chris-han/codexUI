@@ -1,40 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SquareLibrary } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import * as api from '../../api/codexGateway';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
-import type { SkillInfo } from '../../types/codex';
+import type { SkillMarketplaceInfo } from '../../types/codex';
 import ContentHeader from './ContentHeader';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
-import { IconTablerX, IconTablerSearch } from '../icons';
+import { IconTablerSearch, IconTablerX } from '../icons';
 
 interface SkillCardProps {
-  skill: SkillInfo;
+  skill: SkillMarketplaceInfo;
   onClick: () => void;
 }
 
 function SkillCard({ skill, onClick }: SkillCardProps) {
-  const title = skill.name || 'Unnamed skill';
+  const title = skill.displayName || skill.name || 'Unnamed skill';
+
   return (
     <button
       onClick={onClick}
-      className="w-full overflow-hidden text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-md transition-all"
+      className="w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-primary hover:shadow-md"
     >
       <div className="flex items-start gap-3">
+        {skill.avatarUrl ? (
+          <img src={skill.avatarUrl} alt={skill.owner} className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
+        ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-3">
             <h3 className="min-w-0 flex-1 break-words font-semibold text-gray-800">{title}</h3>
-            {skill.isInstalled && (
-              <span className="shrink-0 self-start px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
+            {skill.installed ? (
+              <span className="shrink-0 self-start rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                 Installed
               </span>
-            )}
+            ) : null}
           </div>
-          {skill.description && (
-            <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-              {skill.description}
-            </p>
-          )}
+          <p className="mt-0.5 text-xs text-gray-400">{skill.owner}</p>
+          {skill.description ? (
+            <p className="mt-1 line-clamp-2 text-sm text-gray-500">{skill.description}</p>
+          ) : null}
         </div>
       </div>
     </button>
@@ -42,56 +46,147 @@ function SkillCard({ skill, onClick }: SkillCardProps) {
 }
 
 interface SkillDetailModalProps {
-  skill: SkillInfo | null;
+  skill: SkillMarketplaceInfo | null;
+  isInstalling: boolean;
+  isUninstalling: boolean;
+  onInstall: (skill: SkillMarketplaceInfo) => Promise<void>;
+  onUninstall: (skill: SkillMarketplaceInfo) => Promise<void>;
   onClose: () => void;
 }
 
-function SkillDetailModal({ skill, onClose }: SkillDetailModalProps) {
+function simpleMarkdown(md: string): string {
+  if (!md.trim()) return '';
+  const escaped = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return escaped
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/\n{2,}/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+}
+
+function SkillDetailModal({
+  skill,
+  isInstalling,
+  isUninstalling,
+  onInstall,
+  onUninstall,
+  onClose,
+}: SkillDetailModalProps) {
+  const [readme, setReadme] = useState('');
+  const [description, setDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!skill) {
+      setReadme('');
+      setDescription('');
+      setIsLoading(false);
+      return;
+    }
+
+    setReadme('');
+    setDescription('');
+    setIsLoading(true);
+    api.getSkillMarketplaceReadme({
+      owner: skill.owner,
+      name: skill.name,
+      installed: skill.installed,
+      path: skill.path,
+    }).then((data) => {
+      if (cancelled) return;
+      setReadme(data.content);
+      setDescription(data.description);
+    }).catch(() => {
+      if (cancelled) return;
+      setReadme('');
+      setDescription('');
+    }).finally(() => {
+      if (cancelled) return;
+      setIsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [skill]);
+
   if (!skill) return null;
-  const title = skill.name || 'Unnamed skill';
+
+  const title = skill.displayName || skill.name || 'Unnamed skill';
+  const effectiveDescription = description || skill.description || '';
+  const renderedReadme = simpleMarkdown(readme);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">{title}</h2>
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white">
+        <div className="flex items-start justify-between gap-4 px-6 py-5">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-semibold text-gray-900">{title}</h2>
+            <p className="text-sm text-gray-400">{skill.owner}</p>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
-            <IconTablerX className="w-5 h-5" />
+            <IconTablerX className="h-5 w-5" />
           </button>
         </div>
 
-        {skill.description && (
-          <p className="text-gray-600 mb-4">{skill.description}</p>
-        )}
+        <div className="flex-1 overflow-y-auto px-6 pb-5">
+          {effectiveDescription ? (
+            <p className="mb-4 text-gray-600">{effectiveDescription}</p>
+          ) : null}
 
-        <div className="flex gap-3">
-          {skill.isInstalled ? (
+          {isLoading ? (
+            <p className="text-sm text-gray-400">Loading skill contents…</p>
+          ) : renderedReadme ? (
+            <div
+              className="prose prose-sm max-w-none text-gray-700"
+              dangerouslySetInnerHTML={{ __html: renderedReadme }}
+            />
+          ) : null}
+
+          <a
+            className="mt-4 inline-flex text-sm text-primary hover:underline"
+            href={skill.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View on GitHub
+          </a>
+        </div>
+
+        <div className="flex gap-3 border-t border-gray-100 px-6 py-4">
+          {skill.installed ? (
             <button
-              className="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
-              onClick={() => {
-                // TODO: Uninstall skill
-                onClose();
-              }}
+              className="flex-1 rounded-lg bg-red-50 px-4 py-2 text-red-600 hover:bg-red-100"
+              onClick={() => void onUninstall(skill)}
+              disabled={isInstalling || isUninstalling}
             >
-              Uninstall
+              {isUninstalling ? 'Uninstalling…' : 'Uninstall'}
             </button>
           ) : (
             <button
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover"
-              onClick={() => {
-                // TODO: Install skill
-                onClose();
-              }}
+              className="flex-1 rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary-hover"
+              onClick={() => void onInstall(skill)}
+              disabled={isInstalling || isUninstalling}
             >
-              Install
+              {isInstalling ? 'Installing…' : 'Install'}
             </button>
           )}
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            className="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200"
           >
             Close
           </button>
@@ -105,21 +200,105 @@ function SkillsHub() {
   const navigate = useNavigate();
   const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
   const { installedSkills, loadSkills } = useCodexStore();
-  const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
+  const [selectedSkill, setSelectedSkill] = useState<SkillMarketplaceInfo | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
+  const [sortMode, setSortMode] = useState<'date' | 'name'>('date');
+  const [marketplaceSkills, setMarketplaceSkills] = useState<SkillMarketplaceInfo[]>([]);
+  const [installedMarketSkills, setInstalledMarketSkills] = useState<SkillMarketplaceInfo[]>([]);
+  const [totalSkills, setTotalSkills] = useState(0);
+  const [isLoadingMarketplace, setIsLoadingMarketplace] = useState(false);
+  const [error, setError] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [isUninstalling, setIsUninstalling] = useState(false);
+  const [actingSkillKey, setActingSkillKey] = useState('');
 
   useEffect(() => {
-    loadSkills();
+    void loadSkills();
   }, [loadSkills]);
 
-  const normalizedQuery = searchQuery.toLowerCase();
-  const filteredSkills = installedSkills.filter(
-    (skill) => {
-      const name = typeof skill.name === 'string' ? skill.name.toLowerCase() : '';
-      const description = typeof skill.description === 'string' ? skill.description.toLowerCase() : '';
-      return name.includes(normalizedQuery) || description.includes(normalizedQuery);
+  useEffect(() => {
+    void reloadMarketplace('');
+  }, [sortMode]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const filteredInstalledSkills = useMemo(() => {
+    const normalizedQuery = searchQuery.toLowerCase();
+    return installedMarketSkills.filter((skill) => {
+      const haystack = [
+        skill.name,
+        skill.displayName ?? '',
+        skill.owner,
+        skill.description ?? '',
+      ].join(' ').toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [installedMarketSkills, searchQuery]);
+
+  const installedNames = useMemo(() => new Set(installedSkills.map((skill) => skill.name)), [installedSkills]);
+  const selectedSkillKey = selectedSkill ? `${selectedSkill.owner}/${selectedSkill.name}` : '';
+  const modalSkill = selectedSkill
+    ? { ...selectedSkill, installed: selectedSkill.installed || installedNames.has(selectedSkill.name) }
+    : null;
+
+  async function reloadMarketplace(query: string): Promise<void> {
+    const normalizedQuery = query.trim();
+    setActiveQuery(normalizedQuery);
+    setIsLoadingMarketplace(true);
+    setError('');
+    try {
+      const result = await api.getSkillsMarketplace({
+        query: normalizedQuery,
+        limit: 100,
+        sort: sortMode,
+      });
+      setMarketplaceSkills(result.data.filter((skill) => !skill.installed));
+      setInstalledMarketSkills(result.installed);
+      setTotalSkills(result.total);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load skills marketplace');
+    } finally {
+      setIsLoadingMarketplace(false);
     }
-  );
+  }
+
+  async function handleInstall(skill: SkillMarketplaceInfo): Promise<void> {
+    const key = `${skill.owner}/${skill.name}`;
+    setActingSkillKey(key);
+    setIsInstalling(true);
+    try {
+      await api.installMarketplaceSkill({ owner: skill.owner, name: skill.name });
+      await Promise.all([loadSkills(), reloadMarketplace(activeQuery || searchQuery)]);
+      setToast(`${skill.displayName || skill.name} installed`);
+      setSelectedSkill(null);
+    } catch (installError) {
+      setToast(installError instanceof Error ? installError.message : 'Failed to install skill');
+    } finally {
+      setIsInstalling(false);
+    }
+  }
+
+  async function handleUninstall(skill: SkillMarketplaceInfo): Promise<void> {
+    const key = `${skill.owner}/${skill.name}`;
+    setActingSkillKey(key);
+    setIsUninstalling(true);
+    try {
+      await api.uninstallMarketplaceSkill({ name: skill.name, path: skill.path });
+      await Promise.all([loadSkills(), reloadMarketplace(activeQuery || searchQuery)]);
+      setToast(`${skill.displayName || skill.name} uninstalled`);
+      setSelectedSkill(null);
+    } catch (uninstallError) {
+      setToast(uninstallError instanceof Error ? uninstallError.message : 'Failed to uninstall skill');
+    } finally {
+      setIsUninstalling(false);
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-gray-50">
@@ -142,37 +321,88 @@ function SkillsHub() {
       />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl p-6">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
               Skills Hub
             </h1>
             <p className="mt-1 text-gray-500">
-              Manage your installed skills and discover new ones.
+              Browse the marketplace and install skills into your local Codex skills folder.
             </p>
           </div>
 
-          {/* Search */}
-          <div className="mb-6">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search skills..."
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+          {toast ? (
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
+              {toast}
+            </div>
+          ) : null}
+
+          {filteredInstalledSkills.length > 0 ? (
+            <div className="mb-8">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                Installed ({filteredInstalledSkills.length})
+              </h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredInstalledSkills.map((skill) => (
+                  <SkillCard
+                    key={`installed-${skill.owner}-${skill.name}`}
+                    skill={{ ...skill, installed: true }}
+                    onClick={() => setSelectedSkill({ ...skill, installed: true })}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mb-6 flex flex-col gap-3 md:flex-row">
+            <div className="relative flex-1">
+              <IconTablerSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    void reloadMarketplace(searchQuery);
+                  }
+                }}
+                placeholder="Search skills..."
+                className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void reloadMarketplace(searchQuery)}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              Search
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortMode((current) => current === 'date' ? 'name' : 'date')}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              {sortMode === 'date' ? 'Newest' : 'A-Z'}
+            </button>
+            <div className="flex items-center px-1 text-sm text-gray-400">
+              {totalSkills > 0 ? `${totalSkills} skills` : ''}
+            </div>
           </div>
 
-          {/* Skills Grid */}
-          {filteredSkills.length === 0 ? (
+          {isLoadingMarketplace ? (
+            <div className="py-12 text-center text-gray-400">Loading skills…</div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          ) : marketplaceSkills.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
-              {searchQuery ? 'No skills match your search.' : 'No skills installed.'}
+              {activeQuery ? `No skills found for "${activeQuery}".` : 'No marketplace skills available.'}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredSkills.map((skill) => (
+              {marketplaceSkills.map((skill) => (
                 <SkillCard
-                  key={skill.id || skill.path || skill.name}
+                  key={`${skill.owner}-${skill.name}`}
                   skill={skill}
                   onClick={() => setSelectedSkill(skill)}
                 />
@@ -182,9 +412,12 @@ function SkillsHub() {
         </div>
       </div>
 
-      {/* Detail Modal */}
       <SkillDetailModal
-        skill={selectedSkill}
+        skill={modalSkill}
+        isInstalling={isInstalling && actingSkillKey === selectedSkillKey}
+        isUninstalling={isUninstalling && actingSkillKey === selectedSkillKey}
+        onInstall={handleInstall}
+        onUninstall={handleUninstall}
         onClose={() => setSelectedSkill(null)}
       />
     </div>

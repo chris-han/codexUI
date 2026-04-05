@@ -6,6 +6,7 @@ import type {
   ReasoningEffort,
   RpcNotification,
   SkillInfo,
+  SkillMarketplaceInfo,
   SpeedMode,
   ThreadReadResult,
   ThreadSummary,
@@ -617,6 +618,103 @@ export async function getSkillsList(): Promise<SkillInfo[]> {
     return normalizeSkillsList(result.data);
   } catch {
     return [];
+  }
+}
+
+export async function getSkillsMarketplace(params?: {
+  query?: string;
+  limit?: number;
+  sort?: 'date' | 'name';
+}): Promise<{ data: SkillMarketplaceInfo[]; installed: SkillMarketplaceInfo[]; total: number }> {
+  const search = new URLSearchParams();
+  const query = params?.query?.trim() ?? '';
+  if (query) {
+    search.set('q', query);
+  }
+  search.set('limit', String(params?.limit ?? 100));
+  search.set('sort', params?.sort ?? 'date');
+
+  const response = await fetch(`/codex-api/skills-hub?${search.toString()}`);
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load skills marketplace'));
+  }
+
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+  return {
+    data: normalizeSkillsMarketplaceEntries(record?.data),
+    installed: normalizeSkillsMarketplaceEntries(record?.installed),
+    total: typeof record?.total === 'number' ? record.total : 0,
+  };
+}
+
+export async function getSkillMarketplaceReadme(params: {
+  owner: string;
+  name: string;
+  installed?: boolean;
+  path?: string;
+}): Promise<{ content: string; description: string }> {
+  const search = new URLSearchParams({
+    owner: params.owner,
+    name: params.name,
+  });
+  if (params.installed) {
+    search.set('installed', 'true');
+  }
+  if (params.path?.trim()) {
+    search.set('path', params.path.trim());
+  }
+
+  const response = await fetch(`/codex-api/skills-hub/readme?${search.toString()}`);
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load skill details'));
+  }
+
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+  return {
+    content: typeof record?.content === 'string' ? record.content : '',
+    description: typeof record?.description === 'string' ? record.description : '',
+  };
+}
+
+export async function installMarketplaceSkill(params: {
+  owner: string;
+  name: string;
+}): Promise<{ path: string }> {
+  const response = await fetch('/codex-api/skills-hub/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to install skill'));
+  }
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+  return {
+    path: typeof record?.path === 'string' ? record.path : '',
+  };
+}
+
+export async function uninstallMarketplaceSkill(params: {
+  name: string;
+  path?: string;
+}): Promise<void> {
+  const response = await fetch('/codex-api/skills-hub/uninstall', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  const payload = await response.json() as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to uninstall skill'));
   }
 }
 
@@ -1307,6 +1405,37 @@ function normalizeSkillsList(data: unknown): SkillInfo[] {
   }
 
   return flattened;
+}
+
+function normalizeSkillsMarketplaceEntries(data: unknown): SkillMarketplaceInfo[] {
+  if (!Array.isArray(data)) return [];
+
+  const entries: SkillMarketplaceInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const item of data) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const owner = typeof record.owner === 'string' ? record.owner.trim() : '';
+    const name = typeof record.name === 'string' ? record.name.trim() : '';
+    const key = `${owner}/${name}`;
+    if (!owner || !name || seen.has(key)) continue;
+    seen.add(key);
+    entries.push({
+      owner,
+      name,
+      description: typeof record.description === 'string' ? record.description.trim() : '',
+      displayName: typeof record.displayName === 'string' ? record.displayName.trim() : undefined,
+      publishedAt: typeof record.publishedAt === 'number' ? record.publishedAt : undefined,
+      avatarUrl: typeof record.avatarUrl === 'string' ? record.avatarUrl : undefined,
+      url: typeof record.url === 'string' ? record.url : '',
+      installed: record.installed === true,
+      path: typeof record.path === 'string' ? record.path : undefined,
+      enabled: typeof record.enabled === 'boolean' ? record.enabled : undefined,
+    });
+  }
+
+  return entries;
 }
 
 function extractProjectName(cwd: string): string {
