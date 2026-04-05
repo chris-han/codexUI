@@ -20,6 +20,7 @@ import {
 const DEFAULT_FOOTER_HEIGHT = 140;
 const MIN_FOOTER_HEIGHT = 100;
 const MAX_FOOTER_HEIGHT = 400;
+const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 48;
 
 type ReasoningPanelProps = {
   messageId: string;
@@ -207,6 +208,7 @@ function ThreadConversation() {
   const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
   const [footerHeight, setFooterHeight] = useState(DEFAULT_FOOTER_HEIGHT);
   const [isResizing, setIsResizing] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const resizeStartY = useRef<number>(0);
   const resizeStartHeight = useRef<number>(DEFAULT_FOOTER_HEIGHT);
 
@@ -293,14 +295,30 @@ function ThreadConversation() {
     }
   }, [threadId, selectThread]);
 
+  useEffect(() => {
+    setShouldAutoScroll(true);
+  }, [threadId]);
+
+  const isScrolledNearBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return true;
+    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distanceToBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
+  }, []);
+
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
+    if (!shouldAutoScroll) return;
     scrollToBottom();
-  }, [messages, pendingTurnRequest, liveMessage, liveReasoning, scrollToBottom]);
+  }, [messages, pendingTurnRequest, liveMessage, liveReasoning, scrollToBottom, shouldAutoScroll]);
+
+  const handleScroll = useCallback(() => {
+    setShouldAutoScroll(isScrolledNearBottom());
+  }, [isScrolledNearBottom]);
 
   const handleSendMessage = async (payload: ThreadComposerSubmitPayload) => {
     await sendMessage(payload);
@@ -381,6 +399,7 @@ function ThreadConversation() {
         {/* Messages */}
         <div
           ref={scrollContainerRef}
+          onScroll={handleScroll}
           className="flex-1 overflow-y-auto p-4 space-y-4"
         >
           {messages.length === 0 && !pendingTurnRequest && !liveMessage && !liveReasoning && (

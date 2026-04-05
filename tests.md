@@ -291,6 +291,29 @@ This file tracks manual regression and feature verification steps.
 - Remove the test folder if it was created only for verification.
 - Remove the test thread if it should not be kept.
 
+### Feature: React thread auto-scroll stops after manual scroll
+
+#### Prerequisites
+- React app is running from this repository.
+- Open a thread with enough messages to make the conversation pane scrollable.
+- Use a thread that can stream or receive multiple new assistant updates.
+
+#### Steps
+1. Start a new assistant response or open a thread that is actively receiving streamed output.
+2. Confirm the conversation view follows new output while the scroll position remains at the bottom.
+3. While output is still arriving, manually scroll upward in the conversation pane.
+4. Keep the thread streaming and observe the scroll position.
+5. Scroll back down near the bottom of the conversation.
+6. Let another streamed update arrive.
+
+#### Expected Results
+- The conversation auto-scrolls only while the user is near the bottom.
+- After the user manually scrolls away from the bottom, new output does not force the view back down.
+- Once the user returns near the bottom, auto-scroll resumes for subsequent updates.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: Dark theme states for runtime mode toggle
 
 #### Prerequisites
