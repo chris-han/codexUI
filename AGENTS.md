@@ -104,6 +104,9 @@
 - Do not run Playwright for routine task completion unless the user explicitly asks for it.
 - Playwright CLI is faster, more reliable, and works in headless environments without a desktop.
 - Use headless mode by default; only add `--headed` when a live visual check is explicitly needed.
+- When running inside WSL and a Windows host Chrome instance is available with remote debugging enabled, prefer connecting to that remote Chrome over CDP at `http://localhost:9222` instead of trying to install or launch a separate Linux browser in WSL.
+- For WSL remote-Chrome Playwright runs, use the WSL-side app URL (normally `http://127.0.0.1:4173`) but drive the browser through the Windows host CDP endpoint.
+- If remote Chrome is required, verify it first with `curl http://localhost:9222/json/version` and only fall back to local browser install if CDP is unavailable.
 - Skill location: `~/.codex/skills/playwright/SKILL.md` (wrapper script: `~/.codex/skills/playwright/scripts/playwright_cli.sh`).
 - Minimum reporting format in completion messages:
   - tested URL
