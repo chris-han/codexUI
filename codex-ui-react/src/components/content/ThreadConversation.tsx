@@ -14,6 +14,10 @@ import {
   IconTablerX,
 } from '../icons';
 
+const DEFAULT_FOOTER_HEIGHT = 140;
+const MIN_FOOTER_HEIGHT = 100;
+const MAX_FOOTER_HEIGHT = 400;
+
 const ReviewPane = lazy(() => import('./ReviewPane'));
 
 type ReasoningPanelProps = {
@@ -66,6 +70,126 @@ function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = fal
   );
 }
 
+type ApprovalCardProps = {
+  request: import('../../types/codex').UiServerRequest;
+  onRespond: (id: number, decision: string) => void;
+  onSendMessage: (payload: import('../../types/codex').ThreadComposerSubmitPayload) => void;
+};
+
+function ApprovalCard({ request, onRespond, onSendMessage }: ApprovalCardProps) {
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [instructions, setInstructions] = useState('');
+
+  const params = request.params as Record<string, unknown> | null | undefined;
+  const command = typeof params?.command === 'string' ? params.command : null;
+  const cwd = typeof params?.cwd === 'string' ? params.cwd : null;
+  const reason = typeof params?.reason === 'string' ? params.reason : null;
+  const isFileChange = request.method === 'item/fileChange/requestApproval';
+  const grantRoot = isFileChange && typeof params?.grantRoot === 'string' ? params.grantRoot : null;
+
+  const title = isFileChange ? 'File write approval required' : 'Command execution approval required';
+
+  function handleDenyWithInstructions() {
+    onRespond(request.id, 'decline');
+    if (instructions.trim()) {
+      onSendMessage({ text: instructions.trim(), imageUrls: [], fileAttachments: [], skills: [] });
+    }
+  }
+
+  return (
+    <div className="flex justify-center my-4">
+      <div className="w-full max-w-lg rounded-xl border border-amber-200 bg-amber-50 shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-100 px-4 py-2.5">
+          <span className="text-amber-700 font-bold text-base">⚠</span>
+          <span className="text-sm font-semibold text-amber-800">{title}</span>
+        </div>
+
+        {/* Body */}
+        <div className="px-4 py-3 space-y-2">
+          {reason && (
+            <p className="text-xs text-amber-700 italic">{reason}</p>
+          )}
+          {command && (
+            <div>
+              <div className="text-xs font-medium text-gray-500 mb-1">Command</div>
+              <pre className="text-xs font-mono bg-gray-900 text-green-300 rounded-lg px-3 py-2 whitespace-pre-wrap break-all">{command}</pre>
+            </div>
+          )}
+          {grantRoot && (
+            <div>
+              <div className="text-xs font-medium text-gray-500 mb-1">Write access requested for</div>
+              <code className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5">{grantRoot}</code>
+            </div>
+          )}
+          {cwd && (
+            <div className="text-xs text-gray-400">
+              <span className="font-medium">cwd:</span> {cwd}
+            </div>
+          )}
+        </div>
+
+        {/* Primary actions */}
+        <div className="flex flex-wrap gap-2 px-4 pb-3">
+          <button
+            onClick={() => onRespond(request.id, 'accept')}
+            className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:opacity-90 font-medium"
+          >
+            Approve
+          </button>
+          <button
+            onClick={() => onRespond(request.id, 'acceptForSession')}
+            className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
+          >
+            Approve for session
+          </button>
+          <button
+            onClick={() => onRespond(request.id, 'decline')}
+            className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200"
+          >
+            Deny
+          </button>
+          <button
+            onClick={() => onRespond(request.id, 'cancel')}
+            className="px-3 py-1.5 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 hover:bg-red-100"
+          >
+            Cancel turn
+          </button>
+        </div>
+
+        {/* Instructions section */}
+        <div className="border-t border-amber-200">
+          <button
+            onClick={() => setShowInstructions((v) => !v)}
+            className="flex w-full items-center gap-1 px-4 py-2 text-xs text-amber-700 hover:bg-amber-100 text-left"
+          >
+            <span>{showInstructions ? '▾' : '▸'}</span>
+            <span>Deny and send instructions instead</span>
+          </button>
+          {showInstructions && (
+            <div className="px-4 pb-3 space-y-2">
+              <textarea
+                className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                rows={3}
+                placeholder="Tell the agent what to do differently..."
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+              />
+              <button
+                onClick={handleDenyWithInstructions}
+                disabled={!instructions.trim()}
+                className="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Deny &amp; send instructions
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ThreadConversation() {
   const { threadId } = useParams<{ threadId: string }>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -73,6 +197,39 @@ function ThreadConversation() {
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
+  const [footerHeight, setFooterHeight] = useState(DEFAULT_FOOTER_HEIGHT);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartY = useRef<number>(0);
+  const resizeStartHeight = useRef<number>(DEFAULT_FOOTER_HEIGHT);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartY.current = e.clientY;
+    resizeStartHeight.current = footerHeight;
+  }, [footerHeight]);
+
+  const stopResize = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const doResize = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    const deltaY = resizeStartY.current - e.clientY;
+    const newHeight = Math.max(MIN_FOOTER_HEIGHT, Math.min(MAX_FOOTER_HEIGHT, resizeStartHeight.current + deltaY));
+    setFooterHeight(newHeight);
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', doResize);
+      window.addEventListener('mouseup', stopResize);
+      return () => {
+        window.removeEventListener('mousemove', doResize);
+        window.removeEventListener('mouseup', stopResize);
+      };
+    }
+  }, [isResizing, doResize, stopResize]);
 
   const selectedThread = useCodexStore(useCallback((state) => {
     if (!threadId) return null;
@@ -454,47 +611,45 @@ function ThreadConversation() {
 
             {/* Pending server requests */}
             {pendingRequests.map((request) => (
-              <div key={request.id} className="flex justify-center my-4">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 max-w-lg">
-                  <div className="text-sm font-medium text-yellow-800 mb-2">
-                    Action Required: {request.method}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => respondToServerRequest(request.id, true, 'session')}
-                      className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary-hover"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => respondToServerRequest(request.id, true, 'always')}
-                      className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
-                    >
-                      Always
-                    </button>
-                    <button
-                      onClick={() => respondToServerRequest(request.id, false, 'session')}
-                      className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
-                    >
-                      Deny
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ApprovalCard
+                key={request.id}
+                request={request}
+                onRespond={respondToServerRequest}
+                onSendMessage={handleSendMessage}
+              />
             ))}
 
             <div ref={messagesEndRef} />
           </div>
 
           {/* Composer */}
-          <div className="border-t border-gray-200 bg-white p-4">
-            <div className="mx-auto w-full max-w-2xl">
-              <ThreadComposer
-                onSend={handleSendMessage}
-                onInterrupt={handleInterrupt}
-                isInProgress={isInProgress}
-                cwd={threadView.cwd}
-              />
+          <div className="relative">
+            {/* Resize handle */}
+            <div
+              onMouseDown={startResize}
+              className="absolute top-0 left-0 right-0 h-[1px] cursor-ns-resize bg-gray-300 hover:bg-gray-400"
+              title="Drag to resize"
+            >
+              {/* Visible drag handle */}
+              <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center transition-colors ${isResizing ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}>
+                <svg width="24" height="12" viewBox="0 0 24 12" fill="currentColor">
+                  <rect x="4" y="4" width="16" height="1" rx="0.5" />
+                  <rect x="4" y="7" width="16" height="1" rx="0.5" />
+                </svg>
+              </div>
+            </div>
+            <div
+              className="border-t border-gray-200 bg-white p-4 overflow-hidden"
+              style={{ height: footerHeight }}
+            >
+              <div className="mx-auto w-full max-w-2xl h-full">
+                <ThreadComposer
+                  onSend={handleSendMessage}
+                  onInterrupt={handleInterrupt}
+                  isInProgress={isInProgress}
+                  cwd={threadView.cwd}
+                />
+              </div>
             </div>
           </div>
         </>

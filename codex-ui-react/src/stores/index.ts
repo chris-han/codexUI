@@ -186,8 +186,7 @@ export interface CodexActions {
   // Server request actions
   respondToServerRequest: (
     requestId: number,
-    approved: boolean,
-    duration?: 'always' | 'workingSet' | 'session'
+    decision: string
   ) => Promise<void>;
 
   // Sync/Polling
@@ -234,10 +233,11 @@ const getInitialState = (): CodexState => ({
   selectedReasoningEffort: 'medium',
   selectedSpeedMode: 'standard',
   availableCollaborationModes: [
-    { value: 'default', label: 'Default' },
+    { value: 'ask-approval', label: 'Ask Approval' },
     { value: 'plan', label: 'Plan Mode' },
+    { value: 'full-auto', label: 'Full Auto' },
   ],
-  selectedCollaborationMode: 'default',
+  selectedCollaborationMode: 'ask-approval',
 
   installedSkills: [],
 
@@ -860,9 +860,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
       // ==================== Server Request Actions ====================
 
-      respondToServerRequest: async (requestId, approved, duration) => {
+      respondToServerRequest: async (requestId, decision) => {
         try {
-          await api.replyToServerRequest(requestId, approved, { duration });
+          await api.replyToServerRequest(requestId, decision);
           // Remove from pending requests
           set((state) => {
             state.pendingServerRequestsByThreadId.forEach((requests, threadId) => {

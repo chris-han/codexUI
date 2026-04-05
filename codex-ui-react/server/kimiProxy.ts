@@ -304,6 +304,11 @@ function convertToChatFormat(body: any) {
         if (!content) {
           continue;
         }
+        // Flush any accumulated direct text before adding a structured message
+        if (directUserParts.length > 0) {
+          messages.push({ role: 'user', content: directUserParts.join('\n') });
+          directUserParts.length = 0;
+        }
         messages.push({
           role: normalizeChatRole(item.role),
           content,
@@ -315,6 +320,49 @@ function convertToChatFormat(body: any) {
         directUserParts.push(item.text);
         continue;
       }
+
+      // Tool call by the model in a previous turn (function_call)
+      if (item.type === 'function_call') {
+        if (directUserParts.length > 0) {
+          messages.push({ role: 'user', content: directUserParts.join('\n') });
+          directUserParts.length = 0;
+        }
+        const callId = typeof item.call_id === 'string' && item.call_id ? item.call_id : `call_${messages.length}`;
+        const rawName = typeof item.name === 'string' ? item.name : '';
+        const mappedName = toolMapping.originalToSanitized.get(rawName) || rawName;
+        const argsStr = typeof item.arguments === 'string'
+          ? item.arguments
+          : JSON.stringify(item.arguments ?? {});
+        messages.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ id: callId, type: 'function', function: { name: mappedName, arguments: argsStr } }],
+        });
+        continue;
+      }
+
+      // Tool execution result (function_call_output)
+      if (item.type === 'function_call_output') {
+        if (directUserParts.length > 0) {
+          messages.push({ role: 'user', content: directUserParts.join('\n') });
+          directUserParts.length = 0;
+        }
+        const callId = typeof item.call_id === 'string' ? item.call_id : '';
+        let outputContent: string;
+        if (typeof item.output === 'string') {
+          outputContent = item.output;
+        } else if (Array.isArray(item.output)) {
+          outputContent = (item.output as any[])
+            .filter((p: any) => p?.type === 'input_text' || p?.type === 'output_text' || p?.type === 'text')
+            .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
+            .filter(Boolean)
+            .join('\n');
+        } else {
+          outputContent = '';
+        }
+        messages.push({ role: 'tool', tool_call_id: callId, content: outputContent });
+        continue;
+      }
     }
 
     if (directUserParts.length > 0) {
@@ -324,6 +372,15 @@ function convertToChatFormat(body: any) {
       });
     }
   }
+
+  const inputTypes = Array.isArray(body.input)
+    ? (body.input as any[]).map((i: any) => i?.type ?? 'unknown').join(',')
+    : typeof body.input;
+  console.log('[proxy] convertToChatFormat', {
+    inputTypes,
+    messageCount: messages.length,
+    roles: messages.map((m: any) => m.role).join(','),
+  });
 
   return {
     chatBody: {
@@ -974,6 +1031,12 @@ async function streamChatCompletionsAsResponses(
   const emitter = createResponseStreamEmitter(sink, toolMapping, model);
   const toolCallsByIndex = new Map<number, Record<string, unknown>>();
   const finalMessage: Record<string, unknown> = { role: 'assistant', content: '', tool_calls: [] };
+  console.log('[proxy] streaming request', {
+    model,
+    toolCount: Array.isArray(chatBody.tools) ? chatBody.tools.length : 0,
+    toolChoice: chatBody.tool_choice,
+    messageCount: Array.isArray(chatBody.messages) ? chatBody.messages.length : 0,
+  });
 
   try {
     await postToUpstreamStream(chatBody, {
@@ -991,6 +1054,10 @@ async function streamChatCompletionsAsResponses(
 
         const choice = parsed?.choices?.[0];
         const delta = choice?.delta ?? {};
+
+        if (choice?.finish_reason) {
+          console.log('[proxy] finish_reason', choice.finish_reason, 'toolCallsAccumulated', toolCallsByIndex.size);
+        }
 
         if (typeof parsed?.usage === 'object' && parsed.usage) {
           emitter.setUsage({
@@ -1055,6 +1122,18 @@ async function streamChatCompletionsAsResponses(
         finalMessage.tool_calls = Array.from(toolCallsByIndex.entries())
           .sort((a, b) => a[0] - b[0])
           .map(([, value]) => value);
+        console.log('[proxy] stream done', {
+          model,
+          hasContent: typeof finalMessage.content === 'string' && (finalMessage.content as string).length > 0,
+          toolCallCount: (finalMessage.tool_calls as unknown[]).length,
+          toolCalls: (finalMessage.tool_calls as Array<Record<string, unknown>>).map((tc) => ({
+            id: tc.id,
+            name: (tc.function as Record<string, unknown> | undefined)?.name,
+            argsLen: typeof (tc.function as Record<string, unknown> | undefined)?.arguments === 'string'
+              ? ((tc.function as Record<string, unknown>).arguments as string).length
+              : 0,
+          })),
+        });
       },
     });
 

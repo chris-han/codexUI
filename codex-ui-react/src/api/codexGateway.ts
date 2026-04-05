@@ -75,8 +75,9 @@ type UploadComposerFileResponse = {
 
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_COLLABORATION_MODE_OPTIONS: CollaborationModeOption[] = [
-  { value: 'default', label: 'Default' },
+  { value: 'ask-approval', label: 'Ask Approval' },
   { value: 'plan', label: 'Plan' },
+  { value: 'full-auto', label: 'Full Auto' },
 ];
 
 type CurrentModelConfig = {
@@ -344,13 +345,18 @@ export async function startThreadTurn(
     });
   }
 
+  const isFullAuto = options?.collaborationMode === 'full-auto';
+  const isPlan = options?.collaborationMode === 'plan';
   const request = {
     threadId,
     input,
     model: normalizedModel || undefined,
     effort: options?.reasoningEffort,
-    collaborationMode: options?.collaborationMode
-      ? await resolveCollaborationMode(options.collaborationMode, normalizedModel, options?.reasoningEffort)
+    approvalPolicy: isFullAuto ? 'never' : undefined,
+    // Only send collaborationMode for 'plan' — the Rust ModeKind only accepts 'plan'|'default'.
+    // 'ask-approval' and 'full-auto' both map to the Rust default; full-auto only sets approvalPolicy.
+    collaborationMode: isPlan
+      ? await resolveCollaborationMode('plan', normalizedModel, options?.reasoningEffort)
       : undefined,
   };
 
@@ -379,7 +385,7 @@ async function resolveCollaborationMode(
   model?: string,
   effort?: ReasoningEffort
 ): Promise<{
-  mode: CollaborationModeKind;
+  mode: string;
   settings: {
     model: string;
     reasoning_effort: ReasoningEffort | null;
@@ -387,8 +393,11 @@ async function resolveCollaborationMode(
   };
 }> {
   const settings = await resolveCollaborationModeSettings(mode, model, effort);
+  // Map frontend mode names to the Rust ModeKind snake_case values: 'plan' or 'default'.
+  // 'ask-approval' and 'full-auto' both resolve to the Rust 'default' mode.
+  const serverMode = mode === 'plan' ? 'plan' : 'default';
   return {
-    mode,
+    mode: serverMode,
     settings: {
       model: settings.model,
       reasoning_effort: settings.reasoningEffort,
@@ -449,7 +458,8 @@ async function resolveCollaborationModeSettings(
     };
   }
 
-  throw new Error(`${mode === 'plan' ? 'Plan' : 'Default'} mode requires an available model. Wait for models to load and try again.`);
+  const modeLabel = mode === 'plan' ? 'Plan' : mode === 'full-auto' ? 'Full Auto' : 'Ask Approval';
+  throw new Error(`${modeLabel} mode requires an available model. Wait for models to load and try again.`);
 }
 
 export async function interruptThreadTurn(threadId: string, turnId?: string): Promise<void> {
@@ -663,15 +673,11 @@ export async function getPendingServerRequests(): Promise<UiServerRequest[]> {
 
 export async function replyToServerRequest(
   requestId: number,
-  approved: boolean,
-  options?: { duration?: 'always' | 'workingSet' | 'session' }
+  decision: string
 ): Promise<void> {
   await respondServerRequest({
     id: requestId,
-    result: {
-      approved,
-      duration: options?.duration || 'session',
-    },
+    result: { decision },
   });
 }
 

@@ -1613,3 +1613,31 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Remove any temporary uploaded files from the server temp directory if manual cleanup is desired.
+
+### Feature: kimiProxy tool-call continuation (function_call / function_call_output)
+
+#### Prerequisites
+- `codex-ui-react` is running locally (kimi proxy on port 3456, bridge on port 3457).
+- Full Auto collaboration mode is enabled in the composer.
+- Model is set to a kimi model that supports tool use (e.g. `kimi-k2`).
+
+#### Steps
+1. Open the React UI and start a new thread.
+2. Set collaboration mode to **Full Auto** (no approval prompts).
+3. Send a multi-step task that requires tool use, e.g. "List all files in the current directory and summarize their sizes".
+4. Watch the conversation panel — the model should issue tool calls (shell commands), receive results, and continue reasoning without stopping.
+5. Confirm the final assistant message contains the summarized output.
+
+#### Expected Results
+- The model issues one or more tool calls.
+- Each tool result is fed back to the model in the next request (confirmed via `[proxy] convertToChatFormat` log showing `function_call` and `function_call_output` types in `inputTypes`).
+- The model produces a final answer that incorporates the tool results.
+- The conversation does **not** stall after the first tool call with a bare response.
+
+#### Bug Fixed
+- `convertToChatFormat` in `kimiProxy.ts` previously dropped `function_call` and `function_call_output` items from the Responses API `input` array.
+- As a result, the model never received tool results and stalled or produced a wrong response on the second turn.
+- The fix adds proper handling for both item types, converting them to Chat Completions `tool_calls` and `tool` role messages respectively.
+
+#### Rollback/Cleanup
+- No cleanup required.

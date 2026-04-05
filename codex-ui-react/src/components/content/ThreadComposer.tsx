@@ -299,7 +299,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
+      className="relative h-full flex flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
     >
       {uploadError ? (
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -357,15 +357,17 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         </div>
       ) : null}
 
-      {selectedCollaborationMode === 'plan' ? (
+      {selectedCollaborationMode === 'plan' || selectedCollaborationMode === 'full-auto' ? (
         <div className="mb-3">
-          <span className="inline-flex items-center rounded-full bg-gray-900 px-2.5 py-1 text-xs font-medium text-white">
-            Plan
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium text-white ${
+            selectedCollaborationMode === 'full-auto' ? 'bg-green-700' : 'bg-gray-900'
+          }`}>
+            {selectedCollaborationMode === 'full-auto' ? 'Full Auto' : 'Plan'}
           </span>
         </div>
       ) : null}
 
-      <div className="relative">
+      <div className="relative flex-1 min-h-0">
         <textarea
           ref={textareaRef}
           value={message}
@@ -418,8 +420,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           }}
           placeholder={disabled ? 'Loading...' : 'Type a message... (@ for files, / for skills)'}
           disabled={disabled || isInProgress}
-          className="min-h-[112px] w-full resize-none border-0 bg-transparent px-2 py-2 pr-12 text-[15px] text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50"
-          rows={4}
+          className="h-full min-h-[56px] w-full resize-none border-0 bg-transparent px-2 py-2 pr-12 text-[15px] text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50"
+          rows={2}
         />
 
         {slashSkillOptions.length > 0 ? (
@@ -491,13 +493,27 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                 <button
                   type="button"
                   onClick={() => {
-                    handleCollaborationModeChange(selectedCollaborationMode === 'plan' ? 'default' : 'plan');
+                    handleCollaborationModeChange(selectedCollaborationMode === 'plan' ? 'ask-approval' : 'plan');
                     closeMenus();
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
                 >
                   <IconLucideSplinePointer className="h-5 w-5 shrink-0" />
-                  <span>Plan</span>
+                  <span>{selectedCollaborationMode === 'plan' ? 'Exit Plan' : 'Plan'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCollaborationModeChange(selectedCollaborationMode === 'full-auto' ? 'ask-approval' : 'full-auto');
+                    closeMenus();
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
+                >
+                  <span className="h-5 w-5 shrink-0 flex items-center justify-center text-green-700 font-bold text-xs">⚡</span>
+                  <div className="flex flex-col">
+                    <span>{selectedCollaborationMode === 'full-auto' ? 'Exit Full Auto' : 'Full Auto'}</span>
+                    <span className="text-xs text-gray-500">Tools run without approval</span>
+                  </div>
                 </button>
                 <div className="my-2 h-px bg-gray-200" />
                 <button
