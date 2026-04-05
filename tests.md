@@ -240,6 +240,7 @@ This file tracks manual regression and feature verification steps.
 - The skill detail modal can show remote or local `SKILL.md` content.
 - If install or uninstall fails, the modal shows the returned error message inline instead of only leaving the action in a loading-looking state.
 - Installs are written specifically into `codex-ui-react/.codex/skills` and are not redirected to another Codex home discovered from `skills/list`.
+- If GitHub marketplace fetches or `skills/list` are slow or unavailable, the page returns promptly with whatever partial skill data is available instead of remaining stuck on `Loading skills…`.
 
 #### Rollback/Cleanup
 - Uninstall any test skill you installed during verification.

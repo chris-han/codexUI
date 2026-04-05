@@ -487,6 +487,8 @@ type MetaJson = {
 const HUB_SKILLS_OWNER = 'openclaw';
 const HUB_SKILLS_REPO = 'skills';
 const TREE_CACHE_TTL_MS = 5 * 60 * 1000;
+const SKILLS_HUB_GITHUB_TIMEOUT_MS = 8_000;
+const SKILLS_HUB_BRIDGE_TIMEOUT_MS = 5_000;
 let skillsTreeCache: SkillsTreeCache | null = null;
 const metaCache = new Map<string, { description: string; displayName: string; publishedAt: number }>();
 
@@ -507,6 +509,24 @@ function getErrorMessageFromPayload(payload: unknown, fallback: string): string 
     return nested.message;
   }
   return fallback;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
@@ -579,7 +599,7 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
   const installed = new Map<string, InstalledSkillInfo>();
   const localSkillsDir = getSkillsInstallDir();
   try {
-    const result = await bridge.call('skills/list', {}) as {
+    const result = await withTimeout(bridge.call('skills/list', {}), SKILLS_HUB_BRIDGE_TIMEOUT_MS, 'skills/list') as {
       data?: Array<{ skills?: Array<{ name?: string; path?: string; enabled?: boolean }> }>;
     };
     for (const entry of result.data ?? []) {
@@ -622,6 +642,7 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
 
 async function ghFetch(url: string): Promise<Response> {
   return fetch(url, {
+    signal: AbortSignal.timeout(SKILLS_HUB_GITHUB_TIMEOUT_MS),
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'codex-ui-react',
@@ -665,7 +686,10 @@ async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
 async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
   const batch = entries.filter((entry) => !metaCache.has(`${entry.owner}/${entry.name}`)).slice(0, 50);
   await Promise.allSettled(batch.map(async (entry) => {
-    const response = await fetch(`https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${entry.owner}/${entry.name}/_meta.json`);
+    const response = await fetch(
+      `https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${entry.owner}/${entry.name}/_meta.json`,
+      { signal: AbortSignal.timeout(SKILLS_HUB_GITHUB_TIMEOUT_MS) }
+    );
     if (!response.ok) return;
     const meta = await response.json() as MetaJson;
     metaCache.set(`${entry.owner}/${entry.name}`, {
@@ -1293,16 +1317,23 @@ app.post('/codex-api/composer-file-search', async (req, res) => {
 });
 
 app.get('/codex-api/skills-hub', async (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q : '';
+  const sort = req.query.sort === 'name' ? 'name' : 'date';
+  const limitRaw = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 100;
+  const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 200);
+
   try {
-    const query = typeof req.query.q === 'string' ? req.query.q : '';
-    const sort = req.query.sort === 'name' ? 'name' : 'date';
-    const limitRaw = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 100;
-    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 200);
-    const [allEntries, installed] = await Promise.all([
+    const [entriesResult, installedResult] = await Promise.allSettled([
       fetchSkillsTree(),
       scanInstalledSkills(bridge),
     ]);
-    await fetchMetaBatch(allEntries);
+
+    const allEntries = entriesResult.status === 'fulfilled' ? entriesResult.value : [];
+    const installed = installedResult.status === 'fulfilled' ? installedResult.value : new Map<string, InstalledSkillInfo>();
+
+    if (allEntries.length > 0) {
+      await fetchMetaBatch(allEntries).catch(() => {});
+    }
 
     const installedEntries = Array.from(installed.values()).map((skill) => {
       const treeEntry = allEntries.find((entry) => entry.name === skill.name);
@@ -1327,9 +1358,13 @@ app.get('/codex-api/skills-hub', async (req, res) => {
     });
 
     res.json({
-      data: searchSkillsHub(allEntries, query, limit, sort, installed),
+      data: allEntries.length > 0 ? searchSkillsHub(allEntries, query, limit, sort, installed) : [],
       installed: installedEntries,
       total: allEntries.length,
+      partialError: [
+        entriesResult.status === 'rejected' ? getErrorMessageFromPayload(entriesResult.reason, 'Failed to load marketplace') : '',
+        installedResult.status === 'rejected' ? getErrorMessageFromPayload(installedResult.reason, 'Failed to load installed skills') : '',
+      ].filter(Boolean).join('; ') || undefined,
     });
   } catch (error) {
     res.status(500).json({ error: getErrorMessageFromPayload(error, 'Failed to fetch skills hub') });
