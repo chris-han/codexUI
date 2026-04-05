@@ -238,6 +238,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: React thread actions follow Vue sidebar behavior
+
+#### Prerequisites
+- React app is running from this repository.
+- At least one existing thread is visible in the React sidebar.
+
+#### Steps
+1. Open any existing thread in the React UI.
+2. Verify the thread header does not show `Review`, fork, or delete/archive buttons.
+3. In the sidebar, hover the same thread row and open the `...` thread menu.
+4. Click `Rename thread`, enter a new title, and confirm the sidebar row updates.
+5. Open the thread menu again and click `Create chat fork`.
+6. Confirm the app navigates to the new forked thread.
+7. Open the original thread menu again and click `Delete thread`, then confirm the archive prompt.
+
+#### Expected Results
+- Thread-level actions are available from the sidebar thread menu instead of the thread header.
+- The React thread header no longer exposes the React-only review control.
+- Renaming updates the thread title in the sidebar.
+- Forking creates and opens a new thread.
+- Deleting archives the selected thread after confirmation.
+
+#### Rollback/Cleanup
+- Rename the test thread back to its previous title if needed.
+- Delete any temporary fork thread created during the test if it should not be kept.
+
 ### Feature: Dark theme states for runtime mode toggle
 
 #### Prerequisites

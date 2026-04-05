@@ -6,7 +6,7 @@ import { useCodexStore } from '../../stores';
 import type { SkillInfo } from '../../types/codex';
 import ContentHeader from './ContentHeader';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
-import { IconTablerX, IconTablerBolt, IconTablerSearch } from '../icons';
+import { IconTablerX, IconTablerSearch } from '../icons';
 
 interface SkillCardProps {
   skill: SkillInfo;
@@ -145,7 +145,6 @@ function SkillsHub() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
-              <IconTablerBolt className="h-7 w-7 text-primary" />
               Skills Hub
             </h1>
             <p className="mt-1 text-gray-500">

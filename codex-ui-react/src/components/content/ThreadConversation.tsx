@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SquareLibrary } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
@@ -9,12 +9,10 @@ import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import {
-  IconTablerArchive,
   IconTablerArrowBackUp,
   IconTablerChevronDown,
   IconTablerChevronRight,
   IconTablerCopy,
-  IconTablerGitFork,
   IconTablerSearch,
   IconTablerX,
 } from '../icons';
@@ -22,8 +20,6 @@ import {
 const DEFAULT_FOOTER_HEIGHT = 140;
 const MIN_FOOTER_HEIGHT = 100;
 const MAX_FOOTER_HEIGHT = 400;
-
-const ReviewPane = lazy(() => import('./ReviewPane'));
 
 type ReasoningPanelProps = {
   messageId: string;
@@ -207,7 +203,6 @@ function ThreadConversation() {
   const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
   const [footerHeight, setFooterHeight] = useState(DEFAULT_FOOTER_HEIGHT);
@@ -288,8 +283,6 @@ function ThreadConversation() {
   const selectThread = useCodexStore((state) => state.selectThread);
   const sendMessage = useCodexStore((state) => state.sendMessage);
   const interruptSelectedThreadTurn = useCodexStore((state) => state.interruptSelectedThreadTurn);
-  const archiveThreadById = useCodexStore((state) => state.archiveThreadById);
-  const forkThreadById = useCodexStore((state) => state.forkThreadById);
   const rollbackThreadToTurn = useCodexStore((state) => state.rollbackThreadToTurn);
   const respondToServerRequest = useCodexStore((state) => state.respondToServerRequest);
 
@@ -299,10 +292,6 @@ function ThreadConversation() {
       selectThread(threadId);
     }
   }, [threadId, selectThread]);
-
-  useEffect(() => {
-    setIsReviewOpen(false);
-  }, [threadId]);
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -319,14 +308,6 @@ function ThreadConversation() {
 
   const handleInterrupt = async () => {
     await interruptSelectedThreadTurn();
-  };
-
-  const handleArchive = async () => {
-    await archiveThreadById(threadView.id);
-  };
-
-  const handleFork = async () => {
-    await forkThreadById(threadView.id);
   };
 
   const handleCopyMessage = useCallback(async (messageId: string, text: string) => {
@@ -386,64 +367,27 @@ function ThreadConversation() {
             </SidebarToolbarAction>
           </SidebarThreadControls>
         ) : null}
-        actions={(
+        actions={isInProgress ? (
           <div className="flex items-center gap-2">
-            {isInProgress ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                {liveActivityLabel || 'Working...'}
-              </span>
-            ) : null}
-            <button
-              onClick={() => setIsReviewOpen((value) => !value)}
-              className={`rounded-lg px-3 py-1.5 text-sm ${
-                isReviewOpen
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-              title="Toggle review pane"
-            >
-              Review
-            </button>
-            <button
-              onClick={handleFork}
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              title="Fork thread"
-            >
-              <IconTablerGitFork className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleArchive}
-              className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
-              title="Archive thread"
-            >
-              <IconTablerArchive className="w-4 h-4" />
-            </button>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+              {liveActivityLabel || 'Working...'}
+            </span>
           </div>
-        )}
+        ) : null}
       />
 
-      {isReviewOpen ? (
-        <Suspense fallback={<div className="flex-1 p-4 text-sm text-gray-500">Loading review pane…</div>}>
-          <ReviewPane
-            threadId={threadView.id}
-            cwd={threadView.cwd}
-            isThreadInProgress={isInProgress}
-            onClose={() => setIsReviewOpen(false)}
-          />
-        </Suspense>
-      ) : (
-        <>
-          {/* Messages */}
-          <div
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4"
-          >
-            {messages.length === 0 && !pendingTurnRequest && !liveMessage && !liveReasoning && (
-              <div className="text-center text-gray-400 py-12">
-                No messages yet. Start the conversation!
-              </div>
-            )}
+      <>
+        {/* Messages */}
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+        >
+          {messages.length === 0 && !pendingTurnRequest && !liveMessage && !liveReasoning && (
+            <div className="text-center text-gray-400 py-12">
+              No messages yet. Start the conversation!
+            </div>
+          )}
 
             {messages.map((message) => (
               <div
@@ -676,8 +620,7 @@ function ThreadConversation() {
               </div>
             </div>
           </div>
-        </>
-      )}
+      </>
 
       {modalImageUrl && (
         <div

@@ -24,6 +24,9 @@ function DesktopLayout() {
     toggleSidebarSearch,
     setSidebarSearchQuery,
     clearError,
+    renameThreadById,
+    archiveThreadById,
+    forkThreadById,
   } = useCodexStore();
 
   const isSkillsRoute = location.pathname === '/skills';
@@ -52,6 +55,29 @@ function DesktopLayout() {
       setSidebarCollapsed(true);
     }
     navigate(`/thread/${threadId}`);
+  };
+
+  const handleRenameThread = async (threadId: string, nextTitle: string) => {
+    await renameThreadById(threadId, nextTitle);
+  };
+
+  const handleArchiveThread = async (threadId: string) => {
+    await archiveThreadById(threadId);
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
+    if (location.pathname === `/thread/${threadId}`) {
+      navigate('/');
+    }
+  };
+
+  const handleForkThread = async (threadId: string) => {
+    const nextThreadId = await forkThreadById(threadId);
+    if (!nextThreadId) return;
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
+    navigate(`/thread/${nextThreadId}`);
   };
 
   const handleNewThread = () => {
@@ -125,6 +151,9 @@ function DesktopLayout() {
           isLoading={isLoadingThreads}
           searchQuery={sidebarSearchQuery}
           onSelectThread={handleSelectThread}
+          onRenameThread={handleRenameThread}
+          onArchiveThread={handleArchiveThread}
+          onForkThread={handleForkThread}
         />
       </div>
     </section>

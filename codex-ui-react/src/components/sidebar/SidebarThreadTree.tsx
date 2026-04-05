@@ -49,6 +49,9 @@ interface SidebarThreadTreeProps {
   isLoading: boolean;
   searchQuery: string;
   onSelectThread: (threadId: string) => void;
+  onRenameThread: (threadId: string, nextTitle: string) => void;
+  onForkThread: (threadId: string) => void;
+  onArchiveThread: (threadId: string) => void;
 }
 
 function SidebarThreadTree({
@@ -57,6 +60,9 @@ function SidebarThreadTree({
   isLoading,
   searchQuery,
   onSelectThread,
+  onRenameThread,
+  onForkThread,
+  onArchiveThread,
 }: SidebarThreadTreeProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     const initial = new Set<string>();
@@ -66,14 +72,16 @@ function SidebarThreadTree({
   const [projectLabels, setProjectLabels] = useState<Record<string, string>>(() => loadProjectLabels());
   const [hiddenProjects, setHiddenProjects] = useState<Set<string>>(() => new Set(loadHiddenProjects()));
   const [openProjectMenu, setOpenProjectMenu] = useState<string | null>(null);
+  const [openThreadMenu, setOpenThreadMenu] = useState<string | null>(null);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest('[data-project-menu-root="true"]')) {
+      if (target instanceof Element && target.closest('[data-menu-root="true"]')) {
         return;
       }
       setOpenProjectMenu(null);
+      setOpenThreadMenu(null);
     };
 
     window.addEventListener('pointerdown', handlePointerDown);
@@ -128,6 +136,28 @@ function SidebarThreadTree({
     });
   };
 
+  const handleRenameThread = (thread: UiThread) => {
+    const nextTitle = window.prompt('Rename thread', thread.title);
+    setOpenThreadMenu(null);
+    if (nextTitle === null) return;
+
+    const normalized = nextTitle.trim();
+    if (!normalized || normalized === thread.title) return;
+    onRenameThread(thread.id, normalized);
+  };
+
+  const handleForkThread = (threadId: string) => {
+    setOpenThreadMenu(null);
+    onForkThread(threadId);
+  };
+
+  const handleArchiveThread = (thread: UiThread) => {
+    const confirmed = window.confirm(`Archive thread "${thread.title}"?`);
+    setOpenThreadMenu(null);
+    if (!confirmed) return;
+    onArchiveThread(thread.id);
+  };
+
   const filterThreads = (threads: UiThread[]): UiThread[] => {
     if (!searchQuery.trim()) return threads;
     const query = searchQuery.toLowerCase();
@@ -169,7 +199,7 @@ function SidebarThreadTree({
 
         return (
           <div key={group.projectName} className="px-1">
-            <div data-project-menu-root="true" className="group relative flex items-center gap-1 rounded-md pr-1 hover:bg-gray-100">
+            <div data-menu-root="true" className="group relative flex items-center gap-1 rounded-md pr-1 hover:bg-gray-100">
               <button
                 onClick={() => toggleGroup(group.projectName)}
                 className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-sm font-medium text-gray-700 transition-colors"
@@ -224,21 +254,65 @@ function SidebarThreadTree({
             {isExpanded && (
               <div className="ml-6 space-y-0.5 mt-1">
                 {filteredThreads.map((thread) => (
-                  <button
-                    key={thread.id}
-                    onClick={() => onSelectThread(thread.id)}
-                    className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors truncate ${
-                      selectedThreadId === thread.id
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    } ${thread.inProgress ? 'italic' : ''}`}
-                    title={thread.title}
-                  >
-                    {thread.inProgress && (
-                      <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full mr-1.5 animate-pulse" />
-                    )}
-                    {thread.title}
-                  </button>
+                  <div key={thread.id} data-menu-root="true" className="group/thread relative flex items-center gap-1 rounded-md pr-1 hover:bg-gray-100">
+                    <button
+                      onClick={() => onSelectThread(thread.id)}
+                      className={`min-w-0 flex-1 text-left px-2 py-1.5 text-sm rounded-md transition-colors truncate ${
+                        selectedThreadId === thread.id
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      } ${thread.inProgress ? 'italic' : ''}`}
+                      title={thread.title}
+                    >
+                      {thread.inProgress && (
+                        <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full mr-1.5 animate-pulse" />
+                      )}
+                      {thread.title}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenProjectMenu(null);
+                        setOpenThreadMenu((current) => (current === thread.id ? null : thread.id));
+                      }}
+                      className={`flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-700 ${
+                        openThreadMenu === thread.id ? 'bg-white text-gray-700 shadow-sm' : 'opacity-0 group-hover/thread:opacity-100'
+                      }`}
+                      aria-label={`Open thread menu for ${thread.title}`}
+                      title="Thread actions"
+                    >
+                      <IconTablerDots className="h-4 w-4" />
+                    </button>
+                    {openThreadMenu === thread.id ? (
+                      <div
+                        className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[160px] overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-lg"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleForkThread(thread.id)}
+                          className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Create chat fork
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRenameThread(thread)}
+                          className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Rename thread
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleArchiveThread(thread)}
+                          className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
+                        >
+                          Delete thread
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             )}
