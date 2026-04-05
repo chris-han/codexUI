@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
 import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
-import { IconTablerChevronDown } from '../icons';
+import ContentHeader from './ContentHeader';
+import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
+import { IconTablerChevronDown, IconTablerSearch } from '../icons';
 
 function HomeScreen() {
   const navigate = useNavigate();
+  const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
   const { projectGroups, startNewThread, isSendingMessage } = useCodexStore();
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -61,9 +65,20 @@ function HomeScreen() {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="px-6 py-5 text-lg font-semibold text-gray-900">
-        New thread
-      </div>
+      <ContentHeader
+        title="New thread"
+        leading={showHeaderControls ? (
+          <SidebarThreadControls
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            onNewThread={() => navigate('/')}
+          >
+            <SidebarToolbarAction label="Search threads" onClick={openSidebarSearch}>
+              <IconTablerSearch className="h-4 w-4" />
+            </SidebarToolbarAction>
+          </SidebarThreadControls>
+        ) : null}
+      />
 
       <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8">
         <div className="w-full max-w-3xl">

@@ -1,9 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
 import type { ThreadComposerSubmitPayload } from '../../types/codex';
+import ContentHeader from './ContentHeader';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
+import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import {
   IconTablerArchive,
   IconTablerArrowBackUp,
@@ -11,6 +14,7 @@ import {
   IconTablerChevronRight,
   IconTablerCopy,
   IconTablerGitFork,
+  IconTablerSearch,
   IconTablerX,
 } from '../icons';
 
@@ -197,7 +201,9 @@ function ApprovalCard({ request, onRespond, onSendMessage }: ApprovalCardProps) 
 }
 
 function ThreadConversation() {
+  const navigate = useNavigate();
   const { threadId } = useParams<{ threadId: string }>();
+  const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
@@ -363,47 +369,55 @@ function ThreadConversation() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
-        <div className="flex items-center gap-3">
-          <h1 className="font-semibold text-gray-800 truncate max-w-md">
-            {threadView.title}
-          </h1>
-          {isInProgress && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
-              <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-              {liveActivityLabel || 'Working...'}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsReviewOpen((value) => !value)}
-            className={`rounded-lg px-3 py-1.5 text-sm ${
-              isReviewOpen
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            title="Toggle review pane"
+      <ContentHeader
+        title={threadView.title}
+        leading={showHeaderControls ? (
+          <SidebarThreadControls
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            onNewThread={() => navigate('/')}
           >
-            Review
-          </button>
-          <button
-            onClick={handleFork}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
-            title="Fork thread"
-          >
-            <IconTablerGitFork className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleArchive}
-            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-            title="Archive thread"
-          >
-            <IconTablerArchive className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+            <SidebarToolbarAction label="Search threads" onClick={openSidebarSearch}>
+              <IconTablerSearch className="h-4 w-4" />
+            </SidebarToolbarAction>
+          </SidebarThreadControls>
+        ) : null}
+        actions={(
+          <div className="flex items-center gap-2">
+            {isInProgress ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                {liveActivityLabel || 'Working...'}
+              </span>
+            ) : null}
+            <button
+              onClick={() => setIsReviewOpen((value) => !value)}
+              className={`rounded-lg px-3 py-1.5 text-sm ${
+                isReviewOpen
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title="Toggle review pane"
+            >
+              Review
+            </button>
+            <button
+              onClick={handleFork}
+              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              title="Fork thread"
+            >
+              <IconTablerGitFork className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleArchive}
+              className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+              title="Archive thread"
+            >
+              <IconTablerArchive className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      />
 
       {isReviewOpen ? (
         <Suspense fallback={<div className="flex-1 p-4 text-sm text-gray-500">Loading review pane…</div>}>

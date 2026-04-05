@@ -1719,3 +1719,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React sidebar header and mobile Skills header parity
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- At least one thread exists in the sidebar.
+
+#### Steps
+1. Open the React home route on a desktop-width viewport.
+2. Inspect the left sidebar header and confirm it renders as a compact icon row.
+3. Click the sidebar search icon and confirm the thread filter input opens directly below the icon row.
+4. Collapse the sidebar and confirm the main content header now shows the compact controls before the page title.
+5. Switch to a mobile viewport and open `/skills`.
+6. Confirm the mobile header shows the compact controls followed by the `Skills` title on one row.
+7. Tap the sidebar toggle in the mobile header to open the drawer, then tap the backdrop to close it.
+
+#### Expected Results
+- Desktop sidebar header uses the compact Vue-style toolbar layout instead of a large labeled block.
+- Collapsed desktop state moves toolbar controls into the content header and removes the old collapsed icon rail.
+- Mobile `Skills` view shows a compact header with toolbar controls and title together.
+- Mobile sidebar opens as an overlay drawer and closes from the backdrop.
+
+#### Rollback/Cleanup
+- No cleanup required.

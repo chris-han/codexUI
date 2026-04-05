@@ -1,14 +1,15 @@
-import { useEffect, useCallback, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCodexStore } from '../../stores';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import SidebarThreadTree from '../sidebar/SidebarThreadTree';
-import SidebarThreadControls from '../sidebar/SidebarThreadControls';
-import NewThreadDialog from '../dialogs/NewThreadDialog';
-import { IconTablerSearch, IconTablerX, IconTablerLayoutSidebar, IconTablerLayoutSidebarFilled } from '../icons';
+import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
+import { IconTablerSearch, IconTablerX } from '../icons';
 
 function DesktopLayout() {
   const navigate = useNavigate();
-  const [isNewThreadDialogOpen, setIsNewThreadDialogOpen] = useState(false);
+  const location = useLocation();
+  const isMobile = useIsMobile();
   const {
     projectGroups,
     selectedThreadId,
@@ -24,10 +25,11 @@ function DesktopLayout() {
     clearError,
   } = useCodexStore();
 
-  // Keyboard shortcut for sidebar toggle (Cmd/Ctrl+B)
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-      e.preventDefault();
+  const isSkillsRoute = location.pathname === '/skills';
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
+      event.preventDefault();
       setSidebarCollapsed(!isSidebarCollapsed);
     }
   }, [isSidebarCollapsed, setSidebarCollapsed]);
@@ -37,147 +39,147 @@ function DesktopLayout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
+  }, [isMobile, setSidebarCollapsed]);
+
   const handleSelectThread = async (threadId: string) => {
     await selectThread(threadId);
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
     navigate(`/thread/${threadId}`);
   };
 
   const handleNewThread = () => {
-    setIsNewThreadDialogOpen(true);
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
+    navigate('/');
   };
 
-  return (
-    <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
-      <aside
-        className={`flex-shrink-0 bg-white border-r border-gray-200 transition-all duration-200 ease-in-out flex flex-col ${
-          isSidebarCollapsed ? 'w-12' : 'w-64'
-        }`}
-      >
-        {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-3 border-b border-gray-200">
-          {!isSidebarCollapsed && (
-            <span className="font-semibold text-gray-800">Codex</span>
-          )}
-          <button
-            onClick={() => setSidebarCollapsed(!isSidebarCollapsed)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {isSidebarCollapsed ? (
-              <IconTablerLayoutSidebar className="w-5 h-5" />
-            ) : (
-              <IconTablerLayoutSidebarFilled className="w-5 h-5" />
-            )}
-          </button>
-        </div>
+  const handleToggleSidebarSearch = () => {
+    if (isSidebarCollapsed || isMobile) {
+      setSidebarCollapsed(false);
+    }
+    toggleSidebarSearch();
+  };
 
-        {/* Thread Controls */}
-        {!isSidebarCollapsed && (
-          <SidebarThreadControls onNewThread={handleNewThread} />
-        )}
+  const handleNavigateSkills = () => {
+    if (isMobile) {
+      setSidebarCollapsed(true);
+    }
+    navigate('/skills');
+  };
 
-        {/* Search Bar */}
-        {!isSidebarCollapsed && (
-          <div className="px-3 pb-2">
-            <div className="relative">
-              <button
-                onClick={toggleSidebarSearch}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <IconTablerSearch className="w-4 h-4" />
-                <span className="flex-1 text-left">Search threads...</span>
-              </button>
-            </div>
+  const sidebar = (
+    <section className="flex h-full flex-col bg-gray-100">
+      <div className="px-3 pb-2 pt-3">
+        <SidebarThreadControls
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed(!isSidebarCollapsed)}
+          onNewThread={handleNewThread}
+        >
+          <SidebarToolbarAction label="Search threads" onClick={handleToggleSidebarSearch}>
+            <IconTablerSearch className="h-4 w-4" />
+          </SidebarToolbarAction>
+        </SidebarThreadControls>
+      </div>
 
-            {isSidebarSearchVisible && (
-              <div className="mt-2 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <IconTablerSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={sidebarSearchQuery}
-                    onChange={(e) => setSidebarSearchQuery(e.target.value)}
-                    placeholder="Filter threads..."
-                    className="w-full pl-9 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    autoFocus
-                  />
-                  {sidebarSearchQuery && (
-                    <button
-                      onClick={() => setSidebarSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <IconTablerX className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Skills Link */}
-        {!isSidebarCollapsed && (
-          <div className="px-3 pb-2">
-            <button
-              onClick={() => navigate('/skills')}
-              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              Skills Hub
-            </button>
-          </div>
-        )}
-
-        {/* Thread Tree */}
-        <div className="flex-1 overflow-y-auto">
-          {isSidebarCollapsed ? (
-            <div className="flex flex-col items-center py-4 gap-3">
-              {projectGroups.slice(0, 5).map((group) => (
-                <div
-                  key={group.projectName}
-                  className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-medium"
-                  title={group.projectName}
-                >
-                  {group.projectName.charAt(0).toUpperCase()}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <SidebarThreadTree
-              groups={projectGroups}
-              selectedThreadId={selectedThreadId}
-              isLoading={isLoadingThreads}
-              searchQuery={sidebarSearchQuery}
-              onSelectThread={handleSelectThread}
+      {isSidebarSearchVisible ? (
+        <div className="px-3 pb-2">
+          <div className="relative">
+            <IconTablerSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={sidebarSearchQuery}
+              onChange={(event) => setSidebarSearchQuery(event.target.value)}
+              placeholder="Filter threads..."
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-700 outline-none ring-0 transition focus:border-primary"
+              autoFocus
             />
-          )}
+            {sidebarSearchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSidebarSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Clear search"
+              >
+                <IconTablerX className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         </div>
-      </aside>
+      ) : null}
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden flex flex-col bg-gray-50">
-        {error && (
-          <div className="bg-red-50 border-b border-red-200 px-4 py-3 flex items-center justify-between">
-            <span className="text-red-700 text-sm">{error}</span>
+      <div className="px-3 pb-2">
+        <button
+          type="button"
+          onClick={handleNavigateSkills}
+          className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+            isSkillsRoute
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-700 hover:bg-white/80'
+          }`}
+        >
+          Skills Hub
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <SidebarThreadTree
+          groups={projectGroups}
+          selectedThreadId={selectedThreadId}
+          isLoading={isLoadingThreads}
+          searchQuery={sidebarSearchQuery}
+          onSelectThread={handleSelectThread}
+        />
+      </div>
+    </section>
+  );
+
+  return (
+    <div className="flex h-screen w-full overflow-hidden bg-gray-100">
+      {isMobile && !isSidebarCollapsed ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={() => setSidebarCollapsed(true)}
+        >
+          <aside
+            className="absolute inset-y-0 left-0 w-[85vw] max-w-80 overflow-hidden shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {sidebar}
+          </aside>
+        </div>
+      ) : null}
+
+      {!isMobile && !isSidebarCollapsed ? (
+        <aside className="w-80 flex-shrink-0 border-r border-gray-200">
+          {sidebar}
+        </aside>
+      ) : null}
+
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        {error ? (
+          <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-3">
+            <span className="text-sm text-red-700">{error}</span>
             <button
+              type="button"
               onClick={clearError}
-              className="text-red-500 hover:text-red-700"
+              className="text-red-500 transition hover:text-red-700"
+              aria-label="Dismiss error"
             >
-              <IconTablerX className="w-4 h-4" />
+              <IconTablerX className="h-4 w-4" />
             </button>
           </div>
-        )}
+        ) : null}
         <div className="flex-1 overflow-hidden">
           <Outlet />
         </div>
       </main>
-
-      {/* New Thread Dialog */}
-      <NewThreadDialog
-        isOpen={isNewThreadDialogOpen}
-        onClose={() => setIsNewThreadDialogOpen(false)}
-        onCreated={(threadId) => navigate(`/thread/${threadId}`)}
-      />
     </div>
   );
 }

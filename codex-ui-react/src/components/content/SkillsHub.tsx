@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
 import type { SkillInfo } from '../../types/codex';
-import { IconTablerX, IconTablerBolt } from '../icons';
+import ContentHeader from './ContentHeader';
+import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
+import { IconTablerX, IconTablerBolt, IconTablerSearch } from '../icons';
 
 interface SkillCardProps {
   skill: SkillInfo;
@@ -97,6 +101,8 @@ function SkillDetailModal({ skill, onClose }: SkillDetailModalProps) {
 }
 
 function SkillsHub() {
+  const navigate = useNavigate();
+  const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
   const { installedSkills, loadSkills } = useCodexStore();
   const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -115,46 +121,62 @@ function SkillsHub() {
   );
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
-      <div className="max-w-4xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <IconTablerBolt className="w-7 h-7 text-primary" />
-            Skills Hub
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Manage your installed skills and discover new ones.
-          </p>
-        </div>
-
-        {/* Search */}
-        <div className="mb-6">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search skills..."
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-
-        {/* Skills Grid */}
-        {filteredSkills.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            {searchQuery ? 'No skills match your search.' : 'No skills installed.'}
+    <div className="flex h-full flex-col bg-gray-50">
+      <ContentHeader
+        title="Skills"
+        leading={showHeaderControls ? (
+          <SidebarThreadControls
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            onNewThread={() => navigate('/')}
+          >
+            <SidebarToolbarAction label="Search threads" onClick={openSidebarSearch}>
+              <IconTablerSearch className="h-4 w-4" />
+            </SidebarToolbarAction>
+          </SidebarThreadControls>
+        ) : null}
+      />
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-4xl p-6">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
+              <IconTablerBolt className="h-7 w-7 text-primary" />
+              Skills Hub
+            </h1>
+            <p className="mt-1 text-gray-500">
+              Manage your installed skills and discover new ones.
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredSkills.map((skill) => (
-              <SkillCard
-                key={skill.id || skill.path || skill.name}
-                skill={skill}
-                onClick={() => setSelectedSkill(skill)}
-              />
-            ))}
+
+          {/* Search */}
+          <div className="mb-6">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search skills..."
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
-        )}
+
+          {/* Skills Grid */}
+          {filteredSkills.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              {searchQuery ? 'No skills match your search.' : 'No skills installed.'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredSkills.map((skill) => (
+                <SkillCard
+                  key={skill.id || skill.path || skill.name}
+                  skill={skill}
+                  onClick={() => setSelectedSkill(skill)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Detail Modal */}

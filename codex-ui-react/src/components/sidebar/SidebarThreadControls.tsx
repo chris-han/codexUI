@@ -1,20 +1,77 @@
-import { IconTablerBolt } from '../icons';
+import type { ReactNode } from 'react';
+import {
+  IconTablerFilePencil,
+  IconTablerLayoutSidebar,
+  IconTablerLayoutSidebarFilled,
+} from '../icons';
 
 interface SidebarThreadControlsProps {
+  isSidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
   onNewThread: () => void;
+  showNewThreadButton?: boolean;
+  children?: ReactNode;
+  className?: string;
 }
 
-function SidebarThreadControls({ onNewThread }: SidebarThreadControlsProps) {
+function SidebarThreadControls({
+  isSidebarCollapsed,
+  onToggleSidebar,
+  onNewThread,
+  showNewThreadButton = true,
+  children,
+  className = '',
+}: SidebarThreadControlsProps) {
   return (
-    <div className="px-3 py-2">
+    <div className={`flex flex-nowrap items-center gap-2 ${className}`.trim()}>
       <button
-        onClick={onNewThread}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors font-medium"
+        type="button"
+        onClick={onToggleSidebar}
+        className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent text-gray-600 transition hover:border-gray-200 hover:bg-gray-50"
+        aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        <IconTablerBolt className="w-4 h-4" />
-        <span>New Thread</span>
+        {isSidebarCollapsed ? (
+          <IconTablerLayoutSidebarFilled className="h-4 w-4" />
+        ) : (
+          <IconTablerLayoutSidebar className="h-4 w-4" />
+        )}
       </button>
+      {children}
+      {showNewThreadButton ? (
+        <button
+          type="button"
+          onClick={onNewThread}
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent text-gray-600 transition hover:border-gray-200 hover:bg-gray-50"
+          aria-label="Start new thread"
+          title="Start new thread"
+        >
+          <IconTablerFilePencil className="h-4 w-4" />
+        </button>
+      ) : null}
     </div>
+  );
+}
+
+export function SidebarToolbarAction({
+  children,
+  label,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-transparent text-gray-600 transition hover:border-gray-200 hover:bg-gray-50"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
   );
 }
 
