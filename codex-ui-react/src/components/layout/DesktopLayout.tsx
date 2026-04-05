@@ -77,7 +77,7 @@ function DesktopLayout() {
 
   const sidebar = (
     <section className="flex h-full flex-col bg-gray-100">
-      <div className="px-3 pb-2 pt-3">
+      <div className="flex min-h-12 items-center px-2 pb-2 pt-3 sm:min-h-14 sm:px-3 sm:pt-4">
         <SidebarThreadControls
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!isSidebarCollapsed)}

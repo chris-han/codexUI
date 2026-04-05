@@ -1832,3 +1832,22 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React sidebar toolbar top padding matches content header
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- A compact content header and the sidebar toolbar can both be viewed.
+
+#### Steps
+1. Open a route with a compact content header, such as `/skills`.
+2. Note the vertical offset from the top edge to the toolbar icons.
+3. Open the sidebar toolbar view without a title-only content header replacing it.
+4. Compare the top spacing above the icon row in both places.
+
+#### Expected Results
+- The sidebar toolbar uses the same top padding rhythm as the shared content header.
+- Icon rows no longer appear visually higher or lower between the two header variants.
+
+#### Rollback/Cleanup
+- No cleanup required.
