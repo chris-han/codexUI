@@ -3,7 +3,6 @@ import { FolderOpen, Folder } from 'lucide-react';
 import type { UiProjectGroup, UiThread } from '../../types/codex';
 import {
   IconTablerDots,
-  IconTablerFolder,
 } from '../icons';
 
 const PROJECT_LABELS_STORAGE_KEY = 'codex-ui-react.project-labels.v1';
