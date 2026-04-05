@@ -317,7 +317,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   return (
     <form
       onSubmit={handleSubmit}
-      className={`relative flex h-full flex-col rounded-[2rem] border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] ${
+      className={`relative flex h-full flex-col rounded-2xl border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] ${
         isMobile ? 'p-5' : 'p-4'
       }`}
     >
