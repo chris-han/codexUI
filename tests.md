@@ -264,6 +264,33 @@ This file tracks manual regression and feature verification steps.
 - Rename the test thread back to its previous title if needed.
 - Delete any temporary fork thread created during the test if it should not be kept.
 
+### Feature: React new-thread folder picker stays in sync and can create a folder
+
+#### Prerequisites
+- React app is running from this repository.
+- Home/new-thread screen is open.
+- The server can write to the target parent directory for the new folder.
+
+#### Steps
+1. Open the folder picker under `Let's build` and note the listed project folders.
+2. Confirm folders already used by existing thread groups are present in the picker.
+3. Click `Create new folder`.
+4. Enter either a new folder name or an absolute path, then confirm the prompt.
+5. Re-open the folder picker.
+6. Confirm the newly created folder now appears in the list and is selected.
+7. Send a first message from the home screen with that folder selected.
+8. Confirm the app opens the new thread and the thread is associated with the created folder.
+
+#### Expected Results
+- The home-screen folder picker includes current workspace roots plus folders already represented in the thread tree.
+- Creating a folder writes/opens the project root and immediately adds it to the picker.
+- The created folder remains selectable for starting a new thread.
+- Starting the thread uses the selected folder as the thread cwd.
+
+#### Rollback/Cleanup
+- Remove the test folder if it was created only for verification.
+- Remove the test thread if it should not be kept.
+
 ### Feature: Dark theme states for runtime mode toggle
 
 #### Prerequisites

@@ -1,43 +1,130 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SquareLibrary } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getHomeDirectory, getWorkspaceRootsState, openProjectRoot, setWorkspaceRootsState, type WorkspaceRootsState } from '../../api/codexGateway';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
-import type { ThreadComposerSubmitPayload } from '../../types/codex';
+import type { ThreadComposerSubmitPayload, UiProjectGroup } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
 import ContentHeader from './ContentHeader';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import { IconTablerChevronDown, IconTablerSearch } from '../icons';
+
+type ProjectOption = {
+  label: string;
+  cwd: string;
+};
+
+function normalizePathSlashes(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function getBaseName(value: string): string {
+  const normalized = normalizePathSlashes(value.trim());
+  const parts = normalized.split('/').filter(Boolean);
+  return parts[parts.length - 1] || normalized;
+}
+
+function isAbsolutePath(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value);
+}
+
+function joinPath(basePath: string, child: string): string {
+  const normalizedBase = normalizePathSlashes(basePath).replace(/\/+$/, '');
+  const normalizedChild = normalizePathSlashes(child).replace(/^\/+/, '');
+  if (!normalizedBase) return `/${normalizedChild}`;
+  return `${normalizedBase}/${normalizedChild}`;
+}
+
+function deriveProjectLabel(cwd: string, labels: Record<string, string>): string {
+  const customLabel = labels[cwd]?.trim();
+  if (customLabel) return customLabel;
+  const base = getBaseName(cwd);
+  return base || cwd.trim() || 'Project';
+}
+
+function buildProjectOptions(
+  rootsState: WorkspaceRootsState,
+  projectGroups: UiProjectGroup[]
+): ProjectOption[] {
+  const optionByCwd = new Map<string, ProjectOption>();
+
+  for (const cwd of rootsState.order) {
+    const normalizedCwd = cwd.trim();
+    if (!normalizedCwd) continue;
+    optionByCwd.set(normalizedCwd, {
+      cwd: normalizedCwd,
+      label: deriveProjectLabel(normalizedCwd, rootsState.labels),
+    });
+  }
+
+  for (const group of projectGroups) {
+    const cwd = group.threads[0]?.cwd?.trim() ?? '';
+    if (!cwd || optionByCwd.has(cwd)) continue;
+    optionByCwd.set(cwd, {
+      cwd,
+      label: group.projectName || deriveProjectLabel(cwd, rootsState.labels),
+    });
+  }
+
+  return Array.from(optionByCwd.values());
+}
 
 function HomeScreen() {
   const navigate = useNavigate();
   const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
   const { projectGroups, startNewThread, isSendingMessage } = useCodexStore();
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [workspaceRootsState, setLocalWorkspaceRootsState] = useState<WorkspaceRootsState>({
+    order: [],
+    labels: {},
+    active: [],
+  });
+  const [homeDirectory, setHomeDirectory] = useState('');
+  const [selectedCwd, setSelectedCwd] = useState('');
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
 
   const projectOptions = useMemo(
-    () =>
-      projectGroups
-        .map((group) => {
-          const thread = group.threads[0];
-          return thread
-            ? {
-                label: group.projectName,
-                cwd: thread.cwd,
-              }
-            : null;
-        })
-        .filter((option): option is { label: string; cwd: string } => Boolean(option)),
-    [projectGroups]
+    () => buildProjectOptions(workspaceRootsState, projectGroups),
+    [projectGroups, workspaceRootsState]
   );
 
-  const [selectedCwd, setSelectedCwd] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRoots = async () => {
+      try {
+        const [rootsState, nextHomeDirectory] = await Promise.all([
+          getWorkspaceRootsState(),
+          getHomeDirectory(),
+        ]);
+        if (cancelled) return;
+        setLocalWorkspaceRootsState(rootsState);
+        setHomeDirectory(nextHomeDirectory);
+      } catch {
+        if (cancelled) return;
+        setLocalWorkspaceRootsState({ order: [], labels: {}, active: [] });
+        setHomeDirectory('');
+      }
+    };
+
+    void loadRoots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedCwd && projectOptions.length > 0) {
       setSelectedCwd(projectOptions[0].cwd);
     }
+  }, [projectOptions, selectedCwd]);
+
+  useEffect(() => {
+    if (!selectedCwd) return;
+    if (projectOptions.some((option) => option.cwd === selectedCwd)) return;
+    setSelectedCwd(projectOptions[0]?.cwd ?? '');
   }, [projectOptions, selectedCwd]);
 
   useEffect(() => {
@@ -56,8 +143,50 @@ function HomeScreen() {
 
   const selectedProject = projectOptions.find((option) => option.cwd === selectedCwd) || null;
 
+  const handleCreateFolder = async () => {
+    const rawValue = window.prompt('New folder name or absolute path', '');
+    if (rawValue === null) return;
+
+    const trimmed = rawValue.trim();
+    if (!trimmed) return;
+
+    const nextPath = isAbsolutePath(trimmed)
+      ? trimmed
+      : joinPath(homeDirectory || '/', trimmed);
+    const nextLabel = getBaseName(nextPath.trim()) || trimmed;
+
+    try {
+      const createdPath = await openProjectRoot(nextPath, {
+        createIfMissing: true,
+        label: nextLabel,
+      });
+      const nextState = await getWorkspaceRootsState();
+      setLocalWorkspaceRootsState(nextState);
+      setSelectedCwd(createdPath);
+      setIsProjectMenuOpen(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to create folder');
+    }
+  };
+
   const handleSend = async (payload: ThreadComposerSubmitPayload) => {
     if (!selectedCwd) return;
+
+    if (!workspaceRootsState.order.includes(selectedCwd)) {
+      const nextState: WorkspaceRootsState = {
+        order: [selectedCwd, ...workspaceRootsState.order.filter((item) => item !== selectedCwd)],
+        labels: workspaceRootsState.labels,
+        active: [selectedCwd, ...workspaceRootsState.active.filter((item) => item !== selectedCwd)],
+      };
+
+      try {
+        await setWorkspaceRootsState(nextState);
+        setLocalWorkspaceRootsState(nextState);
+      } catch {
+        // Keep new-thread flow usable even if roots-state persistence fails.
+      }
+    }
+
     const threadId = await startNewThread(selectedCwd, payload);
     if (threadId) {
       navigate(`/thread/${threadId}`);
@@ -95,7 +224,6 @@ function HomeScreen() {
                 type="button"
                 onClick={() => setIsProjectMenuOpen((open) => !open)}
                 className="inline-flex items-center gap-2 text-4xl font-semibold text-gray-500 outline-none transition hover:text-gray-700"
-                disabled={projectOptions.length === 0}
                 aria-haspopup="listbox"
                 aria-expanded={isProjectMenuOpen}
               >
@@ -126,6 +254,16 @@ function HomeScreen() {
                         ) : null}
                       </button>
                     ))}
+                    <div className="mx-2 my-2 h-px bg-gray-100" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleCreateFolder();
+                      }}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      <span>Create new folder</span>
+                    </button>
                   </div>
                 </div>
               ) : null}

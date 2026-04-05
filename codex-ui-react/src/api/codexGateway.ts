@@ -48,6 +48,8 @@ type WorkspaceRootsState = {
   active: string[];
 };
 
+export type { WorkspaceRootsState };
+
 type SkillsListResponseEntry = {
   cwd?: string;
   skills?: Array<{
@@ -716,18 +718,91 @@ export async function replyToServerRequest(
 
 // Workspace roots
 export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
-  try {
-    const result = await rpcCall<WorkspaceRootsState>('workspaceRootsState/read');
-    return result;
-  } catch {
-    return { order: [], labels: {}, active: [] };
+  const response = await fetch('/codex-api/workspace-roots-state');
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load workspace roots state'));
   }
+  const envelope =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const data =
+    envelope.data && typeof envelope.data === 'object' && !Array.isArray(envelope.data)
+      ? (envelope.data as Record<string, unknown>)
+      : {};
+  const order = Array.isArray(data.order) ? data.order.filter((item): item is string => typeof item === 'string') : [];
+  const active = Array.isArray(data.active) ? data.active.filter((item): item is string => typeof item === 'string') : [];
+  const labelsRaw = data.labels && typeof data.labels === 'object' && !Array.isArray(data.labels)
+    ? (data.labels as Record<string, unknown>)
+    : {};
+  const labels = Object.fromEntries(
+    Object.entries(labelsRaw).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+  );
+  return { order, labels, active };
 }
 
 export async function setWorkspaceRootsState(
   state: WorkspaceRootsState
 ): Promise<void> {
-  await rpcCall('workspaceRootsState/write', state);
+  const response = await fetch('/codex-api/workspace-roots-state', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as unknown;
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to save workspace roots state'));
+  }
+}
+
+export async function getHomeDirectory(): Promise<string> {
+  const response = await fetch('/codex-api/home-directory');
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to load home directory'));
+  }
+  const envelope =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const data =
+    envelope.data && typeof envelope.data === 'object' && !Array.isArray(envelope.data)
+      ? (envelope.data as Record<string, unknown>)
+      : {};
+  return typeof data.path === 'string' ? data.path.trim() : '';
+}
+
+export async function openProjectRoot(
+  path: string,
+  options?: { createIfMissing?: boolean; label?: string }
+): Promise<string> {
+  const response = await fetch('/codex-api/project-root', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path,
+      createIfMissing: options?.createIfMissing === true,
+      label: options?.label ?? '',
+    }),
+  });
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) {
+    throw new Error(getErrorMessageFromPayload(payload, 'Failed to open project root'));
+  }
+  const envelope =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const data =
+    envelope.data && typeof envelope.data === 'object' && !Array.isArray(envelope.data)
+      ? (envelope.data as Record<string, unknown>)
+      : {};
+  const normalizedPath = typeof data.path === 'string' ? data.path.trim() : '';
+  if (!normalizedPath) {
+    throw new Error('Project root path missing from response');
+  }
+  return normalizedPath;
 }
 
 // Notifications

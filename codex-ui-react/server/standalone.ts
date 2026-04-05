@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
@@ -37,6 +37,12 @@ type DirectoryBrowseResponse = {
   path: string;
   parentPath: string | null;
   entries: DirectoryBrowseEntry[];
+};
+
+type WorkspaceRootsState = {
+  order: string[];
+  labels: Record<string, string>;
+  active: string[];
 };
 
 // Check and free the configured bridge port before starting
@@ -104,6 +110,70 @@ function isThreadNotMaterializedYetError(error: unknown): boolean {
     message.includes('not materialized yet') ||
     message.includes('includeTurns is unavailable before first user message')
   );
+}
+
+function getStandaloneStatePath(): string {
+  return join(CODEX_HOME, 'global-state.json');
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const next: string[] = [];
+  for (const item of value) {
+    if (typeof item === 'string' && item.trim().length > 0 && !next.includes(item.trim())) {
+      next.push(item.trim());
+    }
+  }
+  return next;
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const next: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof key !== 'string' || typeof entry !== 'string') continue;
+    const normalizedKey = key.trim();
+    const normalizedValue = entry.trim();
+    if (!normalizedKey || !normalizedValue) continue;
+    next[normalizedKey] = normalizedValue;
+  }
+  return next;
+}
+
+async function readWorkspaceRootsState(): Promise<WorkspaceRootsState> {
+  const statePath = getStandaloneStatePath();
+  let payload: Record<string, unknown> = {};
+
+  try {
+    const raw = await readFile(statePath, 'utf8');
+    payload = asRecord(JSON.parse(raw)) ?? {};
+  } catch {
+    payload = {};
+  }
+
+  return {
+    order: normalizeStringArray(payload['electron-saved-workspace-roots']),
+    labels: normalizeStringRecord(payload['electron-workspace-root-labels']),
+    active: normalizeStringArray(payload['active-workspace-roots']),
+  };
+}
+
+async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise<void> {
+  const statePath = getStandaloneStatePath();
+  let payload: Record<string, unknown> = {};
+  try {
+    const raw = await readFile(statePath, 'utf8');
+    payload = asRecord(JSON.parse(raw)) ?? {};
+  } catch {
+    payload = {};
+  }
+
+  payload['electron-saved-workspace-roots'] = normalizeStringArray(nextState.order);
+  payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels);
+  payload['active-workspace-roots'] = normalizeStringArray(nextState.active);
+
+  await mkdir(CODEX_HOME, { recursive: true });
+  await writeFile(statePath, JSON.stringify(payload), 'utf8');
 }
 
 function logProviderModelDiscoveryWarning(message: string, details: Record<string, unknown>): void {
@@ -803,6 +873,83 @@ app.get('/codex-api/provider-models', async (req, res) => {
 
 app.get('/codex-api/home-directory', async (req, res) => {
   res.json({ data: { path: homedir() } });
+});
+
+app.get('/codex-api/workspace-roots-state', async (req, res) => {
+  try {
+    const state = await readWorkspaceRootsState();
+    res.json({ data: state });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to load workspace roots state') });
+  }
+});
+
+app.put('/codex-api/workspace-roots-state', async (req, res) => {
+  try {
+    const record = asRecord(req.body);
+    if (!record) {
+      res.status(400).json({ error: 'Invalid body: expected object' });
+      return;
+    }
+    const nextState: WorkspaceRootsState = {
+      order: normalizeStringArray(record.order),
+      labels: normalizeStringRecord(record.labels),
+      active: normalizeStringArray(record.active),
+    };
+    await writeWorkspaceRootsState(nextState);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to save workspace roots state') });
+  }
+});
+
+app.post('/codex-api/project-root', async (req, res) => {
+  try {
+    const record = asRecord(req.body);
+    const rawPath = typeof record?.path === 'string' ? record.path.trim() : '';
+    const createIfMissing = record?.createIfMissing === true;
+    const label = typeof record?.label === 'string' ? record.label.trim() : '';
+    if (!rawPath) {
+      res.status(400).json({ error: 'Missing path' });
+      return;
+    }
+
+    const normalizedPath = isAbsolute(rawPath) ? rawPath : resolve(rawPath);
+    let pathExists = true;
+    try {
+      const info = await stat(normalizedPath);
+      if (!info.isDirectory()) {
+        res.status(400).json({ error: 'Path exists but is not a directory' });
+        return;
+      }
+    } catch {
+      pathExists = false;
+    }
+
+    if (!pathExists && createIfMissing) {
+      await mkdir(normalizedPath, { recursive: true });
+    } else if (!pathExists) {
+      res.status(404).json({ error: 'Directory does not exist' });
+      return;
+    }
+
+    const existingState = await readWorkspaceRootsState();
+    const nextOrder = [normalizedPath, ...existingState.order.filter((item) => item !== normalizedPath)];
+    const nextActive = [normalizedPath, ...existingState.active.filter((item) => item !== normalizedPath)];
+    const nextLabels = { ...existingState.labels };
+    if (label) {
+      nextLabels[normalizedPath] = label;
+    }
+    await writeWorkspaceRootsState({
+      order: nextOrder,
+      labels: nextLabels,
+      active: nextActive,
+    });
+
+    res.json({ data: { path: normalizedPath } });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to open project root') });
+  }
 });
 
 app.get('/codex-api/browse-directory', async (req, res) => {
