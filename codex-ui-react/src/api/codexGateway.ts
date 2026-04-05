@@ -102,12 +102,41 @@ function normalizeCollaborationModeReasoningEffort(
   return value && value.length > 0 ? value : null;
 }
 
+const STRUCTURED_ATTACHMENT_EXTENSIONS = new Set([
+  'csv',
+  'doc',
+  'docx',
+  'ods',
+  'odt',
+  'pdf',
+  'ppt',
+  'pptx',
+  'xls',
+  'xlsx',
+]);
+
+function getFileExtension(path: string): string {
+  const normalized = path.trim().toLowerCase();
+  const lastDot = normalized.lastIndexOf('.');
+  if (lastDot < 0 || lastDot === normalized.length - 1) return '';
+  return normalized.slice(lastDot + 1);
+}
+
 function buildTextWithAttachments(
   prompt: string,
   files: ComposerFileAttachment[]
 ): string {
   if (files.length === 0) return prompt;
-  let prefix = '# Attached files\n';
+  const includesStructuredAttachment = files.some((file) =>
+    STRUCTURED_ATTACHMENT_EXTENSIONS.has(getFileExtension(file.path))
+  );
+  let prefix = '# Attachment instructions\n\n';
+  prefix += '- The attached files are intended inputs for this request.\n';
+  prefix += '- Inspect the attached files before answering when the request depends on their contents.\n';
+  if (includesStructuredAttachment) {
+    prefix += '- For structured attachments such as .docx, .pdf, or spreadsheets, inspect or extract the file contents before answering.\n';
+  }
+  prefix += '\n# Attached files\n';
   for (const file of files) {
     prefix += `\n- ${file.label}: ${file.path}\n`;
   }
@@ -346,18 +375,19 @@ export async function startThreadTurn(
   }
 
   const isFullAuto = options?.collaborationMode === 'full-auto';
-  const isPlan = options?.collaborationMode === 'plan';
+  const collaborationMode = await resolveCollaborationMode(
+    options?.collaborationMode ?? 'ask-approval',
+    normalizedModel,
+    options?.reasoningEffort
+  );
   const request = {
     threadId,
     input,
     model: normalizedModel || undefined,
     effort: options?.reasoningEffort,
     approvalPolicy: isFullAuto ? 'never' : undefined,
-    // Only send collaborationMode for 'plan' — the Rust ModeKind only accepts 'plan'|'default'.
-    // 'ask-approval' and 'full-auto' both map to the Rust default; full-auto only sets approvalPolicy.
-    collaborationMode: isPlan
-      ? await resolveCollaborationMode('plan', normalizedModel, options?.reasoningEffort)
-      : undefined,
+    // Always send the collaboration mode so Codex can apply the built-in mode instructions.
+    collaborationMode,
   };
 
   try {
@@ -393,8 +423,9 @@ async function resolveCollaborationMode(
   };
 }> {
   const settings = await resolveCollaborationModeSettings(mode, model, effort);
-  // Map frontend mode names to the Rust ModeKind snake_case values: 'plan' or 'default'.
-  // 'ask-approval' and 'full-auto' both resolve to the Rust 'default' mode.
+  // The app-server currently exposes 'plan' and 'default' ModeKind values.
+  // Our 'ask-approval' and 'full-auto' UI states both run on the 'default' mode preset;
+  // 'full-auto' additionally overrides approvalPolicy to 'never'.
   const serverMode = mode === 'plan' ? 'plan' : 'default';
   return {
     mode: serverMode,

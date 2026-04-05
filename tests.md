@@ -1641,3 +1641,27 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React full-auto attachment turns keep mode instructions and force attachment-first context
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- An existing thread is open in the React UI.
+- Full Auto mode is available in the composer.
+- A structured attachment such as a `.docx` contract file is available for upload.
+
+#### Steps
+1. Open the React composer and enable `Full Auto` from the `+` menu.
+2. Upload a `.docx` file through `Upload attachment`.
+3. Send a prompt that depends on the file contents, for example `检查这份合同文件并分析其有效性`.
+4. Observe the turn after submission.
+5. If available in logs or request inspection tools, confirm the `turn/start` payload includes both `approvalPolicy: never` and a `collaborationMode` object.
+
+#### Expected Results
+- The React client sends the `default` collaboration mode preset even in Full Auto, so Codex receives the built-in mode instructions instead of only an approval override.
+- The prompt text includes an attachment instruction block that tells Codex the uploaded files are intended inputs and should be inspected before answering when the request depends on their contents.
+- Structured attachments such as `.docx` receive an explicit extract/inspect hint in the prompt prefix.
+- The agent is more likely to proceed into attachment inspection or extraction instead of stopping at a passive `Thinking` phase with no execution.
+
+#### Rollback/Cleanup
+- Remove any temporary uploaded attachment files if manual cleanup is desired.
