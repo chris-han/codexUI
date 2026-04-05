@@ -49,6 +49,7 @@ interface SkillDetailModalProps {
   skill: SkillMarketplaceInfo | null;
   isInstalling: boolean;
   isUninstalling: boolean;
+  actionError: string | null;
   onInstall: (skill: SkillMarketplaceInfo) => Promise<void>;
   onUninstall: (skill: SkillMarketplaceInfo) => Promise<void>;
   onClose: () => void;
@@ -77,6 +78,7 @@ function SkillDetailModal({
   skill,
   isInstalling,
   isUninstalling,
+  actionError,
   onInstall,
   onUninstall,
   onClose,
@@ -147,6 +149,12 @@ function SkillDetailModal({
             <p className="mb-4 text-gray-600">{effectiveDescription}</p>
           ) : null}
 
+          {actionError ? (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+              {actionError}
+            </div>
+          ) : null}
+
           {isLoading ? (
             <p className="text-sm text-gray-400">Loading skill contents…</p>
           ) : renderedReadme ? (
@@ -213,6 +221,7 @@ function SkillsHub() {
   const [isInstalling, setIsInstalling] = useState(false);
   const [isUninstalling, setIsUninstalling] = useState(false);
   const [actingSkillKey, setActingSkillKey] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadSkills();
@@ -271,6 +280,7 @@ function SkillsHub() {
   async function handleInstall(skill: SkillMarketplaceInfo): Promise<void> {
     const key = `${skill.owner}/${skill.name}`;
     setActingSkillKey(key);
+    setActionError(null);
     setIsInstalling(true);
     try {
       await api.installMarketplaceSkill({ owner: skill.owner, name: skill.name });
@@ -278,7 +288,9 @@ function SkillsHub() {
       setToast(`${skill.displayName || skill.name} installed`);
       setSelectedSkill(null);
     } catch (installError) {
-      setToast(installError instanceof Error ? installError.message : 'Failed to install skill');
+      const message = installError instanceof Error ? installError.message : 'Failed to install skill';
+      setActionError(message);
+      setToast(message);
     } finally {
       setIsInstalling(false);
     }
@@ -287,6 +299,7 @@ function SkillsHub() {
   async function handleUninstall(skill: SkillMarketplaceInfo): Promise<void> {
     const key = `${skill.owner}/${skill.name}`;
     setActingSkillKey(key);
+    setActionError(null);
     setIsUninstalling(true);
     try {
       await api.uninstallMarketplaceSkill({ name: skill.name, path: skill.path });
@@ -294,7 +307,9 @@ function SkillsHub() {
       setToast(`${skill.displayName || skill.name} uninstalled`);
       setSelectedSkill(null);
     } catch (uninstallError) {
-      setToast(uninstallError instanceof Error ? uninstallError.message : 'Failed to uninstall skill');
+      const message = uninstallError instanceof Error ? uninstallError.message : 'Failed to uninstall skill';
+      setActionError(message);
+      setToast(message);
     } finally {
       setIsUninstalling(false);
     }
@@ -346,7 +361,10 @@ function SkillsHub() {
                   <SkillCard
                     key={`installed-${skill.owner}-${skill.name}`}
                     skill={{ ...skill, installed: true }}
-                    onClick={() => setSelectedSkill({ ...skill, installed: true })}
+                    onClick={() => {
+                      setActionError(null);
+                      setSelectedSkill({ ...skill, installed: true });
+                    }}
                   />
                 ))}
               </div>
@@ -404,7 +422,10 @@ function SkillsHub() {
                 <SkillCard
                   key={`${skill.owner}-${skill.name}`}
                   skill={skill}
-                  onClick={() => setSelectedSkill(skill)}
+                  onClick={() => {
+                    setActionError(null);
+                    setSelectedSkill(skill);
+                  }}
                 />
               ))}
             </div>
@@ -416,9 +437,13 @@ function SkillsHub() {
         skill={modalSkill}
         isInstalling={isInstalling && actingSkillKey === selectedSkillKey}
         isUninstalling={isUninstalling && actingSkillKey === selectedSkillKey}
+        actionError={actionError}
         onInstall={handleInstall}
         onUninstall={handleUninstall}
-        onClose={() => setSelectedSkill(null)}
+        onClose={() => {
+          setActionError(null);
+          setSelectedSkill(null);
+        }}
       />
     </div>
   );

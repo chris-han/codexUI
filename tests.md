@@ -238,6 +238,7 @@ This file tracks manual regression and feature verification steps.
 - Installing a skill writes it into the local skills folder and refreshes the installed skills list.
 - Uninstalling removes the local skill folder and refreshes the installed skills list.
 - The skill detail modal can show remote or local `SKILL.md` content.
+- If install or uninstall fails, the modal shows the returned error message inline instead of only leaving the action in a loading-looking state.
 
 #### Rollback/Cleanup
 - Uninstall any test skill you installed during verification.

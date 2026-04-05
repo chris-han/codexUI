@@ -1425,8 +1425,14 @@ app.post('/codex-api/skills-hub/install', async (req, res) => {
       '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
       '--path', `skills/${owner}/${name}`,
       '--dest', installDir,
-      '--method', 'git',
+      '--method', 'auto',
     ], { timeoutMs: 90_000 });
+
+    const skillManifestPath = join(skillDir, 'SKILL.md');
+    const skillManifest = await stat(skillManifestPath).catch(() => null);
+    if (!skillManifest?.isFile()) {
+      throw new Error(`Installed skill is missing SKILL.md at ${skillManifestPath}`);
+    }
 
     try {
       await bridge.call('skills/list', { forceReload: true });
