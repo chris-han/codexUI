@@ -1811,3 +1811,24 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - No cleanup required.
+
+### Feature: React sidebar toggle uses Lucide panel icons
+
+#### Prerequisites
+- `codex-ui-react` is running locally on `http://127.0.0.1:4173`.
+- The sidebar toggle control is visible in the sidebar header or compact content header.
+
+#### Steps
+1. Open the app with the sidebar expanded.
+2. Inspect the leftmost toolbar button and confirm it uses Lucide `PanelLeftClose`.
+3. Click the button to collapse the sidebar.
+4. Inspect the same toolbar position and confirm it now uses Lucide `PanelLeftOpen`.
+5. Click again to expand the sidebar.
+
+#### Expected Results
+- Expanded state shows `PanelLeftClose`.
+- Collapsed state shows `PanelLeftOpen`.
+- Toggling behavior remains unchanged while the icon set switches to Lucide.
+
+#### Rollback/Cleanup
+- No cleanup required.

@@ -1,9 +1,5 @@
 import type { ReactNode } from 'react';
-import { SquarePen } from 'lucide-react';
-import {
-  IconTablerLayoutSidebar,
-  IconTablerLayoutSidebarFilled,
-} from '../icons';
+import { PanelLeftClose, PanelLeftOpen, SquarePen } from 'lucide-react';
 
 interface SidebarThreadControlsProps {
   isSidebarCollapsed: boolean;
@@ -32,9 +28,9 @@ function SidebarThreadControls({
         title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {isSidebarCollapsed ? (
-          <IconTablerLayoutSidebarFilled className="h-4 w-4" />
+          <PanelLeftOpen className="h-4 w-4" strokeWidth={1.8} />
         ) : (
-          <IconTablerLayoutSidebar className="h-4 w-4" />
+          <PanelLeftClose className="h-4 w-4" strokeWidth={1.8} />
         )}
       </button>
       {children}
