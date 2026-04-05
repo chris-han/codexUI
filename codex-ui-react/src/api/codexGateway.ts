@@ -175,6 +175,21 @@ function getErrorMessageFromPayload(payload: unknown, fallback: string): string 
   return fallback;
 }
 
+async function readApiPayload(response: Response): Promise<unknown> {
+  const rawText = await response.text();
+  if (!rawText.trim()) return null;
+
+  try {
+    return JSON.parse(rawText) as unknown;
+  } catch {
+    const trimmed = rawText.trim();
+    if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
+      throw new Error('API route returned HTML instead of JSON. Restart the React standalone server and try again.');
+    }
+    throw new Error(`API returned invalid JSON: ${trimmed.slice(0, 200)}`);
+  }
+}
+
 function isThreadNotLoadedError(error: unknown): boolean {
   return getErrorMessage(error).includes('thread not loaded');
 }
@@ -719,7 +734,7 @@ export async function replyToServerRequest(
 // Workspace roots
 export async function getWorkspaceRootsState(): Promise<WorkspaceRootsState> {
   const response = await fetch('/codex-api/workspace-roots-state');
-  const payload = (await response.json()) as unknown;
+  const payload = await readApiPayload(response);
   if (!response.ok) {
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to load workspace roots state'));
   }
@@ -751,14 +766,14 @@ export async function setWorkspaceRootsState(
     body: JSON.stringify(state),
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as unknown;
+    const payload = await readApiPayload(response).catch((error) => error);
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to save workspace roots state'));
   }
 }
 
 export async function getHomeDirectory(): Promise<string> {
   const response = await fetch('/codex-api/home-directory');
-  const payload = (await response.json()) as unknown;
+  const payload = await readApiPayload(response);
   if (!response.ok) {
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to load home directory'));
   }
@@ -786,7 +801,7 @@ export async function openProjectRoot(
       label: options?.label ?? '',
     }),
   });
-  const payload = (await response.json()) as unknown;
+  const payload = await readApiPayload(response);
   if (!response.ok) {
     throw new Error(getErrorMessageFromPayload(payload, 'Failed to open project root'));
   }
