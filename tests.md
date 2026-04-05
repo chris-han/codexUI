@@ -314,6 +314,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: React replaces browser dialogs with app modals
+
+#### Prerequisites
+- React app is running from this repository.
+- At least one thread and one project group exist in the sidebar.
+- Home/new-thread screen is accessible.
+
+#### Steps
+1. In the sidebar project menu, choose `Rename` and confirm an in-app modal appears instead of a browser prompt.
+2. Save a new project name and confirm the sidebar updates.
+3. Open the same project menu and choose `Delete`, then confirm an in-app confirmation modal appears instead of a browser confirm dialog.
+4. Cancel once, then reopen and confirm the hide action.
+5. In a thread row menu, choose `Rename thread` and confirm an in-app modal appears and saves the new title.
+6. In the same thread row menu, choose `Delete thread` and confirm an in-app confirmation modal appears.
+7. On the home/new-thread screen, open the folder picker and choose `Create new folder`.
+8. Confirm the create-folder flow opens an in-app modal with inline validation/error rendering instead of browser prompt/alert dialogs.
+
+#### Expected Results
+- No browser-native `prompt`, `confirm`, or `alert` dialogs appear in these flows.
+- Rename and delete/hide actions are handled by React-rendered modal dialogs.
+- The create-folder flow uses the same in-app modal pattern and shows errors inline inside the dialog.
+
+#### Rollback/Cleanup
+- Restore any renamed project/thread titles if needed.
+- Unhide or remove any temporary test data created during verification.
+
 ### Feature: Dark theme states for runtime mode toggle
 
 #### Prerequisites

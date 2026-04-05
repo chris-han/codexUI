@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen, Folder } from 'lucide-react';
 import type { UiProjectGroup, UiThread } from '../../types/codex';
+import { ConfirmDialog, TextInputDialog } from '../dialogs/Modal';
 import {
   IconTablerDots,
 } from '../icons';
@@ -73,6 +74,12 @@ function SidebarThreadTree({
   const [hiddenProjects, setHiddenProjects] = useState<Set<string>>(() => new Set(loadHiddenProjects()));
   const [openProjectMenu, setOpenProjectMenu] = useState<string | null>(null);
   const [openThreadMenu, setOpenThreadMenu] = useState<string | null>(null);
+  const [projectRenameTarget, setProjectRenameTarget] = useState<string | null>(null);
+  const [projectRenameDraft, setProjectRenameDraft] = useState('');
+  const [projectDeleteTarget, setProjectDeleteTarget] = useState<string | null>(null);
+  const [threadRenameTarget, setThreadRenameTarget] = useState<UiThread | null>(null);
+  const [threadRenameDraft, setThreadRenameDraft] = useState('');
+  const [threadDeleteTarget, setThreadDeleteTarget] = useState<UiThread | null>(null);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -106,44 +113,61 @@ function SidebarThreadTree({
   };
 
   const handleRenameProject = (projectName: string) => {
-    const nextName = window.prompt('Rename folder', getProjectLabel(projectName));
     setOpenProjectMenu(null);
-    if (nextName === null) return;
+    setProjectRenameTarget(projectName);
+    setProjectRenameDraft(getProjectLabel(projectName));
+  };
 
-    const normalized = nextName.trim();
+  const submitRenameProject = () => {
+    if (!projectRenameTarget) return;
+    const normalized = projectRenameDraft.trim();
     setProjectLabels((current) => {
       const next = { ...current };
-      if (!normalized || normalized === projectName) {
-        delete next[projectName];
+      if (!normalized || normalized === projectRenameTarget) {
+        delete next[projectRenameTarget];
       } else {
-        next[projectName] = normalized;
+        next[projectRenameTarget] = normalized;
       }
       saveProjectLabels(next);
       return next;
     });
+    setProjectRenameTarget(null);
+    setProjectRenameDraft('');
   };
 
   const handleDeleteProject = (projectName: string) => {
-    const confirmed = window.confirm(`Hide folder "${getProjectLabel(projectName)}" from the sidebar?`);
     setOpenProjectMenu(null);
-    if (!confirmed) return;
+    setProjectDeleteTarget(projectName);
+  };
 
+  const submitDeleteProject = () => {
+    if (!projectDeleteTarget) return;
     setHiddenProjects((current) => {
       const next = new Set(current);
-      next.add(projectName);
+      next.add(projectDeleteTarget);
       saveHiddenProjects(Array.from(next));
       return next;
     });
+    setProjectDeleteTarget(null);
   };
 
   const handleRenameThread = (thread: UiThread) => {
-    const nextTitle = window.prompt('Rename thread', thread.title);
     setOpenThreadMenu(null);
-    if (nextTitle === null) return;
+    setThreadRenameTarget(thread);
+    setThreadRenameDraft(thread.title);
+  };
 
-    const normalized = nextTitle.trim();
-    if (!normalized || normalized === thread.title) return;
-    onRenameThread(thread.id, normalized);
+  const submitRenameThread = () => {
+    if (!threadRenameTarget) return;
+    const normalized = threadRenameDraft.trim();
+    if (!normalized || normalized === threadRenameTarget.title) {
+      setThreadRenameTarget(null);
+      setThreadRenameDraft('');
+      return;
+    }
+    onRenameThread(threadRenameTarget.id, normalized);
+    setThreadRenameTarget(null);
+    setThreadRenameDraft('');
   };
 
   const handleForkThread = (threadId: string) => {
@@ -152,10 +176,14 @@ function SidebarThreadTree({
   };
 
   const handleArchiveThread = (thread: UiThread) => {
-    const confirmed = window.confirm(`Archive thread "${thread.title}"?`);
     setOpenThreadMenu(null);
-    if (!confirmed) return;
-    onArchiveThread(thread.id);
+    setThreadDeleteTarget(thread);
+  };
+
+  const submitArchiveThread = () => {
+    if (!threadDeleteTarget) return;
+    onArchiveThread(threadDeleteTarget.id);
+    setThreadDeleteTarget(null);
   };
 
   const filterThreads = (threads: UiThread[]): UiThread[] => {
@@ -319,6 +347,50 @@ function SidebarThreadTree({
           </div>
         );
       })}
+      <TextInputDialog
+        isOpen={projectRenameTarget !== null}
+        title="Rename folder"
+        label="Folder name"
+        value={projectRenameDraft}
+        onChange={setProjectRenameDraft}
+        onSubmit={submitRenameProject}
+        onClose={() => {
+          setProjectRenameTarget(null);
+          setProjectRenameDraft('');
+        }}
+        confirmLabel="Save"
+      />
+      <ConfirmDialog
+        isOpen={projectDeleteTarget !== null}
+        title="Hide folder"
+        message={`Hide folder "${projectDeleteTarget ? getProjectLabel(projectDeleteTarget) : ''}" from the sidebar?`}
+        confirmLabel="Hide"
+        onConfirm={submitDeleteProject}
+        onClose={() => setProjectDeleteTarget(null)}
+        tone="danger"
+      />
+      <TextInputDialog
+        isOpen={threadRenameTarget !== null}
+        title="Rename thread"
+        label="Thread title"
+        value={threadRenameDraft}
+        onChange={setThreadRenameDraft}
+        onSubmit={submitRenameThread}
+        onClose={() => {
+          setThreadRenameTarget(null);
+          setThreadRenameDraft('');
+        }}
+        confirmLabel="Save"
+      />
+      <ConfirmDialog
+        isOpen={threadDeleteTarget !== null}
+        title="Archive thread"
+        message={`Archive thread "${threadDeleteTarget?.title ?? ''}"?`}
+        confirmLabel="Archive"
+        onConfirm={submitArchiveThread}
+        onClose={() => setThreadDeleteTarget(null)}
+        tone="danger"
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useCodexStore } from '../../stores';
 import type { ThreadComposerSubmitPayload, UiProjectGroup } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
 import ContentHeader from './ContentHeader';
+import { TextInputDialog } from '../dialogs/Modal';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import { IconTablerChevronDown, IconTablerSearch } from '../icons';
 
@@ -82,6 +83,10 @@ function HomeScreen() {
   });
   const [homeDirectory, setHomeDirectory] = useState('');
   const [selectedCwd, setSelectedCwd] = useState('');
+  const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false);
+  const [createFolderDraft, setCreateFolderDraft] = useState('');
+  const [createFolderError, setCreateFolderError] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
 
   const projectOptions = useMemo(
@@ -144,10 +149,7 @@ function HomeScreen() {
   const selectedProject = projectOptions.find((option) => option.cwd === selectedCwd) || null;
 
   const handleCreateFolder = async () => {
-    const rawValue = window.prompt('New folder name or absolute path', '');
-    if (rawValue === null) return;
-
-    const trimmed = rawValue.trim();
+    const trimmed = createFolderDraft.trim();
     if (!trimmed) return;
 
     const nextPath = isAbsolutePath(trimmed)
@@ -156,6 +158,8 @@ function HomeScreen() {
     const nextLabel = getBaseName(nextPath.trim()) || trimmed;
 
     try {
+      setIsCreatingFolder(true);
+      setCreateFolderError('');
       const createdPath = await openProjectRoot(nextPath, {
         createIfMissing: true,
         label: nextLabel,
@@ -164,8 +168,12 @@ function HomeScreen() {
       setLocalWorkspaceRootsState(nextState);
       setSelectedCwd(createdPath);
       setIsProjectMenuOpen(false);
+      setIsCreateFolderDialogOpen(false);
+      setCreateFolderDraft('');
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to create folder');
+      setCreateFolderError(error instanceof Error ? error.message : 'Failed to create folder');
+    } finally {
+      setIsCreatingFolder(false);
     }
   };
 
@@ -258,7 +266,9 @@ function HomeScreen() {
                     <button
                       type="button"
                       onClick={() => {
-                        void handleCreateFolder();
+                        setCreateFolderError('');
+                        setCreateFolderDraft('');
+                        setIsCreateFolderDialogOpen(true);
                       }}
                       className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                     >
@@ -281,6 +291,40 @@ function HomeScreen() {
           </div>
         </div>
       </div>
+      <TextInputDialog
+        isOpen={isCreateFolderDialogOpen}
+        title="Create new folder"
+        label="Folder name or absolute path"
+        value={createFolderDraft}
+        onChange={(value) => {
+          setCreateFolderDraft(value);
+          if (createFolderError) {
+            setCreateFolderError('');
+          }
+        }}
+        onSubmit={() => {
+          void handleCreateFolder();
+        }}
+        onClose={() => {
+          if (isCreatingFolder) return;
+          setIsCreateFolderDialogOpen(false);
+          setCreateFolderDraft('');
+          setCreateFolderError('');
+        }}
+        confirmLabel="Create"
+        placeholder="my-project or /absolute/path"
+        helperText={
+          createFolderDraft.trim()
+            ? `Will be created at: ${
+                isAbsolutePath(createFolderDraft.trim())
+                  ? createFolderDraft.trim()
+                  : joinPath(homeDirectory || '/', createFolderDraft.trim())
+              }`
+            : undefined
+        }
+        error={createFolderError}
+        isSubmitting={isCreatingFolder}
+      />
     </div>
   );
 }
