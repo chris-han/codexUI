@@ -639,7 +639,7 @@ function ThreadConversation() {
               </div>
             </div>
             <div
-              className="border-t border-gray-200 bg-white p-4 overflow-hidden"
+              className="border-t border-gray-200 bg-white p-4"
               style={{ height: footerHeight }}
             >
               <div className="mx-auto w-full max-w-2xl h-full">

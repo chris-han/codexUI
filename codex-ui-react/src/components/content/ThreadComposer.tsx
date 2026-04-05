@@ -469,26 +469,26 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         ) : null}
       </div>
 
-      <div ref={controlsRef} className="mt-3 flex items-center gap-4 border-t border-gray-100 pt-3">
-        <div className="relative shrink-0">
+      <div ref={controlsRef} className="mt-3 flex items-center gap-4 border-t border-gray-100 pt-3 relative">
+        <div className="relative flex items-center shrink-0">
           <button
             type="button"
             onClick={() => {
               setOpenDropdown(null);
               setIsPlusMenuOpen((open) => !open);
             }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-6 w-6 items-end justify-center rounded-full bg-transparent text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 pb-[6px]"
             disabled={disabled || isInProgress}
             aria-label="More actions"
           >
-            <span className="relative block h-4 w-4">
-              <span className="absolute left-1/2 top-1/2 h-[1.5px] w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
-              <span className="absolute left-1/2 top-1/2 h-4 w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+            <span className="relative block h-3 w-3">
+              <span className="absolute left-1/2 top-1/2 h-[1px] w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
+              <span className="absolute left-1/2 top-1/2 h-3 w-[1px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
             </span>
           </button>
 
           {isPlusMenuOpen ? (
-            <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 text-gray-900 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 text-gray-900 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
               <div className="max-h-72 overflow-y-auto pr-1">
                 <button
                   type="button"
@@ -543,7 +543,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             </button>
             {openDropdown === 'model' ? (
-              <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+              <div className="fixed bottom-auto left-auto z-[100] min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]" style={{ top: 'auto', left: 'auto', transform: 'translateY(-100%)', marginTop: '-12px' }}>
                 <div className="max-h-72 overflow-y-auto pr-1">
                   {modelOptions.map((option) => (
                     <button
@@ -577,7 +577,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             </button>
             {openDropdown === 'skills' ? (
-              <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+              <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
                 <div className="max-h-72 overflow-y-auto pr-1">
                   {skillOptions.map((option) => (
                     <button
@@ -608,7 +608,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <IconTablerChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             </button>
             {openDropdown === 'reasoning' ? (
-              <div className="absolute bottom-[calc(100%+12px)] left-0 z-30 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+              <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
                 <div className="max-h-72 overflow-y-auto pr-1">
                   {reasoningOptions.map((option) => (
                     <button
