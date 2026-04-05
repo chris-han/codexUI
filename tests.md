@@ -245,6 +245,32 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Uninstall any test skill you installed during verification.
 
+### Feature: React Skills Hub installs large marketplace skills without Python helper
+
+#### Prerequisites
+- React app server is running from `codex-ui-react/`.
+- Network access to `https://api.github.com` and `https://raw.githubusercontent.com` is available.
+- The local skills directory `codex-ui-react/.codex/skills/` is writable.
+- The marketplace contains `axelhu/superpowers-brainstorming`.
+
+#### Steps
+1. Open the React `Skills Hub` screen.
+2. Search for `superpowers-brainstorming`.
+3. Open the `superpowers-brainstorming` skill detail modal from owner `axelhu`.
+4. Click `Install` and wait for the request to finish.
+5. Confirm the skill appears in the installed section.
+6. Verify `codex-ui-react/.codex/skills/superpowers-brainstorming/SKILL.md` exists on disk.
+7. Click `Uninstall` for the same skill and confirm the installed entry disappears.
+
+#### Expected Results
+- Install succeeds without requiring the external Python `skill-installer` helper.
+- The install completes by downloading only the selected skill directory, not the full marketplace repository.
+- If install fails mid-download, any previously installed copy is left intact until a full replacement is ready.
+- Uninstall still removes the local installed copy.
+
+#### Rollback/Cleanup
+- Remove `codex-ui-react/.codex/skills/superpowers-brainstorming/` if it remains after the test.
+
 ### Feature: Thinking block stays available after assistant content appears
 
 #### Prerequisites

@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
@@ -15,11 +15,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const CODEX_HOME = join(__dirname, '..', '.codex');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
-
-type CommandInvocation = {
-  command: string;
-  args: string[];
-};
 
 type ProviderModelsResponse = {
   data: string[];
@@ -484,6 +479,14 @@ type MetaJson = {
   latest?: { publishedAt?: number };
 };
 
+type GitHubContentEntry = {
+  name: string;
+  path: string;
+  type: 'dir' | 'file';
+  url: string;
+  downloadUrl: string | null;
+};
+
 const HUB_SKILLS_OWNER = 'openclaw';
 const HUB_SKILLS_REPO = 'skills';
 const TREE_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -527,72 +530,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
       }
     );
   });
-}
-
-async function runCommand(command: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<void> {
-  const timeoutMs = options.timeoutMs ?? 120_000;
-  await new Promise<void>((resolvePromise, reject) => {
-    const proc = spawn(command, args, {
-      cwd: options.cwd,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      proc.kill('SIGKILL');
-      reject(new Error(`Command timed out after ${timeoutMs}ms (${command} ${args.join(' ')})`));
-    }, timeoutMs);
-
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    proc.on('error', (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      reject(error);
-    });
-    proc.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (code === 0) {
-        resolvePromise();
-        return;
-      }
-      const details = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n');
-      reject(new Error(details || `Command failed (${command} ${args.join(' ')})`));
-    });
-  });
-}
-
-function resolvePythonCommand(): CommandInvocation | null {
-  const candidates: CommandInvocation[] = [
-    { command: 'python3', args: [] },
-    { command: 'python', args: [] },
-  ];
-  for (const candidate of candidates) {
-    if (canRunCommand(candidate.command, [...candidate.args, '--version'])) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function resolveSkillInstallerScriptPath(): string | null {
-  const candidates = [
-    join(homedir(), '.codex', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
-    join(CODEX_HOME, 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
-    join(homedir(), '.cursor', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
 }
 
 async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, InstalledSkillInfo>> {
@@ -648,6 +585,110 @@ async function ghFetch(url: string): Promise<Response> {
       'User-Agent': 'codex-ui-react',
     },
   });
+}
+
+function isSafeGitHubPathSegment(value: string): boolean {
+  return value.length > 0 && value !== '.' && value !== '..' && !value.includes('/') && !value.includes('\\');
+}
+
+function encodeGitHubPath(path: string): string {
+  return path
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
+async function fetchGitHubDirectoryEntries(path: string): Promise<GitHubContentEntry[]> {
+  const response = await ghFetch(
+    `https://api.github.com/repos/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/contents/${encodeGitHubPath(path)}?ref=main`
+  );
+  if (!response.ok) {
+    throw new Error(`GitHub contents API returned ${response.status} for ${path}`);
+  }
+
+  const payload = await response.json() as unknown;
+  if (!Array.isArray(payload)) {
+    throw new Error(`Expected a directory listing for ${path}`);
+  }
+
+  const entries: GitHubContentEntry[] = [];
+  for (const item of payload) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const name = readNonEmptyString(record.name);
+    const entryPath = readNonEmptyString(record.path);
+    const type = readNonEmptyString(record.type);
+    const url = readNonEmptyString(record.url);
+    const downloadUrl = readNonEmptyString(record.download_url);
+    if (!name || !entryPath || !type || !url) continue;
+    if (!isSafeGitHubPathSegment(name)) {
+      throw new Error(`Invalid skill entry name: ${name}`);
+    }
+    if (type !== 'dir' && type !== 'file') continue;
+    entries.push({
+      name,
+      path: entryPath,
+      type,
+      url,
+      downloadUrl,
+    });
+  }
+  return entries;
+}
+
+async function downloadGitHubFile(url: string, destPath: string): Promise<void> {
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(SKILLS_HUB_GITHUB_TIMEOUT_MS),
+    headers: {
+      'User-Agent': 'codex-ui-react',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub file download returned ${response.status}`);
+  }
+  const body = Buffer.from(await response.arrayBuffer());
+  await writeFile(destPath, body);
+}
+
+async function downloadSkillDirectory(path: string, destDir: string): Promise<void> {
+  await mkdir(destDir, { recursive: true });
+  const entries = await fetchGitHubDirectoryEntries(path);
+  for (const entry of entries) {
+    const destPath = join(destDir, entry.name);
+    if (entry.type === 'dir') {
+      await downloadSkillDirectory(entry.path, destPath);
+      continue;
+    }
+    if (!entry.downloadUrl) {
+      throw new Error(`Missing download URL for ${entry.path}`);
+    }
+    await downloadGitHubFile(entry.downloadUrl, destPath);
+  }
+}
+
+async function installMarketplaceSkill(owner: string, name: string, installDir: string): Promise<string> {
+  const sourcePath = `skills/${owner}/${name}`;
+  const stageDir = await mkdtemp(join(installDir, `.${name}-install-`));
+  const targetDir = join(installDir, name);
+
+  try {
+    await downloadSkillDirectory(sourcePath, stageDir);
+    const skillManifestPath = join(stageDir, 'SKILL.md');
+    const skillManifest = await stat(skillManifestPath).catch(() => null);
+    if (!skillManifest?.isFile()) {
+      throw new Error(`Installed skill is missing SKILL.md at ${skillManifestPath}`);
+    }
+
+    if (existsSync(targetDir)) {
+      await rm(targetDir, { recursive: true, force: true });
+    }
+    await rename(stageDir, targetDir);
+    return targetDir;
+  } catch (error) {
+    await rm(stageDir, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
@@ -1417,37 +1458,14 @@ app.post('/codex-api/skills-hub/install', async (req, res) => {
       res.status(400).json({ error: 'Missing owner or name' });
       return;
     }
-
-    const installerScript = resolveSkillInstallerScriptPath();
-    if (!installerScript) {
-      throw new Error('Skill installer script not found');
-    }
-    const python = resolvePythonCommand();
-    if (!python) {
-      throw new Error('Python 3 is required to install skills');
+    if (!isSafeGitHubPathSegment(owner) || !isSafeGitHubPathSegment(name)) {
+      res.status(400).json({ error: 'Invalid owner or name' });
+      return;
     }
 
     const installDir = getSkillsInstallDir();
     await mkdir(installDir, { recursive: true });
-    const skillDir = join(installDir, name);
-    if (existsSync(skillDir)) {
-      await rm(skillDir, { recursive: true, force: true });
-    }
-
-    await runCommand(python.command, [
-      ...python.args,
-      installerScript,
-      '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
-      '--path', `skills/${owner}/${name}`,
-      '--dest', installDir,
-      '--method', 'auto',
-    ], { timeoutMs: 90_000 });
-
-    const skillManifestPath = join(skillDir, 'SKILL.md');
-    const skillManifest = await stat(skillManifestPath).catch(() => null);
-    if (!skillManifest?.isFile()) {
-      throw new Error(`Installed skill is missing SKILL.md at ${skillManifestPath}`);
-    }
+    const skillDir = await installMarketplaceSkill(owner, name, installDir);
 
     try {
       await bridge.call('skills/list', { forceReload: true });
