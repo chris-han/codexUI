@@ -23,6 +23,7 @@ import type {
 } from '../types/codex';
 import * as api from '../api/codexGateway';
 import { subscribeRpcNotifications } from '../api/codexRpcClient';
+import type { WorkspaceRootsState } from '../api/codexGateway';
 
 // Storage keys (matching original)
 // const READ_STATE_STORAGE_KEY = 'codex-web-local.thread-read-state.v1';
@@ -95,6 +96,8 @@ function createThreadShell(params: {
 export interface CodexState {
   // Project/Thread state
   projectGroups: UiProjectGroup[];
+  workspaceRootsState: WorkspaceRootsState;
+  homeDirectory: string;
   threadShellsById: Map<string, UiThread>;
   selectedThreadId: string | null;
   isLoadingThreads: boolean;
@@ -148,6 +151,8 @@ export interface CodexState {
 export interface CodexActions {
   // Thread actions
   loadThreads: () => Promise<void>;
+  loadWorkspaceRootsState: () => Promise<void>;
+  updateWorkspaceRootsState: (nextState: WorkspaceRootsState) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
   loadMessages: (threadId: string) => Promise<void>;
   startNewThread: (
@@ -206,6 +211,8 @@ export interface CodexActions {
 
 const getInitialState = (): CodexState => ({
   projectGroups: [],
+  workspaceRootsState: { order: [], labels: {}, active: [] },
+  homeDirectory: '',
   threadShellsById: new Map(),
   selectedThreadId: loadFromStorage<string | null>(SELECTED_THREAD_STORAGE_KEY, null),
   isLoadingThreads: false,
@@ -422,6 +429,41 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           set((state) => {
             state.isLoadingThreads = false;
           });
+        }
+      },
+
+      loadWorkspaceRootsState: async () => {
+        try {
+          const [workspaceRootsState, homeDirectory] = await Promise.all([
+            api.getWorkspaceRootsState(),
+            api.getHomeDirectory(),
+          ]);
+          set((state) => {
+            state.workspaceRootsState = workspaceRootsState;
+            state.homeDirectory = homeDirectory;
+          });
+        } catch (error) {
+          console.error('Failed to load workspace roots state:', error);
+          set((state) => {
+            state.workspaceRootsState = { order: [], labels: {}, active: [] };
+            state.homeDirectory = '';
+            state.error = 'Failed to load project folders';
+          });
+        }
+      },
+
+      updateWorkspaceRootsState: async (nextState) => {
+        try {
+          await api.setWorkspaceRootsState(nextState);
+          set((state) => {
+            state.workspaceRootsState = nextState;
+          });
+        } catch (error) {
+          console.error('Failed to update workspace roots state:', error);
+          set((state) => {
+            state.error = 'Failed to update project folders';
+          });
+          throw error;
         }
       },
 
@@ -894,7 +936,10 @@ export const useCodexStore = create<CodexState & CodexActions>()(
       },
 
       syncAll: async () => {
-        await get().loadThreads();
+        await Promise.all([
+          get().loadThreads(),
+          get().loadWorkspaceRootsState(),
+        ]);
         const { selectedThreadId } = get();
         if (selectedThreadId) {
           await get().loadMessages(selectedThreadId);

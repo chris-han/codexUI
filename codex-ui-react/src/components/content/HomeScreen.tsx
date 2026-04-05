@@ -1,20 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SquareLibrary } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getHomeDirectory, getWorkspaceRootsState, openProjectRoot, setWorkspaceRootsState, type WorkspaceRootsState } from '../../api/codexGateway';
+import { openProjectRoot } from '../../api/codexGateway';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
-import type { ThreadComposerSubmitPayload, UiProjectGroup } from '../../types/codex';
+import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ThreadComposer from './ThreadComposer';
 import ContentHeader from './ContentHeader';
 import { TextInputDialog } from '../dialogs/Modal';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import { IconTablerChevronDown, IconTablerSearch } from '../icons';
-
-type ProjectOption = {
-  label: string;
-  cwd: string;
-};
+import { buildProjectEntries } from '../../utils/projectEntries';
 
 function normalizePathSlashes(value: string): string {
   return value.replace(/\\/g, '/');
@@ -37,51 +33,19 @@ function joinPath(basePath: string, child: string): string {
   return `${normalizedBase}/${normalizedChild}`;
 }
 
-function deriveProjectLabel(cwd: string, labels: Record<string, string>): string {
-  const customLabel = labels[cwd]?.trim();
-  if (customLabel) return customLabel;
-  const base = getBaseName(cwd);
-  return base || cwd.trim() || 'Project';
-}
-
-function buildProjectOptions(
-  rootsState: WorkspaceRootsState,
-  projectGroups: UiProjectGroup[]
-): ProjectOption[] {
-  const optionByCwd = new Map<string, ProjectOption>();
-
-  for (const cwd of rootsState.order) {
-    const normalizedCwd = cwd.trim();
-    if (!normalizedCwd) continue;
-    optionByCwd.set(normalizedCwd, {
-      cwd: normalizedCwd,
-      label: deriveProjectLabel(normalizedCwd, rootsState.labels),
-    });
-  }
-
-  for (const group of projectGroups) {
-    const cwd = group.threads[0]?.cwd?.trim() ?? '';
-    if (!cwd || optionByCwd.has(cwd)) continue;
-    optionByCwd.set(cwd, {
-      cwd,
-      label: group.projectName || deriveProjectLabel(cwd, rootsState.labels),
-    });
-  }
-
-  return Array.from(optionByCwd.values());
-}
-
 function HomeScreen() {
   const navigate = useNavigate();
   const { isSidebarCollapsed, showHeaderControls, toggleSidebar, openSidebarSearch } = useSidebarChrome();
-  const { projectGroups, startNewThread, isSendingMessage } = useCodexStore();
+  const {
+    projectGroups,
+    workspaceRootsState,
+    homeDirectory,
+    startNewThread,
+    isSendingMessage,
+    loadWorkspaceRootsState,
+    updateWorkspaceRootsState,
+  } = useCodexStore();
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
-  const [workspaceRootsState, setLocalWorkspaceRootsState] = useState<WorkspaceRootsState>({
-    order: [],
-    labels: {},
-    active: [],
-  });
-  const [homeDirectory, setHomeDirectory] = useState('');
   const [selectedCwd, setSelectedCwd] = useState('');
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false);
   const [createFolderDraft, setCreateFolderDraft] = useState('');
@@ -90,35 +54,11 @@ function HomeScreen() {
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
 
   const projectOptions = useMemo(
-    () => buildProjectOptions(workspaceRootsState, projectGroups),
+    () => buildProjectEntries(workspaceRootsState, projectGroups)
+      .filter((entry) => entry.cwd.trim().length > 0)
+      .map((entry) => ({ cwd: entry.cwd, label: entry.label })),
     [projectGroups, workspaceRootsState]
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadRoots = async () => {
-      try {
-        const [rootsState, nextHomeDirectory] = await Promise.all([
-          getWorkspaceRootsState(),
-          getHomeDirectory(),
-        ]);
-        if (cancelled) return;
-        setLocalWorkspaceRootsState(rootsState);
-        setHomeDirectory(nextHomeDirectory);
-      } catch {
-        if (cancelled) return;
-        setLocalWorkspaceRootsState({ order: [], labels: {}, active: [] });
-        setHomeDirectory('');
-      }
-    };
-
-    void loadRoots();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!selectedCwd && projectOptions.length > 0) {
@@ -164,8 +104,7 @@ function HomeScreen() {
         createIfMissing: true,
         label: nextLabel,
       });
-      const nextState = await getWorkspaceRootsState();
-      setLocalWorkspaceRootsState(nextState);
+      await loadWorkspaceRootsState();
       setSelectedCwd(createdPath);
       setIsProjectMenuOpen(false);
       setIsCreateFolderDialogOpen(false);
@@ -181,15 +120,14 @@ function HomeScreen() {
     if (!selectedCwd) return;
 
     if (!workspaceRootsState.order.includes(selectedCwd)) {
-      const nextState: WorkspaceRootsState = {
+      const nextState = {
         order: [selectedCwd, ...workspaceRootsState.order.filter((item) => item !== selectedCwd)],
         labels: workspaceRootsState.labels,
         active: [selectedCwd, ...workspaceRootsState.active.filter((item) => item !== selectedCwd)],
       };
 
       try {
-        await setWorkspaceRootsState(nextState);
-        setLocalWorkspaceRootsState(nextState);
+        await updateWorkspaceRootsState(nextState);
       } catch {
         // Keep new-thread flow usable even if roots-state persistence fails.
       }

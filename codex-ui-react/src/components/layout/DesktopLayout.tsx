@@ -6,6 +6,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import SidebarThreadTree from '../sidebar/SidebarThreadTree';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import { IconTablerSearch, IconTablerX } from '../icons';
+import { buildProjectEntries } from '../../utils/projectEntries';
 
 function DesktopLayout() {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ function DesktopLayout() {
   const isMobile = useIsMobile();
   const {
     projectGroups,
+    workspaceRootsState,
     selectedThreadId,
     isLoadingThreads,
     isSidebarCollapsed,
@@ -27,9 +29,11 @@ function DesktopLayout() {
     renameThreadById,
     archiveThreadById,
     forkThreadById,
+    updateWorkspaceRootsState,
   } = useCodexStore();
 
   const isSkillsRoute = location.pathname === '/skills';
+  const projectEntries = buildProjectEntries(workspaceRootsState, projectGroups);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
@@ -78,6 +82,34 @@ function DesktopLayout() {
       setSidebarCollapsed(true);
     }
     navigate(`/thread/${nextThreadId}`);
+  };
+
+  const handleRenameProject = async (cwd: string, nextLabel: string) => {
+    const normalizedCwd = cwd.trim();
+    if (!normalizedCwd) return;
+    const normalizedLabel = nextLabel.trim();
+    const nextState = {
+      ...workspaceRootsState,
+      labels: { ...workspaceRootsState.labels },
+    };
+    if (!normalizedLabel) {
+      delete nextState.labels[normalizedCwd];
+    } else {
+      nextState.labels[normalizedCwd] = normalizedLabel;
+    }
+    await updateWorkspaceRootsState(nextState);
+  };
+
+  const handleHideProject = async (cwd: string) => {
+    const normalizedCwd = cwd.trim();
+    if (!normalizedCwd) return;
+    const nextLabels = { ...workspaceRootsState.labels };
+    delete nextLabels[normalizedCwd];
+    await updateWorkspaceRootsState({
+      order: workspaceRootsState.order.filter((item) => item !== normalizedCwd),
+      active: workspaceRootsState.active.filter((item) => item !== normalizedCwd),
+      labels: nextLabels,
+    });
   };
 
   const handleNewThread = () => {
@@ -146,11 +178,13 @@ function DesktopLayout() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SidebarThreadTree
-          groups={projectGroups}
+          projectEntries={projectEntries}
           selectedThreadId={selectedThreadId}
           isLoading={isLoadingThreads}
           searchQuery={sidebarSearchQuery}
           onSelectThread={handleSelectThread}
+          onRenameProject={handleRenameProject}
+          onHideProject={handleHideProject}
           onRenameThread={handleRenameThread}
           onArchiveThread={handleArchiveThread}
           onForkThread={handleForkThread}

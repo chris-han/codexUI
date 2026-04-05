@@ -1,85 +1,58 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen, Folder } from 'lucide-react';
-import type { UiProjectGroup, UiThread } from '../../types/codex';
+import type { UiThread } from '../../types/codex';
 import { ConfirmDialog, TextInputDialog } from '../dialogs/Modal';
+import type { ProjectEntry } from '../../utils/projectEntries';
 import {
   IconTablerDots,
 } from '../icons';
 
-const PROJECT_LABELS_STORAGE_KEY = 'codex-ui-react.project-labels.v1';
-const HIDDEN_PROJECTS_STORAGE_KEY = 'codex-ui-react.hidden-projects.v1';
-
-function loadProjectLabels(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(PROJECT_LABELS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-    );
-  } catch {
-    return {};
-  }
-}
-
-function saveProjectLabels(labels: Record<string, string>): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PROJECT_LABELS_STORAGE_KEY, JSON.stringify(labels));
-}
-
-function loadHiddenProjects(): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(HIDDEN_PROJECTS_STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveHiddenProjects(projects: string[]): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(HIDDEN_PROJECTS_STORAGE_KEY, JSON.stringify(projects));
-}
-
 interface SidebarThreadTreeProps {
-  groups: UiProjectGroup[];
+  projectEntries: ProjectEntry[];
   selectedThreadId: string | null;
   isLoading: boolean;
   searchQuery: string;
   onSelectThread: (threadId: string) => void;
+  onRenameProject: (cwd: string, nextLabel: string) => void;
+  onHideProject: (cwd: string) => void;
   onRenameThread: (threadId: string, nextTitle: string) => void;
   onForkThread: (threadId: string) => void;
   onArchiveThread: (threadId: string) => void;
 }
 
 function SidebarThreadTree({
-  groups,
+  projectEntries,
   selectedThreadId,
   isLoading,
   searchQuery,
   onSelectThread,
+  onRenameProject,
+  onHideProject,
   onRenameThread,
   onForkThread,
   onArchiveThread,
 }: SidebarThreadTreeProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    groups.forEach((g) => initial.add(g.projectName));
+    projectEntries.forEach((entry) => initial.add(entry.key));
     return initial;
   });
-  const [projectLabels, setProjectLabels] = useState<Record<string, string>>(() => loadProjectLabels());
-  const [hiddenProjects, setHiddenProjects] = useState<Set<string>>(() => new Set(loadHiddenProjects()));
   const [openProjectMenu, setOpenProjectMenu] = useState<string | null>(null);
   const [openThreadMenu, setOpenThreadMenu] = useState<string | null>(null);
-  const [projectRenameTarget, setProjectRenameTarget] = useState<string | null>(null);
+  const [projectRenameTarget, setProjectRenameTarget] = useState<ProjectEntry | null>(null);
   const [projectRenameDraft, setProjectRenameDraft] = useState('');
-  const [projectDeleteTarget, setProjectDeleteTarget] = useState<string | null>(null);
+  const [projectHideTarget, setProjectHideTarget] = useState<ProjectEntry | null>(null);
   const [threadRenameTarget, setThreadRenameTarget] = useState<UiThread | null>(null);
   const [threadRenameDraft, setThreadRenameDraft] = useState('');
   const [threadDeleteTarget, setThreadDeleteTarget] = useState<UiThread | null>(null);
+
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      projectEntries.forEach((entry) => next.add(entry.key));
+      return next;
+    });
+  }, [projectEntries]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -95,60 +68,40 @@ function SidebarThreadTree({
     return () => window.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
-  const toggleGroup = (projectName: string) => {
+  const toggleGroup = (projectKey: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(projectName)) {
-        next.delete(projectName);
+      if (next.has(projectKey)) {
+        next.delete(projectKey);
       } else {
-        next.add(projectName);
+        next.add(projectKey);
       }
       return next;
     });
   };
 
-  const getProjectLabel = (projectName: string) => {
-    const custom = projectLabels[projectName]?.trim();
-    return custom || projectName;
-  };
-
-  const handleRenameProject = (projectName: string) => {
+  const handleRenameProject = (entry: ProjectEntry) => {
     setOpenProjectMenu(null);
-    setProjectRenameTarget(projectName);
-    setProjectRenameDraft(getProjectLabel(projectName));
+    setProjectRenameTarget(entry);
+    setProjectRenameDraft(entry.label);
   };
 
   const submitRenameProject = () => {
     if (!projectRenameTarget) return;
-    const normalized = projectRenameDraft.trim();
-    setProjectLabels((current) => {
-      const next = { ...current };
-      if (!normalized || normalized === projectRenameTarget) {
-        delete next[projectRenameTarget];
-      } else {
-        next[projectRenameTarget] = normalized;
-      }
-      saveProjectLabels(next);
-      return next;
-    });
+    onRenameProject(projectRenameTarget.cwd, projectRenameDraft);
     setProjectRenameTarget(null);
     setProjectRenameDraft('');
   };
 
-  const handleDeleteProject = (projectName: string) => {
+  const handleHideProject = (entry: ProjectEntry) => {
     setOpenProjectMenu(null);
-    setProjectDeleteTarget(projectName);
+    setProjectHideTarget(entry);
   };
 
-  const submitDeleteProject = () => {
-    if (!projectDeleteTarget) return;
-    setHiddenProjects((current) => {
-      const next = new Set(current);
-      next.add(projectDeleteTarget);
-      saveHiddenProjects(Array.from(next));
-      return next;
-    });
-    setProjectDeleteTarget(null);
+  const submitHideProject = () => {
+    if (!projectHideTarget) return;
+    onHideProject(projectHideTarget.cwd);
+    setProjectHideTarget(null);
   };
 
   const handleRenameThread = (thread: UiThread) => {
@@ -204,7 +157,7 @@ function SidebarThreadTree({
     );
   }
 
-  if (groups.length === 0) {
+  if (projectEntries.length === 0) {
     return (
       <div className="p-4 text-center text-gray-400 text-sm">
         No threads yet.
@@ -216,20 +169,19 @@ function SidebarThreadTree({
 
   return (
     <div className="space-y-1">
-      {groups.map((group) => {
-        if (hiddenProjects.has(group.projectName)) return null;
+      {projectEntries.map((entry) => {
+        const filteredThreads = filterThreads(entry.threads);
+        const shouldHideForSearch = searchQuery.trim() && filteredThreads.length === 0 && entry.threads.length > 0;
+        if (shouldHideForSearch) return null;
 
-        const filteredThreads = filterThreads(group.threads);
-        if (searchQuery && filteredThreads.length === 0) return null;
-
-        const isExpanded = expandedGroups.has(group.projectName);
-        const projectLabel = getProjectLabel(group.projectName);
+        const isExpanded = expandedGroups.has(entry.key);
+        const projectLabel = entry.label;
 
         return (
-          <div key={group.projectName} className="px-1">
+          <div key={entry.key} className="px-1">
             <div data-menu-root="true" className="group relative flex items-center gap-1 rounded-md pr-1 hover:bg-gray-100">
               <button
-                onClick={() => toggleGroup(group.projectName)}
+                onClick={() => toggleGroup(entry.key)}
                 className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-sm font-medium text-gray-700 transition-colors"
                 title={projectLabel}
               >
@@ -246,34 +198,34 @@ function SidebarThreadTree({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  setOpenProjectMenu((current) => (current === group.projectName ? null : group.projectName));
+                  setOpenProjectMenu((current) => (current === entry.key ? null : entry.key));
                 }}
                 className={`flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-700 ${
-                  openProjectMenu === group.projectName ? 'bg-white text-gray-700 shadow-sm' : 'opacity-0 group-hover:opacity-100'
+                  openProjectMenu === entry.key ? 'bg-white text-gray-700 shadow-sm' : 'opacity-0 group-hover:opacity-100'
                 }`}
                 aria-label={`Open folder menu for ${projectLabel}`}
                 title="Folder actions"
               >
                 <IconTablerDots className="h-4 w-4" />
               </button>
-              {openProjectMenu === group.projectName ? (
+              {openProjectMenu === entry.key ? (
                 <div
                   className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[140px] overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-lg"
                   onClick={(event) => event.stopPropagation()}
                 >
                   <button
                     type="button"
-                    onClick={() => handleRenameProject(group.projectName)}
+                    onClick={() => handleRenameProject(entry)}
                     className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
                   >
                     Rename
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDeleteProject(group.projectName)}
+                    onClick={() => handleHideProject(entry)}
                     className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
                   >
-                    Delete
+                    Hide
                   </button>
                 </div>
               ) : null}
@@ -281,6 +233,11 @@ function SidebarThreadTree({
 
             {isExpanded && (
               <div className="ml-6 space-y-0.5 mt-1">
+                {filteredThreads.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-gray-400">
+                    No threads
+                  </div>
+                ) : null}
                 {filteredThreads.map((thread) => (
                   <div key={thread.id} data-menu-root="true" className="group/thread relative flex items-center gap-1 rounded-md pr-1 hover:bg-gray-100">
                     <button
@@ -361,12 +318,12 @@ function SidebarThreadTree({
         confirmLabel="Save"
       />
       <ConfirmDialog
-        isOpen={projectDeleteTarget !== null}
+        isOpen={projectHideTarget !== null}
         title="Hide folder"
-        message={`Hide folder "${projectDeleteTarget ? getProjectLabel(projectDeleteTarget) : ''}" from the sidebar?`}
+        message={`Hide folder "${projectHideTarget?.label ?? ''}" from the sidebar and new-thread picker?`}
         confirmLabel="Hide"
-        onConfirm={submitDeleteProject}
-        onClose={() => setProjectDeleteTarget(null)}
+        onConfirm={submitHideProject}
+        onClose={() => setProjectHideTarget(null)}
         tone="danger"
       />
       <TextInputDialog

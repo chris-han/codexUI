@@ -261,8 +261,36 @@ This file tracks manual regression and feature verification steps.
 - Deleting archives the selected thread after confirmation.
 
 #### Rollback/Cleanup
+- Archive any test fork/thread created during verification if it is no longer needed.
 - Rename the test thread back to its previous title if needed.
 - Delete any temporary fork thread created during the test if it should not be kept.
+
+### Feature: React sidebar folders stay synced with new-thread folder picker
+
+#### Prerequisites
+- React app is running from this repository.
+- At least one existing folder/thread group is visible in the React sidebar.
+- Home/new-thread screen is accessible.
+
+#### Steps
+1. Open the home/new-thread screen and open the project folder dropdown.
+2. Compare the dropdown folder list against the sidebar folder list.
+3. In the sidebar, rename a folder from the `...` menu.
+4. Return to the home/new-thread screen and reopen the dropdown.
+5. In the dropdown, create a new folder and wait for the modal to close.
+6. Verify the new folder appears in both the dropdown and the sidebar.
+7. In the sidebar, hide a folder from the `...` menu.
+8. Return to the home/new-thread screen and reopen the dropdown.
+
+#### Expected Results
+- The sidebar and dropdown show the same folder set in the same order.
+- Folder renames from the sidebar are reflected in the dropdown label immediately.
+- Creating a folder from the dropdown adds it to the sidebar without a refresh.
+- Hiding a folder from the sidebar removes it from both the sidebar and the dropdown.
+
+#### Rollback/Cleanup
+- Restore any hidden folder by re-adding/opening it again if needed.
+- Delete any temporary test folder created only for verification if it should not remain.
 
 ### Feature: React new-thread folder picker stays in sync and can create a folder
 

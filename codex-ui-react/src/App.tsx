@@ -12,6 +12,7 @@ function App() {
   const store = useCodexStore();
   const {
     loadThreads,
+    loadWorkspaceRootsState,
     loadSkills,
     initializeModelConfig,
     handleNotification,
@@ -30,9 +31,10 @@ function App() {
   // Initial load
   useEffect(() => {
     loadThreads();
+    loadWorkspaceRootsState();
     loadSkills();
     initializeModelConfig();
-  }, [initializeModelConfig, loadThreads, loadSkills]);
+  }, [initializeModelConfig, loadThreads, loadSkills, loadWorkspaceRootsState]);
 
   // Subscribe to notifications
   useEffect(() => {
