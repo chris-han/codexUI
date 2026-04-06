@@ -1,5 +1,10 @@
 # AGENTS.md
 
+> **Scope:** These instructions are for the GitHub Copilot development agent working on this repository.
+> They do NOT contain file output path configuration for running Codex CLI agents.
+> File output paths and sandbox configuration are injected server-side via `developer_instructions`
+> (see `buildThreadDevInstructions` in `codex-ui-react/server/standalone.ts`).
+
 ## Build And Restart Runbook
 
 - Prefer `bun` over `npm` for package manager and script execution commands in this repository unless a task explicitly requires otherwise.

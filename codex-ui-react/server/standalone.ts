@@ -1289,8 +1289,10 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
 
   if (compact) {
     return [
-      '## Codex UI — Thread Fallback Settings',
+      '<!-- SERVER-INJECTED CONFIGURATION — not from AGENTS.md -->',
+      '## Codex UI Runtime Config (server-injected)',
       '',
+      'These settings are injected by the Codex UI server process, NOT from any AGENTS.md file on disk.',
       'If the current user message does not explicitly override a setting, use these Settings-page values as the fallback defaults for this thread:',
       `- Sandbox mode fallback: \`${sandboxModeSetting}\``,
       `- Codex home fallback: \`${CODEX_HOME}\``,
@@ -1307,8 +1309,11 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
   }
 
   const lines = [
-    '## Codex UI — Runtime Configuration',
+    '<!-- SERVER-INJECTED CONFIGURATION — not from AGENTS.md -->',
+    '## Codex UI Runtime Config (server-injected, not from AGENTS.md)',
     '',
+    'IMPORTANT: These values are injected by the Codex UI server process directly into developer_instructions.',
+    'They do NOT come from any AGENTS.md file. Do not attribute these rules to AGENTS.md.',
     'The following values are configured by the user in the Settings page.',
     'If the user does not explicitly override a config in the chat, treat these as the thread fallback defaults.',
     '',
