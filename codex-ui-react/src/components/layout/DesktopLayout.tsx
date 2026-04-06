@@ -240,7 +240,7 @@ function DesktopLayout() {
             </button>
           </div>
         ) : null}
-        <div className="flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
         </div>
       </main>

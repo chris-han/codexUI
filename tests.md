@@ -916,6 +916,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Revert the scroll-preservation change in `src/components/content/ThreadConversation.vue` if manual scroll locking needs to be removed.
 
+### Feature: React settings page scrolls with long content
+
+#### Prerequisites
+- The React app is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- Open the `Settings` page in the app.
+- Use a window height small enough that the full settings page cannot fit on screen.
+
+#### Steps
+1. Navigate to `/settings` in the React UI.
+2. Confirm the top of the page shows the settings header and the first settings cards.
+3. Scroll downward using the mouse wheel, trackpad, or keyboard.
+4. Continue until the lower sections such as sandbox mode and marketplace settings are visible.
+5. Scroll back to the top.
+
+#### Expected Results
+- The settings content area scrolls vertically inside the main content pane.
+- The header stays visible while the settings sections move underneath it.
+- Lower settings sections remain reachable on smaller screens and shorter browser windows.
+
+#### Rollback/Cleanup
+- No cleanup required.
+
 ### Feature: Rollback API/UI no longer requires turn index in rollback payload
 
 #### Prerequisites

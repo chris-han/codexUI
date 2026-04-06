@@ -314,7 +314,7 @@ function SettingsPane() {
   const builtIn = settings?.builtInMarket;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ContentHeader
         title="Settings"
         leading={<Settings className="h-4 w-4 text-gray-500" strokeWidth={1.8} />}
