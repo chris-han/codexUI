@@ -534,7 +534,7 @@ type MetaJson = {
   latest?: { publishedAt?: number };
 };
 
-const BUILTIN_MARKET_OWNER = 'openclaw';
+const BUILTIN_MARKET_OWNER = 'openai';
 const BUILTIN_MARKET_REPO = 'skills';
 
 type MarketEntry = { owner: string; repo: string; active: boolean };
