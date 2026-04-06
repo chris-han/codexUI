@@ -1,1 +1,4 @@
-{}
+{
+  "sandboxMode": "workspace-write",
+  "networkAccess": true
+}

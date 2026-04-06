@@ -25,6 +25,9 @@ type CodexUiSettings = {
   codexHome?: string;
   userFilesPath?: string;
   sandboxMode?: SandboxModeSetting;
+  networkAccess?: boolean;
+  excludeTmpdirEnvVar?: boolean;
+  excludeSlashTmp?: boolean;
   markets?: Array<{ owner: string; repo: string; active: boolean }>;
 };
 
@@ -88,6 +91,19 @@ function resolveSandboxMode(): SandboxModeSetting {
   return DEFAULT_SANDBOX_MODE;
 }
 let sandboxModeSetting: SandboxModeSetting = resolveSandboxMode();
+
+function resolveNetworkAccess(): boolean {
+  return readSettingsSync().networkAccess === true;
+}
+function resolveExcludeTmpdirEnvVar(): boolean {
+  return readSettingsSync().excludeTmpdirEnvVar === true;
+}
+function resolveExcludeSlashTmp(): boolean {
+  return readSettingsSync().excludeSlashTmp === true;
+}
+let networkAccessSetting: boolean = resolveNetworkAccess();
+let excludeTmpdirEnvVarSetting: boolean = resolveExcludeTmpdirEnvVar();
+let excludeSlashTmpSetting: boolean = resolveExcludeSlashTmp();
 
 /** Ensure userFilesPath exists with 0o755 (rw for owner, no exec by default on files) */
 async function ensureUserFilesDir(dir: string): Promise<void> {
@@ -1482,15 +1498,12 @@ app.post('/codex-api/rpc', async (req, res) => {
       // Apply the user-configured sandbox mode (workspace-write or danger-full-access).
       const effectiveSandbox = p.sandbox == null ? sandboxModeSetting : (p.sandbox as string);
 
-      // In workspace-write sandbox mode, override the thread cwd to userFilesPath
-      // so that relative file writes from the agent land in the configured output
-      // directory instead of the thread-specific folder.
-      const cwd = (effectiveSandbox === 'workspace-write' && userFilesPath)
-        ? userFilesPath
-        : originalCwd;
+      // Use the original cwd (selected folder) for the thread. The sandbox will still
+      // restrict writes to the configured writable roots (including userFilesPath).
+      const cwd = originalCwd;
 
       if (cwd) {
-        await mkdir(cwd, { recursive: true });
+        await mkdir(cwd, { recursive: true, mode: 0o777 });
       }
 
       // Inject configured-path context into developer_instructions
@@ -1506,18 +1519,25 @@ app.post('/codex-api/rpc', async (req, res) => {
 
       const configPatch: Record<string, unknown> = { ...existingConfig };
       if (effectiveSandbox === 'workspace-write') {
-        const existingWritableRoots: string[] = Array.isArray(
-          (existingConfig.sandbox_workspace_write as Record<string, unknown> | undefined)?.writable_roots
-        )
-          ? ((existingConfig.sandbox_workspace_write as Record<string, unknown>).writable_roots as string[])
+        const existingWorkspaceWrite: Record<string, unknown> =
+          (existingConfig.sandbox_workspace_write != null &&
+          typeof existingConfig.sandbox_workspace_write === 'object' &&
+          !Array.isArray(existingConfig.sandbox_workspace_write))
+            ? (existingConfig.sandbox_workspace_write as Record<string, unknown>)
+            : {};
+        const existingWritableRoots: string[] = Array.isArray(existingWorkspaceWrite.writable_roots)
+          ? (existingWorkspaceWrite.writable_roots as string[])
           : [];
         const roots = [...existingWritableRoots, userFilesPath];
         if (originalCwd && originalCwd !== userFilesPath) {
           roots.push(originalCwd);
         }
         configPatch.sandbox_workspace_write = {
-          ...((existingConfig.sandbox_workspace_write as Record<string, unknown>) ?? {}),
+          ...existingWorkspaceWrite,
           writable_roots: [...new Set(roots)],
+          ...(networkAccessSetting ? { network_access: true } : {}),
+          ...(excludeTmpdirEnvVarSetting ? { exclude_tmpdir_env_var: true } : {}),
+          ...(excludeSlashTmpSetting ? { exclude_slash_tmp: true } : {}),
         };
       }
 
@@ -1532,7 +1552,12 @@ app.post('/codex-api/rpc', async (req, res) => {
 
     if (method === 'turn/start') {
       const p = (params ?? {}) as Record<string, unknown>;
-      const reminderBlock = buildThreadDevInstructions({ compact: true });
+      const turnCwd = readNonEmptyString(p.cwd);
+      if (turnCwd) {
+        await mkdir(turnCwd, { recursive: true, mode: 0o777 });
+      }
+
+      const reminderBlock = buildThreadDevInstructions({ threadCwd: turnCwd ?? undefined, compact: true });
       const collaborationMode = asRecord(p.collaborationMode) ?? asRecord(p.collaboration_mode);
       const existingSettings = asRecord(collaborationMode?.settings) ?? {};
       const patchedCollaborationMode = {
@@ -1543,8 +1568,26 @@ app.post('/codex-api/rpc', async (req, res) => {
         },
       };
 
+      let sandboxPolicy = p.sandboxPolicy ?? p.sandbox_policy;
+      if (sandboxPolicy == null) {
+        if (sandboxModeSetting === 'danger-full-access') {
+          sandboxPolicy = { type: 'dangerFullAccess' };
+        } else if (sandboxModeSetting === 'workspace-write' && turnCwd) {
+          sandboxPolicy = {
+            type: 'workspaceWrite',
+            writableRoots: [...new Set([userFilesPath, turnCwd])],
+            readOnlyAccess: { type: 'fullAccess' },
+            networkAccess: networkAccessSetting,
+            excludeTmpdirEnvVar: excludeTmpdirEnvVarSetting,
+            excludeSlashTmp: excludeSlashTmpSetting,
+          };
+        }
+      }
+
       params = {
         ...p,
+        ...(turnCwd ? { cwd: turnCwd } : {}),
+        ...(sandboxPolicy != null ? { sandboxPolicy } : {}),
         collaborationMode: patchedCollaborationMode,
       };
     }
@@ -2038,6 +2081,9 @@ app.get('/codex-api/settings', async (_req, res) => {
         sandboxMode: sandboxModeSetting,
         savedSandboxMode: settings.sandboxMode ?? null,
         defaultSandboxMode: DEFAULT_SANDBOX_MODE,
+        networkAccess: networkAccessSetting,
+        excludeTmpdirEnvVar: excludeTmpdirEnvVarSetting,
+        excludeSlashTmp: excludeSlashTmpSetting,
         markets: allMarkets,
         builtInMarket: { owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO },
       },
@@ -2108,6 +2154,19 @@ app.put('/codex-api/settings', async (req, res) => {
         res.status(400).json({ error: 'sandboxMode must be "workspace-write" or "danger-full-access"' });
         return;
       }
+    }
+
+    if (typeof record.networkAccess === 'boolean') {
+      nextSettings.networkAccess = record.networkAccess;
+      networkAccessSetting = record.networkAccess;
+    }
+    if (typeof record.excludeTmpdirEnvVar === 'boolean') {
+      nextSettings.excludeTmpdirEnvVar = record.excludeTmpdirEnvVar;
+      excludeTmpdirEnvVarSetting = record.excludeTmpdirEnvVar;
+    }
+    if (typeof record.excludeSlashTmp === 'boolean') {
+      nextSettings.excludeSlashTmp = record.excludeSlashTmp;
+      excludeSlashTmpSetting = record.excludeSlashTmp;
     }
 
     if (Array.isArray(record.markets)) {

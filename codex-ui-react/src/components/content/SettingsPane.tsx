@@ -165,12 +165,13 @@ function SettingsPane() {
   // Codex home edit
   const [codexHomeInput, setCodexHomeInput] = useState('');
 
-  // User files path edit
-  const [userFilesInput, setUserFilesInput] = useState('');
-  const [userFilesBrowserTarget, setUserFilesBrowserTarget] = useState<SandboxModeSetting | null>(null);
-
   // Sandbox mode
   const [sandboxMode, setSandboxMode] = useState<SandboxModeSetting>('workspace-write');
+
+  // Fine-grained sandbox settings
+  const [networkAccess, setNetworkAccess] = useState(false);
+  const [excludeTmpdirEnvVar, setExcludeTmpdirEnvVar] = useState(false);
+  const [excludeSlashTmp, setExcludeSlashTmp] = useState(false);
 
   // Markets state
   const [markets, setMarkets] = useState<MarketEntry[]>([]);
@@ -185,8 +186,10 @@ function SettingsPane() {
       const data = await api.getSettings();
       setSettings(data);
       setCodexHomeInput(data.savedCodexHome ?? '');
-      setUserFilesInput(data.savedUserFilesPath ?? '');
       setSandboxMode(data.sandboxMode ?? 'workspace-write');
+      setNetworkAccess(data.networkAccess ?? false);
+      setExcludeTmpdirEnvVar(data.excludeTmpdirEnvVar ?? false);
+      setExcludeSlashTmp(data.excludeSlashTmp ?? false);
       setMarkets(data.markets ?? []);
     } catch {
       // ignore
@@ -301,37 +304,6 @@ function SettingsPane() {
     }
   };
 
-  const handleSaveUserFilesPath = async () => {
-    setSaveError('');
-    setSaveMessage('');
-    setIsSaving(true);
-    try {
-      const result = await api.saveSettings({ userFilesPath: userFilesInput.trim() || undefined });
-      setSaveMessage(result.message);
-      await loadSettings();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleResetUserFilesPath = async () => {
-    setSaveError('');
-    setSaveMessage('');
-    setIsSaving(true);
-    try {
-      const result = await api.saveSettings({ userFilesPath: '' });
-      setSaveMessage(result.message);
-      setUserFilesInput('');
-      await loadSettings();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Reset failed');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleSaveSandboxMode = async (mode: SandboxModeSetting) => {
     setSaveError('');
     setSaveMessage('');
@@ -347,105 +319,24 @@ function SettingsPane() {
     }
   };
 
-  const handleOpenUserFilesBrowser = async (target: SandboxModeSetting) => {
-    const startPath = userFilesInput.trim() || settings?.userFilesPath || '/';
-    setUserFilesBrowserTarget(target);
-    await browseDirectory(startPath);
+  const handleSaveSandboxSetting = async (patch: { networkAccess?: boolean; excludeTmpdirEnvVar?: boolean; excludeSlashTmp?: boolean }) => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      if (patch.networkAccess !== undefined) setNetworkAccess(patch.networkAccess);
+      if (patch.excludeTmpdirEnvVar !== undefined) setExcludeTmpdirEnvVar(patch.excludeTmpdirEnvVar);
+      if (patch.excludeSlashTmp !== undefined) setExcludeSlashTmp(patch.excludeSlashTmp);
+      const result = await api.saveSettings(patch);
+      setSaveMessage(result.message);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const builtIn = settings?.builtInMarket;
-
-  const renderUserFilesOverrideControls = (
-    mode: SandboxModeSetting,
-    tone: 'neutral' | 'warning' = 'neutral',
-  ) => {
-    const isWarning = tone === 'warning';
-    return (
-      <div className="mt-3 space-y-2">
-        <div className={`rounded-md px-2.5 py-2 text-xs ${isWarning ? 'bg-orange-100/60 text-orange-800' : 'bg-gray-50 text-gray-600'}`}>
-          <div className="flex items-center gap-2">
-            <span className={`shrink-0 font-medium ${isWarning ? 'text-orange-900' : 'text-gray-700'}`}>Active path</span>
-            <code className={`min-w-0 break-all rounded px-1 py-0.5 text-[11px] ${isWarning ? 'bg-white/80 text-orange-900' : 'bg-white text-gray-700'}`}>
-              {settings?.userFilesPath || settings?.defaultUserFilesPath || 'Not configured'}
-            </code>
-          </div>
-          <div className="mt-1 flex items-center gap-2">
-            <span className={`shrink-0 font-medium ${isWarning ? 'text-orange-900' : 'text-gray-500'}`}>Default</span>
-            <code className={`min-w-0 break-all rounded px-1 py-0.5 text-[11px] ${isWarning ? 'bg-white/80 text-orange-900' : 'bg-white text-gray-500'}`}>
-              {settings?.defaultUserFilesPath || 'Not configured'}
-            </code>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className={`block text-xs font-medium ${isWarning ? 'text-orange-800' : 'text-gray-700'}`}>
-            Override path <span className={isWarning ? 'font-normal text-orange-700/80' : 'font-normal text-gray-400'}>(leave blank to use default)</span>
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={userFilesInput}
-              onChange={(e) => setUserFilesInput(e.target.value)}
-              placeholder={settings?.defaultUserFilesPath}
-              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
-            />
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                void handleOpenUserFilesBrowser(mode);
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 transition hover:border-primary hover:text-primary"
-              title="Browse…"
-            >
-              <IconTablerFolder className="h-4 w-4" />
-            </button>
-          </div>
-
-          {userFilesBrowserTarget === mode ? (
-            <DirectoryBrowser
-              currentPath={browserPath}
-              parentPath={browserParentPath}
-              entries={browserEntries}
-              isLoading={isBrowserLoading}
-              onNavigate={handleBrowserNavigate}
-              onSelect={(path) => {
-                setUserFilesInput(path);
-                setUserFilesBrowserTarget(null);
-              }}
-            />
-          ) : null}
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                void handleSaveUserFilesPath();
-              }}
-              disabled={isSaving}
-              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
-            >
-              {isSaving ? 'Saving…' : 'Save path'}
-            </button>
-            {settings?.savedUserFilesPath ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  void handleResetUserFilesPath();
-                }}
-                disabled={isSaving}
-                className={`rounded-lg border px-3 py-1.5 text-xs transition disabled:opacity-50 ${isWarning ? 'border-orange-200 text-orange-700 hover:border-orange-300 hover:text-orange-800' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-800'}`}
-              >
-                Reset to default
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -595,10 +486,8 @@ function SettingsPane() {
                       <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Recommended</span>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Agent can write inside its thread workspace <strong>and</strong> the
-                      configured User Files directory. Cannot write elsewhere.
+                      Agent can write inside its thread folder. Cannot write elsewhere.
                     </p>
-                    {renderUserFilesOverrideControls('workspace-write')}
                   </div>
                 </label>
 
@@ -623,10 +512,9 @@ function SettingsPane() {
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
                       Agent has unrestricted read/write access to the entire filesystem.
-                      Useful when the agent needs to touch paths outside the workspace
+                      Useful when the agent needs to touch paths outside the thread folder
                       (e.g. system config, arbitrary project directories).
                     </p>
-                    {renderUserFilesOverrideControls('danger-full-access', 'warning')}
                   </div>
                 </label>
 
@@ -640,6 +528,55 @@ function SettingsPane() {
                     Reset to default
                   </button>
                 ) : null}
+
+                {/* Fine-grained sandbox settings */}
+                <div className="mt-2 space-y-1 rounded-lg border border-gray-200 bg-gray-50 divide-y divide-gray-100">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="min-w-0 flex-1 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-800">Network Access</span>
+                        {networkAccess && (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Enabled</span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Allow the agent to make outbound network requests (e.g. <code className="rounded bg-gray-200 px-1">curl</code>, package installs, API calls).
+                        Has no effect when Sandbox is set to Full Access (network is always on).
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={networkAccess}
+                      onChange={(v) => void handleSaveSandboxSetting({ networkAccess: v })}
+                      label="Toggle network access"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="min-w-0 flex-1 pr-4">
+                      <span className="text-sm font-medium text-gray-800">Exclude TMPDIR env var</span>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Remove the <code className="rounded bg-gray-200 px-1">TMPDIR</code> environment variable from the sandbox environment.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={excludeTmpdirEnvVar}
+                      onChange={(v) => void handleSaveSandboxSetting({ excludeTmpdirEnvVar: v })}
+                      label="Toggle exclude TMPDIR env var"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="min-w-0 flex-1 pr-4">
+                      <span className="text-sm font-medium text-gray-800">Exclude /tmp</span>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Remove access to <code className="rounded bg-gray-200 px-1">/tmp</code> from the sandbox environment.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={excludeSlashTmp}
+                      onChange={(v) => void handleSaveSandboxSetting({ excludeSlashTmp: v })}
+                      label="Toggle exclude /tmp"
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </section>

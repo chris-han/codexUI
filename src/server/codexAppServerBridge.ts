@@ -2397,7 +2397,7 @@ export function createCodexBridgeMiddleware(): CodexBridgeMiddleware {
         }
 
         if (!pathExists && createIfMissing) {
-          await mkdir(normalizedPath, { recursive: true })
+          await mkdir(normalizedPath, { recursive: true, mode: 0o777 })
         } else if (!pathExists) {
           setJson(res, 404, { error: 'Directory does not exist' })
           return

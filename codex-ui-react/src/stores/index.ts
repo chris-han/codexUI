@@ -601,6 +601,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               state.inProgressByThreadId.set(threadId, true);
             });
             const turnId = await api.startThreadTurn(threadId, submitPayload.text, {
+              cwd,
               model: get().selectedModelId,
               reasoningEffort: get().selectedReasoningEffort,
               imageUrls: submitPayload.imageUrls,
@@ -748,6 +749,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             state.inProgressByThreadId.set(threadId, true);
           });
           const turnId = await api.startThreadTurn(threadId, submitPayload.text, {
+            cwd: refreshedState.threadShellsById.get(threadId)?.cwd,
             model: refreshedState.selectedModelId,
             reasoningEffort: refreshedState.selectedReasoningEffort,
             imageUrls: submitPayload.imageUrls,

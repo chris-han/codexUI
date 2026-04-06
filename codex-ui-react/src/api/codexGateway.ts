@@ -355,6 +355,7 @@ export async function startThreadTurn(
   threadId: string,
   message: string,
   options?: {
+    cwd?: string;
     model?: string;
     reasoningEffort?: ReasoningEffort;
     imageUrls?: string[];
@@ -403,6 +404,7 @@ export async function startThreadTurn(
   const request = {
     threadId,
     input,
+    cwd: options?.cwd,
     model: normalizedModel || undefined,
     effort: options?.reasoningEffort,
     approvalPolicy: isFullAuto ? 'never' : undefined,
@@ -1491,6 +1493,9 @@ export type CodexUiSettingsInfo = {
   sandboxMode: SandboxModeSetting;
   savedSandboxMode: SandboxModeSetting | null;
   defaultSandboxMode: SandboxModeSetting;
+  networkAccess: boolean;
+  excludeTmpdirEnvVar: boolean;
+  excludeSlashTmp: boolean;
   markets: MarketEntry[];
   builtInMarket: { owner: string; repo: string };
 };
@@ -1515,7 +1520,7 @@ export async function writeUserFile(path: string, content: string): Promise<{ pa
   return { path: payload.path };
 }
 
-export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; sandboxMode?: SandboxModeSetting | ''; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
+export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; sandboxMode?: SandboxModeSetting | ''; networkAccess?: boolean; excludeTmpdirEnvVar?: boolean; excludeSlashTmp?: boolean; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
   const response = await fetch('/codex-api/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
