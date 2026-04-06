@@ -314,13 +314,13 @@ function SettingsPane() {
   const builtIn = settings?.builtInMarket;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col">
       <ContentHeader
         title="Settings"
         leading={<Settings className="h-4 w-4 text-gray-500" strokeWidth={1.8} />}
       />
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="mx-auto max-w-2xl space-y-8">
 
           {/* CODEX_HOME section */}
