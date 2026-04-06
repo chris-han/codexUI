@@ -580,17 +580,19 @@ function SkillsHub() {
             >
               {sortMode === 'date' ? 'Newest' : 'A-Z'}
             </button>
-            <button
-              type="button"
-              onClick={() => setInstallFilter((f) => f === 'all' ? 'available' : f === 'available' ? 'installed' : 'all')}
-              className={`rounded-xl border px-4 py-3 text-sm font-medium transition ${
+            <select
+              value={installFilter}
+              onChange={(e) => setInstallFilter(e.target.value as 'all' | 'available' | 'installed')}
+              className={`rounded-xl border px-4 py-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
                 installFilter !== 'all'
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
               }`}
             >
-              {installFilter === 'all' ? 'All' : installFilter === 'available' ? 'Available' : 'Installed'}
-            </button>
+              <option value="all">All</option>
+              <option value="available">Available</option>
+              <option value="installed">Installed</option>
+            </select>
             <div className="flex items-center px-1 text-sm text-gray-400">
               {visibleMarketplaceSkills.length > 0
                 ? `${visibleMarketplaceSkills.length}${selectedMarket !== 'all' ? ` / ${totalSkills}` : ''} skills`
