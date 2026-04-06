@@ -520,6 +520,7 @@ type SkillsTreeEntry = {
   url: string;
   marketOwner: string;
   marketRepo: string;
+  metaStyle?: 'meta-json' | 'skill-md';
 };
 
 type InstalledSkillInfo = {
@@ -745,29 +746,67 @@ async function fetchSkillsTree(marketOwner: string, marketRepo: string): Promise
     throw new Error(`GitHub tree API returned ${response.status}`);
   }
   const payload = await response.json() as { tree?: Array<{ path: string; type: string }> };
-  const metaPattern = /^skills\/([^/]+)\/([^/]+)\/_meta\.json$/;
+  const metaJsonPattern = /^skills\/([^/]+)\/([^/]+)\/_meta\.json$/;
+  const skillMdPattern = /^skills\/([^/]+)\/([^/]+)\/SKILL\.md$/;
   const entries: SkillsTreeEntry[] = [];
   const seen = new Set<string>();
 
   for (const node of payload.tree ?? []) {
-    const match = metaPattern.exec(node.path);
-    if (!match) continue;
-    const owner = match[1];
-    const name = match[2];
-    const key = `${owner}/${name}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    entries.push({
-      owner,
-      name,
-      url: `https://github.com/${marketOwner}/${marketRepo}/tree/main/skills/${owner}/${name}`,
-      marketOwner,
-      marketRepo,
-    });
+    const metaMatch = metaJsonPattern.exec(node.path);
+    if (metaMatch) {
+      const owner = metaMatch[1];
+      const name = metaMatch[2];
+      const key = `${owner}/${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({
+        owner,
+        name,
+        url: `https://github.com/${marketOwner}/${marketRepo}/tree/main/skills/${owner}/${name}`,
+        marketOwner,
+        marketRepo,
+        metaStyle: 'meta-json',
+      });
+      continue;
+    }
+    const skillMdMatch = skillMdPattern.exec(node.path);
+    if (skillMdMatch) {
+      const owner = skillMdMatch[1];
+      const name = skillMdMatch[2];
+      const key = `${owner}/${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({
+        owner,
+        name,
+        url: `https://github.com/${marketOwner}/${marketRepo}/tree/main/skills/${owner}/${name}`,
+        marketOwner,
+        marketRepo,
+        metaStyle: 'skill-md',
+      });
+    }
   }
 
   skillsTreeCacheMap.set(cacheKey, { entries, fetchedAt: Date.now() });
   return entries;
+}
+
+function parseSkillMdFrontMatter(content: string): { name?: string; description?: string } {
+  const fmMatch = /^---\s*\n([\s\S]*?)\n---/.exec(content);
+  if (!fmMatch) return {};
+  const fm = fmMatch[1];
+  const nameMatch = /^name:\s*["']?([^"'\n]+)["']?\s*$/m.exec(fm);
+  // description may be a quoted string, possibly containing backticks
+  const descMatch = /^description:\s*"([\s\S]*?)"\s*$/m.exec(fm);
+  return {
+    name: nameMatch?.[1]?.trim(),
+    description: descMatch?.[1]?.replace(/\s+/g, ' ').trim(),
+  };
+}
+
+function extractH1Title(content: string): string {
+  const match = /^#\s+(.+)$/m.exec(content);
+  return match?.[1]?.trim() ?? '';
 }
 
 async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
@@ -786,14 +825,33 @@ async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
   for (const list of byMarket.values()) toFetch.push(...list.slice(0, 50));
 
   await Promise.allSettled(toFetch.map(async (entry) => {
+    const mk = `${entry.marketOwner}/${entry.marketRepo}`;
+    if (!metaCacheMap.has(mk)) metaCacheMap.set(mk, new Map());
+
+    if (entry.metaStyle === 'skill-md') {
+      // openai/skills format: parse SKILL.md front matter
+      const response = await fetch(
+        `https://raw.githubusercontent.com/${entry.marketOwner}/${entry.marketRepo}/main/skills/${entry.owner}/${entry.name}/SKILL.md`,
+        { signal: AbortSignal.timeout(SKILLS_HUB_GITHUB_TIMEOUT_MS) }
+      );
+      if (!response.ok) return;
+      const text = await response.text();
+      const fm = parseSkillMdFrontMatter(text);
+      const displayName = extractH1Title(text) || fm.name || entry.name;
+      metaCacheMap.get(mk)!.set(`${entry.owner}/${entry.name}`, {
+        description: fm.description ?? '',
+        displayName,
+        publishedAt: 0,
+      });
+      return;
+    }
+
     const response = await fetch(
       `https://raw.githubusercontent.com/${entry.marketOwner}/${entry.marketRepo}/main/skills/${entry.owner}/${entry.name}/_meta.json`,
       { signal: AbortSignal.timeout(SKILLS_HUB_GITHUB_TIMEOUT_MS) }
     );
     if (!response.ok) return;
     const meta = await response.json() as MetaJson;
-    const mk = `${entry.marketOwner}/${entry.marketRepo}`;
-    if (!metaCacheMap.has(mk)) metaCacheMap.set(mk, new Map());
     metaCacheMap.get(mk)!.set(`${entry.owner}/${entry.name}`, {
       description: typeof meta.description === 'string' ? meta.description : '',
       displayName: typeof meta.displayName === 'string' ? meta.displayName : '',
