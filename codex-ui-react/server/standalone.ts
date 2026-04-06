@@ -14,7 +14,7 @@ import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './rev
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const DEFAULT_CODEX_HOME = join(__dirname, '..', '.codex');
-const DEFAULT_USER_FILES_PATH = join(homedir(), 'user_files');
+const DEFAULT_USER_FILES_PATH = join(__dirname, '..', 'user_files');
 const SETTINGS_FILE = join(__dirname, '..', '.codex-ui-settings.json');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
@@ -1796,17 +1796,13 @@ app.put('/codex-api/settings', async (req, res) => {
       const trimmed = record.userFilesPath.trim();
       if (trimmed) {
         const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
-        // Must not overlap with CODEX_HOME or the app directory
-        const appDir = join(__dirname, '..');
-        if (normalized.startsWith(appDir + '/') || normalized === appDir) {
-          res.status(400).json({ error: 'userFilesPath must not be inside the app directory' });
-          return;
-        }
+        await ensureUserFilesDir(normalized);
         nextSettings.userFilesPath = normalized;
         userFilesPath = normalized;
       } else {
         nextSettings.userFilesPath = '';
         userFilesPath = DEFAULT_USER_FILES_PATH;
+        await ensureUserFilesDir(DEFAULT_USER_FILES_PATH);
       }
     }
 

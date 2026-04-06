@@ -398,8 +398,8 @@ function SettingsPane() {
               <h2 className="text-base font-semibold text-gray-800">User Files Directory</h2>
               <p className="mt-1 text-sm text-gray-500">
                 An isolated writable directory for saving outputs (documents, exports, etc.).
-                Kept separate from system and Codex files. Files are created with read/write
-                permissions only (no execute).
+                Lives inside the project root by default. Kept separate from Codex system files.
+                The directory is created with the correct permissions automatically when you save.
               </p>
             </div>
 
