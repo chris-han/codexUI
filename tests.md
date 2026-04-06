@@ -461,6 +461,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: Skills Hub openai/skills entries visible in search results
+
+#### Prerequisites
+- React app server is running on port 4173.
+- Skills Hub is open and both `openai/skills` and `openclaw/skills` markets are active.
+
+#### Steps
+1. Open `Skills Hub` in the React UI.
+2. The default tab should show `openai/skills`.
+3. Confirm that skill cards from `openai/skills` (e.g. `aspnet-core`, `chatgpt-apps`, `cloudflare-deploy`) appear in the list — at least 30 cards should be visible.
+4. Confirm each card has a non-empty description text (visible on the card or in the detail modal).
+5. Switch to the `openclaw/skills` tab and confirm openclaw entries appear.
+6. Switch back to `openai/skills` — entries should still appear.
+
+#### Expected Results
+- openai/skills entries appear at the top of the result list (they sort before community entries regardless of date).
+- Descriptions are populated from the unquoted YAML `description:` field in each SKILL.md file.
+- No "No skills from openai/skills" placeholder is shown.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
 ### Feature: Kimi OpenAI-compatible models exposed in React dropdown
