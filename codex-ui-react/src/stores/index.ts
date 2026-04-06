@@ -189,6 +189,7 @@ export interface CodexActions {
   refreshAccounts: () => Promise<void>;
 
   // Server request actions
+  loadPendingServerRequests: () => Promise<void>;
   respondToServerRequest: (
     requestId: number,
     decision: string
@@ -497,7 +498,10 @@ export const useCodexStore = create<CodexState & CodexActions>()(
         });
         if (threadId) {
           saveToStorage(SELECTED_THREAD_STORAGE_KEY, threadId);
-          await get().loadMessages(threadId);
+          await Promise.all([
+            get().loadMessages(threadId),
+            get().loadPendingServerRequests(),
+          ]);
         } else {
           removeFromStorage(SELECTED_THREAD_STORAGE_KEY);
         }
@@ -902,6 +906,26 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
       // ==================== Server Request Actions ====================
 
+      loadPendingServerRequests: async () => {
+        try {
+          const requests = await api.getPendingServerRequests();
+          if (requests.length === 0) return;
+          set((state) => {
+            // Merge fetched requests into the map, avoiding duplicates by id
+            for (const request of requests) {
+              if (!request.threadId) continue;
+              const existing = state.pendingServerRequestsByThreadId.get(request.threadId) || [];
+              const existingIds = new Set(existing.map((r) => r.id));
+              if (!existingIds.has(request.id)) {
+                state.pendingServerRequestsByThreadId.set(request.threadId, [...existing, request]);
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Failed to load pending server requests:', error);
+        }
+      },
+
       respondToServerRequest: async (requestId, decision) => {
         try {
           await api.replyToServerRequest(requestId, decision);
@@ -939,6 +963,7 @@ export const useCodexStore = create<CodexState & CodexActions>()(
         await Promise.all([
           get().loadThreads(),
           get().loadWorkspaceRootsState(),
+          get().loadPendingServerRequests(),
         ]);
         const { selectedThreadId } = get();
         if (selectedThreadId) {

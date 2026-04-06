@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Settings, ExternalLink, Plus, Trash2, Shield } from 'lucide-react';
+import { Settings, ExternalLink, Plus, Trash2, Shield, FolderOpen, AlertCircle } from 'lucide-react';
 import { IconTablerFolder, IconTablerChevronLeft } from '../icons';
 import * as api from '../../api/codexGateway';
-import type { CodexUiSettingsInfo, MarketEntry, SandboxModeSetting } from '../../api/codexGateway';
+import type { CodexUiSettingsInfo, CodexSubdirectoryInfo, MarketEntry, SandboxModeSetting } from '../../api/codexGateway';
 import ContentHeader from './ContentHeader';
 
 type DirectoryBrowseEntry = {
@@ -101,6 +101,48 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
         className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
       />
     </button>
+  );
+}
+
+// ── Subdirectory info card ───────────────────────────────────────────────────
+
+function SubdirectoryCard({ subdir }: { subdir: CodexSubdirectoryInfo }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${subdir.exists ? 'border-gray-200 bg-white' : 'border-orange-200 bg-orange-50/50'}`}>
+      {subdir.exists ? (
+        <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
+      ) : (
+        <AlertCircle className="h-4 w-4 shrink-0 text-orange-500" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-gray-700">{subdir.name}/</span>
+          {subdir.exists ? (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              Ready
+            </span>
+          ) : (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+              Missing
+            </span>
+          )}
+        </div>
+        <code className="block truncate text-xs text-gray-500">{subdir.path}</code>
+      </div>
+      {subdir.exists && (
+        <div className="flex shrink-0 gap-1">
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${subdir.readable ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+            R
+          </span>
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${subdir.writable ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+            W
+          </span>
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${subdir.executable ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+            X
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -430,18 +472,30 @@ function SettingsPane() {
               <div className="text-sm text-gray-400">Loading…</div>
             ) : (
               <>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1.5 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Active now</span>
-                    <code className="min-w-0 break-all text-xs text-gray-700">{settings?.codexHome}</code>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3 text-sm">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-24 shrink-0 text-xs font-medium text-gray-500">Active now</span>
+                      <code className="min-w-0 break-all text-xs text-gray-700">{settings?.codexHome}</code>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-24 shrink-0 text-xs font-medium text-gray-500">Default</span>
+                      <code className="min-w-0 break-all text-xs text-gray-400">{settings?.defaultCodexHome}</code>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-24 shrink-0 text-xs font-medium text-gray-500">Settings</span>
+                      <code className="min-w-0 break-all text-xs text-gray-400">{settings?.settingsFile}</code>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Skills dir</span>
-                    <code className="min-w-0 break-all text-xs text-gray-600">{settings?.skillsDir}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Default</span>
-                    <code className="min-w-0 break-all text-xs text-gray-400">{settings?.defaultCodexHome}</code>
+
+                  {/* Subdirectories */}
+                  <div className="border-t border-gray-200 pt-3">
+                    <p className="mb-2 text-xs font-medium text-gray-500">Subdirectories</p>
+                    <div className="space-y-2">
+                      {settings?.subdirectories?.map((subdir) => (
+                        <SubdirectoryCard key={subdir.name} subdir={subdir} />
+                      ))}
+                    </div>
                   </div>
                 </div>
 

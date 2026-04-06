@@ -681,7 +681,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <button
                 type="button"
                 onClick={onInterrupt}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
                 title="Stop"
               >
                 <IconTablerPlayerStopFilled className="h-4 w-4" />
@@ -690,7 +690,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <button
                 type="submit"
                 disabled={!canSubmit || disabled}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 text-gray-700 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-gray-700 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
                 title="Send"
               >
                 <IconTablerArrowUp className="h-5 w-5" />
@@ -703,7 +703,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <button
                 type="button"
                 onClick={onInterrupt}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
                 title="Stop"
               >
                 <IconTablerPlayerStopFilled className="h-4 w-4" />
@@ -712,7 +712,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <button
                 type="submit"
                 disabled={!canSubmit || disabled}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                 title="Send"
               >
                 <IconTablerArrowUp className="h-4 w-4" />

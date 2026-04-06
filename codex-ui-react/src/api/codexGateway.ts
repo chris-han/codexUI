@@ -1465,11 +1465,25 @@ export type MarketEntry = {
 
 export type SandboxModeSetting = 'workspace-write' | 'danger-full-access';
 
+export type CodexSubdirectoryInfo = {
+  name: string;
+  path: string;
+  exists: boolean;
+  permissions?: string;
+  readable?: boolean;
+  writable?: boolean;
+  executable?: boolean;
+};
+
 export type CodexUiSettingsInfo = {
   codexHome: string;
   savedCodexHome: string | null;
   defaultCodexHome: string;
   skillsDir: string;
+  memoriesDir: string;
+  sessionsDir: string;
+  archivedSessionsDir: string;
+  subdirectories: CodexSubdirectoryInfo[];
   settingsFile: string;
   userFilesPath: string;
   savedUserFilesPath: string | null;

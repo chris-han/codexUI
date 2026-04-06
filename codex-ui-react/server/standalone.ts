@@ -606,6 +606,93 @@ function getSkillsInstallDir(): string {
   return join(CODEX_HOME, 'skills');
 }
 
+function getMemoriesDir(): string {
+  return join(CODEX_HOME, 'memories');
+}
+
+function getSessionsDir(): string {
+  return join(CODEX_HOME, 'sessions');
+}
+
+function getArchivedSessionsDir(): string {
+  return join(CODEX_HOME, 'archived_sessions');
+}
+
+type SubdirectoryInfo = {
+  name: string;
+  path: string;
+  exists: boolean;
+  permissions?: string;
+  readable?: boolean;
+  writable?: boolean;
+  executable?: boolean;
+};
+
+function formatPermissions(mode: number): string {
+  // Convert numeric mode to symbolic format like "rwxr-xr-x"
+  const perms = mode & 0o777;
+  const owner = (perms >> 6) & 0o7;
+  const group = (perms >> 3) & 0o7;
+  const other = perms & 0o7;
+
+  const toChar = (n: number, shift: number) => {
+    const r = (n >> 2) & 1 ? 'r' : '-';
+    const w = (n >> 1) & 1 ? 'w' : '-';
+    const x = n & 1 ? 'x' : '-';
+    return `${r}${w}${x}`;
+  };
+
+  return `${toChar(owner, 6)}${toChar(group, 3)}${toChar(other, 0)}`;
+}
+
+async function getSubdirectoryInfo(basePath: string): Promise<SubdirectoryInfo[]> {
+  const subdirs = [
+    { name: 'skills', getPath: getSkillsInstallDir },
+    { name: 'memories', getPath: getMemoriesDir },
+    { name: 'sessions', getPath: getSessionsDir },
+    { name: 'archived_sessions', getPath: getArchivedSessionsDir },
+  ];
+
+  const results: SubdirectoryInfo[] = [];
+  for (const { name, getPath } of subdirs) {
+    const path = getPath();
+    let exists = false;
+    let permissions: string | undefined;
+    let readable = false;
+    let writable = false;
+    let executable = false;
+    try {
+      const info = await stat(path);
+      exists = info.isDirectory();
+      if (exists) {
+        const mode = info.mode;
+        const ownerPerms = (mode >> 6) & 0o7;
+        readable = (ownerPerms >> 2) & 1 ? true : false;
+        writable = (ownerPerms >> 1) & 1 ? true : false;
+        executable = ownerPerms & 1 ? true : false;
+        permissions = formatPermissions(mode);
+      }
+    } catch {
+      exists = false;
+    }
+    results.push({ name, path, exists, permissions, readable, writable, executable });
+  }
+  return results;
+}
+
+async function ensureCodexSubdirectories(basePath: string): Promise<void> {
+  const subdirs = [
+    { name: 'skills', path: join(basePath, 'skills') },
+    { name: 'memories', path: join(basePath, 'memories') },
+    { name: 'sessions', path: join(basePath, 'sessions') },
+    { name: 'archived_sessions', path: join(basePath, 'archived_sessions') },
+  ];
+
+  for (const { path } of subdirs) {
+    await mkdir(path, { recursive: true, mode: 0o755 });
+  }
+}
+
 function getErrorMessageFromPayload(payload: unknown, fallback: string): string {
   if (payload instanceof Error && payload.message.trim().length > 0) {
     return payload.message;
@@ -1933,12 +2020,17 @@ app.post('/codex-api/review/git/init', async (req, res) => {
 app.get('/codex-api/settings', async (_req, res) => {
   try {
     const settings = await readSettingsAsync();
+    const subdirectories = await getSubdirectoryInfo(CODEX_HOME);
     res.json({
       data: {
         codexHome: CODEX_HOME,
         savedCodexHome: settings.codexHome ?? null,
         defaultCodexHome: DEFAULT_CODEX_HOME,
         skillsDir: getSkillsInstallDir(),
+        memoriesDir: getMemoriesDir(),
+        sessionsDir: getSessionsDir(),
+        archivedSessionsDir: getArchivedSessionsDir(),
+        subdirectories,
         settingsFile: SETTINGS_FILE,
         userFilesPath,
         savedUserFilesPath: settings.userFilesPath ?? null,
@@ -1969,6 +2061,11 @@ app.put('/codex-api/settings', async (req, res) => {
       const trimmed = record.codexHome.trim();
       if (trimmed) {
         const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
+        // Create the directory and subdirectories if they don't exist
+        await mkdir(normalized, { recursive: true, mode: 0o755 });
+        // Create required subdirectories (skills, memories, sessions, archived_sessions)
+        await ensureCodexSubdirectories(normalized);
+        // Verify it's a directory
         try {
           const info = await stat(normalized);
           if (!info.isDirectory()) {
@@ -1976,7 +2073,7 @@ app.put('/codex-api/settings', async (req, res) => {
             return;
           }
         } catch {
-          // allow non-existent paths; codex will error at startup if invalid
+          // Should not happen since we just created it
         }
         nextSettings.codexHome = normalized;
       } else {
