@@ -537,6 +537,12 @@ type MetaJson = {
 const BUILTIN_MARKET_OWNER = 'openai';
 const BUILTIN_MARKET_REPO = 'skills';
 
+// Default markets shown when the user has no saved configuration.
+const DEFAULT_MARKETS: Array<{ owner: string; repo: string; active: boolean }> = [
+  { owner: 'openai', repo: 'skills', active: true },
+  { owner: 'openclaw', repo: 'skills', active: true },
+];
+
 type MarketEntry = { owner: string; repo: string; active: boolean };
 
 function resolveAllMarkets(): MarketEntry[] {
@@ -547,11 +553,16 @@ function resolveAllMarkets(): MarketEntry[] {
         .map((m) => ({ owner: (m.owner as string).trim(), repo: (m.repo as string).trim(), active: m.active !== false }))
     : [];
 
-  // Built-in is always first; pick its active state from saved if present
+  // No saved markets yet — return the defaults
+  if (savedMarkets.length === 0) {
+    return DEFAULT_MARKETS.map((m) => ({ ...m }));
+  }
+
+  // Ensure openai/skills (Official) is always first; preserve its saved active state
   const builtInSaved = savedMarkets.find((m) => m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO);
   const builtIn: MarketEntry = { owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO, active: builtInSaved ? builtInSaved.active : true };
-  const custom = savedMarkets.filter((m) => !(m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO));
-  return [builtIn, ...custom];
+  const rest = savedMarkets.filter((m) => !(m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO));
+  return [builtIn, ...rest];
 }
 
 let allMarkets: MarketEntry[] = resolveAllMarkets();
