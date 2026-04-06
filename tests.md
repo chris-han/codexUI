@@ -978,6 +978,7 @@ This file tracks manual regression and feature verification steps.
 - The agent uses the configured `User Files Directory` as the default output location for generic created files.
 - The same rule still applies on later turns in the same thread, not only on the first turn after thread creation.
 - If the user does **not** mention a file path explicitly, the configured directory is treated as the thread fallback path via system context.
+- More generally, the thread falls back to the saved Settings-page values (sandbox mode, user-files path, skills directory/marketplace defaults) unless the user explicitly overrides them in chat.
 - It does not default to the workspace cwd unless the task is explicitly about editing repo files.
 
 #### Rollback/Cleanup

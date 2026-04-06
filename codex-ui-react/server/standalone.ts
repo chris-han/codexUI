@@ -1280,27 +1280,39 @@ app.use('/codex-api', (req, res, next) => {
 function buildThreadDevInstructions(options: { threadCwd?: string | null; compact?: boolean } = {}): string {
   const { threadCwd = null, compact = false } = options;
   const skillsDir = getSkillsInstallDir();
+  const activeMarketLabels = allMarkets
+    .filter((market) => market.active)
+    .map((market) => `${market.owner}/${market.repo}`);
+  const activeMarketsSummary = activeMarketLabels.length > 0
+    ? activeMarketLabels.join(', ')
+    : `${BUILTIN_MARKET_OWNER}/${BUILTIN_MARKET_REPO}`;
 
   if (compact) {
     return [
-      '## Codex UI — File Output Reminder',
+      '## Codex UI — Thread Fallback Settings',
       '',
-      `- **Thread fallback output path** for unspecified created files: \`${userFilesPath}\``,
-      '- If the current user message does not mention a file path, you MUST use this fallback path.',
+      'If the current user message does not explicitly override a setting, use these Settings-page values as the fallback defaults for this thread:',
+      `- Sandbox mode fallback: \`${sandboxModeSetting}\``,
+      `- Codex home fallback: \`${CODEX_HOME}\``,
+      `- Skills install directory fallback: \`${skillsDir}\``,
+      `- Active skills marketplace fallback: \`${activeMarketsSummary}\``,
+      `- File output fallback path for unspecified created files: \`${userFilesPath}\``,
       '- This overrides the usual tendency to save generic files in the repo/workspace cwd.',
-      '- Only use another location when the user explicitly provides a path or the task is clearly modifying repository code.',
+      '- Only use another location when the user explicitly provides a different config or the task is clearly modifying repository code.',
     ].join('\n');
   }
 
   const lines = [
     '## Codex UI — Runtime Configuration',
     '',
-    'The following paths are configured by the user in the Settings page.',
-    'Always use these paths when reading/writing files or installing skills.',
+    'The following values are configured by the user in the Settings page.',
+    'If the user does not explicitly override a config in the chat, treat these as the thread fallback defaults.',
     '',
-    `- **CODEX_HOME** (Codex home directory): \`${CODEX_HOME}\``,
-    `- **Skills directory** (installed skills live here): \`${skillsDir}\``,
-    `- **User files directory** (default output location for user-created files): \`${userFilesPath}\``,
+    `- **CODEX_HOME fallback** (Codex home directory): \`${CODEX_HOME}\``,
+    `- **Skills directory fallback** (installed skills live here): \`${skillsDir}\``,
+    `- **Active skills marketplace fallback**: \`${activeMarketsSummary}\``,
+    `- **Sandbox mode fallback**: \`${sandboxModeSetting}\``,
+    `- **User files directory fallback** (default output location for user-created files): \`${userFilesPath}\``,
     `- **Thread fallback output path** (use this when the user does not specify a file path): \`${userFilesPath}\``,
   ];
 
@@ -1310,13 +1322,14 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
 
   lines.push(
     '',
-    'IMPORTANT FILE-WRITE RULES:',
-    '1. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **Thread fallback output path / User files directory** above.',
-    '2. This rule is part of the system context for every thread and every turn; it applies even when the user does not mention the configured path explicitly.',
-    '3. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
-    '4. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
-    '5. Only write somewhere else when the user explicitly gives a different path or the task is clearly editing repository code in the workspace.',
-    '6. Do NOT write user content into the skills directory or CODEX_HOME.',
+    'IMPORTANT THREAD FALLBACK RULES:',
+    '1. All relevant Settings-page values above are thread fallback defaults: use them whenever the user has not explicitly requested a different config in the current chat.',
+    '2. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **Thread fallback output path / User files directory** above.',
+    '3. This rule is part of the system context for every thread and every turn; it applies even when the user does not mention the configured path explicitly.',
+    '4. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
+    '5. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
+    '6. Only use different paths, sandbox behavior, or skill sources when the user explicitly requests them or the task is clearly editing repository code in the workspace.',
+    '7. Do NOT write user content into the skills directory or CODEX_HOME.',
     'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
   );
 
