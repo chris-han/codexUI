@@ -427,7 +427,7 @@ function ThreadConversation() {
                       Assistant
                     </div>
                   )}
-                  {message.role === 'assistant' && message.reasoningText ? (
+                  {message.role === 'assistant' && message.reasoningText && !liveReasoning ? (
                     <ReasoningPanel
                       messageId={message.id}
                       text={message.reasoningText}
