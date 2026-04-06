@@ -938,27 +938,47 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup required.
 
-### Feature: Sandbox mode cards show the configured User Files Directory
+### Feature: Sandbox mode cards contain the user-files override path controls
 
 #### Prerequisites
 - The React app is running from `/home/chris/repo/codexUI/codex-ui-react`.
 - Open the `Settings` page in the app.
-- A `User Files Directory` value is visible in settings.
 
 #### Steps
 1. Navigate to `/settings` in the React UI.
 2. Scroll to the `Agent Sandbox Mode` section.
-3. Inspect the `Workspace Write` card.
-4. Inspect the `Full Access` card.
-5. Change the `User Files Directory` value and return to the sandbox section if needed.
+3. Confirm the standalone `User Files Directory` section is no longer shown.
+4. Inspect the `Workspace Write` card and verify it includes `Active path`, `Default`, and `Override path` controls.
+5. Inspect the `Full Access` card and verify it includes the same path controls.
+6. Change the override path from either card and save it.
 
 #### Expected Results
-- Each sandbox mode card shows a `User Files Directory` line inside the card.
-- The displayed path matches the currently configured user-files path.
-- The path remains readable even for longer directory values.
+- There is no separate `User Files Directory` section in settings.
+- Each sandbox mode card includes its own `Override path` input and browse/save controls.
+- Saving the path from either card updates the shared configured user-files path correctly.
 
 #### Rollback/Cleanup
-- Restore the previous `User Files Directory` value if it was changed only for testing.
+- Restore the previous user-files override path if it was changed only for testing.
+
+### Feature: Agent default file writes honor configured User Files Directory
+
+#### Prerequisites
+- The React app and app-server are running from `/home/chris/repo/codexUI/codex-ui-react`.
+- A `User Files Directory` override is configured in `Settings`.
+- Start a new thread after saving the setting.
+
+#### Steps
+1. Open `Settings` and set a distinctive `User Files Directory` path.
+2. Start a brand-new thread.
+3. Ask the agent to create a simple file such as `test_file.txt` without specifying any explicit folder.
+4. Inspect the created file path reported by the agent.
+
+#### Expected Results
+- The agent uses the configured `User Files Directory` as the default output location for generic created files.
+- It does not default to the workspace cwd unless the task is explicitly about editing repo files.
+
+#### Rollback/Cleanup
+- Delete the test file and restore the previous override path if needed.
 
 ### Feature: Rollback API/UI no longer requires turn index in rollback payload
 

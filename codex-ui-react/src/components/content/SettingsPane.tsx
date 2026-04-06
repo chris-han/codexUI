@@ -125,7 +125,7 @@ function SettingsPane() {
 
   // User files path edit
   const [userFilesInput, setUserFilesInput] = useState('');
-  const [isUserFilesBrowsing, setIsUserFilesBrowsing] = useState(false);
+  const [userFilesBrowserTarget, setUserFilesBrowserTarget] = useState<SandboxModeSetting | null>(null);
 
   // Sandbox mode
   const [sandboxMode, setSandboxMode] = useState<SandboxModeSetting>('workspace-write');
@@ -305,13 +305,105 @@ function SettingsPane() {
     }
   };
 
-  const handleOpenUserFilesBrowser = async () => {
+  const handleOpenUserFilesBrowser = async (target: SandboxModeSetting) => {
     const startPath = userFilesInput.trim() || settings?.userFilesPath || '/';
-    setIsUserFilesBrowsing(true);
+    setUserFilesBrowserTarget(target);
     await browseDirectory(startPath);
   };
 
   const builtIn = settings?.builtInMarket;
+
+  const renderUserFilesOverrideControls = (
+    mode: SandboxModeSetting,
+    tone: 'neutral' | 'warning' = 'neutral',
+  ) => {
+    const isWarning = tone === 'warning';
+    return (
+      <div className="mt-3 space-y-2">
+        <div className={`rounded-md px-2.5 py-2 text-xs ${isWarning ? 'bg-orange-100/60 text-orange-800' : 'bg-gray-50 text-gray-600'}`}>
+          <div className="flex items-center gap-2">
+            <span className={`shrink-0 font-medium ${isWarning ? 'text-orange-900' : 'text-gray-700'}`}>Active path</span>
+            <code className={`min-w-0 break-all rounded px-1 py-0.5 text-[11px] ${isWarning ? 'bg-white/80 text-orange-900' : 'bg-white text-gray-700'}`}>
+              {settings?.userFilesPath || settings?.defaultUserFilesPath || 'Not configured'}
+            </code>
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className={`shrink-0 font-medium ${isWarning ? 'text-orange-900' : 'text-gray-500'}`}>Default</span>
+            <code className={`min-w-0 break-all rounded px-1 py-0.5 text-[11px] ${isWarning ? 'bg-white/80 text-orange-900' : 'bg-white text-gray-500'}`}>
+              {settings?.defaultUserFilesPath || 'Not configured'}
+            </code>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className={`block text-xs font-medium ${isWarning ? 'text-orange-800' : 'text-gray-700'}`}>
+            Override path <span className={isWarning ? 'font-normal text-orange-700/80' : 'font-normal text-gray-400'}>(leave blank to use default)</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={userFilesInput}
+              onChange={(e) => setUserFilesInput(e.target.value)}
+              placeholder={settings?.defaultUserFilesPath}
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleOpenUserFilesBrowser(mode);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 transition hover:border-primary hover:text-primary"
+              title="Browse…"
+            >
+              <IconTablerFolder className="h-4 w-4" />
+            </button>
+          </div>
+
+          {userFilesBrowserTarget === mode ? (
+            <DirectoryBrowser
+              currentPath={browserPath}
+              parentPath={browserParentPath}
+              entries={browserEntries}
+              isLoading={isBrowserLoading}
+              onNavigate={handleBrowserNavigate}
+              onSelect={(path) => {
+                setUserFilesInput(path);
+                setUserFilesBrowserTarget(null);
+              }}
+            />
+          ) : null}
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleSaveUserFilesPath();
+              }}
+              disabled={isSaving}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
+            >
+              {isSaving ? 'Saving…' : 'Save path'}
+            </button>
+            {settings?.savedUserFilesPath ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void handleResetUserFilesPath();
+                }}
+                disabled={isSaving}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition disabled:opacity-50 ${isWarning ? 'border-orange-200 text-orange-700 hover:border-orange-300 hover:text-orange-800' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-800'}`}
+              >
+                Reset to default
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -411,93 +503,6 @@ function SettingsPane() {
             )}
           </section>
 
-          {/* User Files section */}
-          <section className="space-y-4 border-t border-gray-100 pt-6">
-            <div>
-              <h2 className="text-base font-semibold text-gray-800">User Files Directory</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                An isolated writable directory for saving outputs (documents, exports, etc.).
-                Lives inside the project root by default. Kept separate from Codex system files.
-                The directory is created with the correct permissions automatically when you save.
-              </p>
-            </div>
-
-            {isLoading ? (
-              <div className="text-sm text-gray-400">Loading…</div>
-            ) : (
-              <>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1.5 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Active path</span>
-                    <code className="min-w-0 break-all text-xs text-gray-700">{settings?.userFilesPath}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Default</span>
-                    <code className="min-w-0 break-all text-xs text-gray-400">{settings?.defaultUserFilesPath}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Permissions</span>
-                    <code className="min-w-0 text-xs text-gray-400">rw-r--r-- (0644 files, 0755 dirs)</code>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Override path <span className="font-normal text-gray-400">(leave blank to use default)</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={userFilesInput}
-                      onChange={(e) => setUserFilesInput(e.target.value)}
-                      placeholder={settings?.defaultUserFilesPath}
-                      className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleOpenUserFilesBrowser}
-                      className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 transition hover:border-primary hover:text-primary"
-                      title="Browse…"
-                    >
-                      <IconTablerFolder className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {isUserFilesBrowsing ? (
-                    <DirectoryBrowser
-                      currentPath={browserPath}
-                      parentPath={browserParentPath}
-                      entries={browserEntries}
-                      isLoading={isBrowserLoading}
-                      onNavigate={handleBrowserNavigate}
-                      onSelect={(path) => { setUserFilesInput(path); setIsUserFilesBrowsing(false); }}
-                    />
-                  ) : null}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSaveUserFilesPath}
-                    disabled={isSaving}
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {isSaving ? 'Saving…' : 'Save'}
-                  </button>
-                  {settings?.savedUserFilesPath ? (
-                    <button
-                      type="button"
-                      onClick={handleResetUserFilesPath}
-                      disabled={isSaving}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
-                    >
-                      Reset to default
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            )}
-          </section>
 
           {/* Sandbox Mode section */}
           <section className="space-y-4 border-t border-gray-100 pt-6">
@@ -539,12 +544,7 @@ function SettingsPane() {
                       Agent can write inside its thread workspace <strong>and</strong> the
                       configured User Files directory. Cannot write elsewhere.
                     </p>
-                    <div className="mt-2 rounded-md bg-gray-50 px-2.5 py-2 text-xs text-gray-600">
-                      <span className="font-medium text-gray-700">User Files Directory:</span>{' '}
-                      <code className="break-all rounded bg-white px-1 py-0.5 text-[11px] text-gray-700">
-                        {settings?.userFilesPath || settings?.defaultUserFilesPath || 'Not configured'}
-                      </code>
-                    </div>
+                    {renderUserFilesOverrideControls('workspace-write')}
                   </div>
                 </label>
 
@@ -572,12 +572,7 @@ function SettingsPane() {
                       Useful when the agent needs to touch paths outside the workspace
                       (e.g. system config, arbitrary project directories).
                     </p>
-                    <div className="mt-2 rounded-md bg-orange-100/60 px-2.5 py-2 text-xs text-orange-800">
-                      <span className="font-medium">User Files Directory:</span>{' '}
-                      <code className="break-all rounded bg-white/80 px-1 py-0.5 text-[11px] text-orange-900">
-                        {settings?.userFilesPath || settings?.defaultUserFilesPath || 'Not configured'}
-                      </code>
-                    </div>
+                    {renderUserFilesOverrideControls('danger-full-access', 'warning')}
                   </div>
                 </label>
 

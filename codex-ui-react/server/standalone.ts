@@ -1287,10 +1287,13 @@ function buildThreadDevInstructions(): string {
     '',
     `- **CODEX_HOME** (Codex home directory): \`${CODEX_HOME}\``,
     `- **Skills directory** (installed skills live here): \`${skillsDir}\``,
-    `- **User files directory** (write user outputs here — documents, exports, articles, etc.): \`${userFilesPath}\``,
+    `- **User files directory** (default output location for user-created files): \`${userFilesPath}\``,
     '',
-    'When the user asks you to save, export, or write a file, use the **user files directory** above.',
-    'Do NOT write to the skills directory or CODEX_HOME for user content.',
+    'IMPORTANT FILE-WRITE RULES:',
+    '1. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **User files directory** above.',
+    '2. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
+    '3. Only write somewhere else when the user explicitly gives a different path or the task is clearly editing repository code in the workspace.',
+    '4. Do NOT write user content into the skills directory or CODEX_HOME.',
     'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
   ].join('\n');
 }
@@ -1338,7 +1341,7 @@ app.post('/codex-api/rpc', async (req, res) => {
         ...p,
         ...(p.sandbox == null ? { sandbox: effectiveSandbox } : {}),
         config: configPatch,
-        developer_instructions: existing ? `${existing}\n\n${configBlock}` : configBlock,
+        developer_instructions: existing ? `${configBlock}\n\n${existing}` : configBlock,
       };
     }
 
