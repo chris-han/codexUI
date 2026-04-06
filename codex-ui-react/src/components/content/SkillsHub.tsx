@@ -301,6 +301,7 @@ function SkillsHub() {
   const [activeMarkets, setActiveMarkets] = useState<MarketEntry[]>([]);
   const [builtInMarket, setBuiltInMarket] = useState<{ owner: string; repo: string } | null>(null);
   const [selectedMarket, setSelectedMarket] = useState<string>('openai/skills'); // default to official
+  const [installFilter, setInstallFilter] = useState<'all' | 'available' | 'installed'>('all');
 
   useEffect(() => {
     void loadSkills();
@@ -344,13 +345,33 @@ function SkillsHub() {
     ? `https://github.com/${selectedMarketInfo.owner}/${selectedMarketInfo.repo}`
     : null;
 
-  // Apply market filter to marketplace skills
-  const visibleMarketplaceSkills = useMemo(() => {
-    if (selectedMarket === 'all') return marketplaceSkills;
-    return marketplaceSkills.filter((s) => `${s.marketOwner}/${s.marketRepo}` === selectedMarket);
-  }, [marketplaceSkills, selectedMarket]);
-
   const installedNames = useMemo(() => new Set(installedSkills.map((skill) => skill.name)), [installedSkills]);
+
+  // Merge installed market skills + uninstalled marketplace skills into one list.
+  // Overlay installed status from local store so even skills not yet refreshed
+  // on the server side get the correct badge.
+  const allMarketSkills = useMemo(() => {
+    const installedWithFlag = installedMarketSkills.map((s) => ({ ...s, installed: true }));
+    const marketWithFlag = marketplaceSkills.map((s) => ({
+      ...s,
+      installed: s.installed || installedNames.has(s.name),
+    }));
+    return [...installedWithFlag, ...marketWithFlag];
+  }, [installedMarketSkills, marketplaceSkills, installedNames]);
+
+  // Apply market + install filters
+  const visibleMarketplaceSkills = useMemo(() => {
+    let list = allMarketSkills;
+    if (selectedMarket !== 'all') {
+      list = list.filter((s) => `${s.marketOwner}/${s.marketRepo}` === selectedMarket);
+    }
+    if (installFilter === 'installed') {
+      list = list.filter((s) => s.installed);
+    } else if (installFilter === 'available') {
+      list = list.filter((s) => !s.installed);
+    }
+    return list;
+  }, [allMarketSkills, selectedMarket, installFilter]);
   const selectedSkillKey = selectedSkill ? `${selectedSkill.owner}/${selectedSkill.name}` : '';
   const modalSkill = selectedSkill
     ? { ...selectedSkill, installed: selectedSkill.installed || installedNames.has(selectedSkill.name) }
@@ -367,7 +388,7 @@ function SkillsHub() {
         limit: 100,
         sort: sortMode,
       });
-      setMarketplaceSkills(result.data.filter((skill) => !skill.installed));
+      setMarketplaceSkills(result.data);
       setInstalledMarketSkills(result.installed);
       setTotalSkills(result.total);
     } catch (loadError) {
@@ -559,6 +580,17 @@ function SkillsHub() {
             >
               {sortMode === 'date' ? 'Newest' : 'A-Z'}
             </button>
+            <button
+              type="button"
+              onClick={() => setInstallFilter((f) => f === 'all' ? 'available' : f === 'available' ? 'installed' : 'all')}
+              className={`rounded-xl border px-4 py-3 text-sm font-medium transition ${
+                installFilter !== 'all'
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {installFilter === 'all' ? 'All' : installFilter === 'available' ? 'Available' : 'Installed'}
+            </button>
             <div className="flex items-center px-1 text-sm text-gray-400">
               {visibleMarketplaceSkills.length > 0
                 ? `${visibleMarketplaceSkills.length}${selectedMarket !== 'all' ? ` / ${totalSkills}` : ''} skills`
@@ -572,13 +604,15 @@ function SkillsHub() {
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               {error}
             </div>
-          ) : marketplaceSkills.length === 0 ? (
+          ) : allMarketSkills.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
               {activeQuery ? `No skills found for "${activeQuery}".` : 'No marketplace skills available.'}
             </div>
           ) : visibleMarketplaceSkills.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
-              No skills from <code className="text-xs">{selectedMarket}</code>{activeQuery ? ` matching "${activeQuery}"` : ''}.
+              {installFilter !== 'all'
+                ? `No ${installFilter} skills${selectedMarket !== 'all' ? ` from ${selectedMarket}` : ''}${activeQuery ? ` matching "${activeQuery}"` : ''}.`
+                : <>No skills from <code className="text-xs">{selectedMarket}</code>{activeQuery ? ` matching "${activeQuery}"` : ''}.</>}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
