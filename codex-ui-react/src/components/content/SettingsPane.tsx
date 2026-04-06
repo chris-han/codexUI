@@ -103,8 +103,10 @@ function SettingsPane() {
   const [browserEntries, setBrowserEntries] = useState<DirectoryBrowseEntry[]>([]);
   const [isBrowserLoading, setIsBrowserLoading] = useState(false);
 
-  // Editable field
+  // Editable fields
   const [codexHomeInput, setCodexHomeInput] = useState('');
+  const [marketplaceOwnerInput, setMarketplaceOwnerInput] = useState('');
+  const [marketplaceRepoInput, setMarketplaceRepoInput] = useState('');
 
   const loadSettings = async () => {
     setIsLoading(true);
@@ -112,6 +114,8 @@ function SettingsPane() {
       const data = await api.getSettings();
       setSettings(data);
       setCodexHomeInput(data.savedCodexHome ?? '');
+      setMarketplaceOwnerInput(data.savedMarketplaceOwner ?? '');
+      setMarketplaceRepoInput(data.savedMarketplaceRepo ?? '');
     } catch {
       // ignore
     } finally {
@@ -159,7 +163,11 @@ function SettingsPane() {
     setSaveMessage('');
     setIsSaving(true);
     try {
-      const result = await api.saveSettings({ codexHome: codexHomeInput.trim() || undefined });
+      const result = await api.saveSettings({
+        codexHome: codexHomeInput.trim() || undefined,
+        marketplaceOwner: marketplaceOwnerInput.trim() || undefined,
+        marketplaceRepo: marketplaceRepoInput.trim() || undefined,
+      });
       setSaveMessage(result.message);
       await loadSettings();
     } catch (err) {
@@ -169,7 +177,7 @@ function SettingsPane() {
     }
   };
 
-  const handleReset = async () => {
+  const handleResetCodexHome = async () => {
     setSaveError('');
     setSaveMessage('');
     setIsSaving(true);
@@ -184,6 +192,26 @@ function SettingsPane() {
       setIsSaving(false);
     }
   };
+
+  const handleResetMarketplace = async () => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      const result = await api.saveSettings({ marketplaceOwner: '', marketplaceRepo: '' });
+      setSaveMessage(result.message);
+      setMarketplaceOwnerInput('');
+      setMarketplaceRepoInput('');
+      await loadSettings();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isMarketplaceCustomized =
+    !!(settings?.savedMarketplaceOwner || settings?.savedMarketplaceRepo);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -262,7 +290,6 @@ function SettingsPane() {
                   ) : null}
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -275,7 +302,7 @@ function SettingsPane() {
                   {settings?.savedCodexHome ? (
                     <button
                       type="button"
-                      onClick={handleReset}
+                      onClick={handleResetCodexHome}
                       disabled={isSaving}
                       className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
                     >
@@ -283,45 +310,137 @@ function SettingsPane() {
                     </button>
                   ) : null}
                 </div>
-
-                {/* Save feedback */}
-                {saveMessage ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    {saveMessage}
-                  </div>
-                ) : null}
-                {saveError ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {saveError}
-                  </div>
-                ) : null}
               </>
             )}
           </section>
+
+          {/* Skills Marketplace section */}
+          <section className="space-y-4 border-t border-gray-100 pt-6">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800">Skills Marketplace</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                The GitHub repository used as the skill marketplace. Skills are fetched from{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">github.com/&lt;owner&gt;/&lt;repo&gt;</code>.
+              </p>
+            </div>
+
+            {isLoading ? (
+              <div className="text-sm text-gray-400">Loading…</div>
+            ) : (
+              <>
+                {/* Current marketplace info */}
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Active URL</span>
+                    <a
+                      href={settings?.marketplaceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 break-all text-xs text-primary underline underline-offset-2"
+                    >
+                      {settings?.marketplaceUrl}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Owner</span>
+                    <code className="text-xs text-gray-700">{settings?.marketplaceOwner}</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Repo</span>
+                    <code className="text-xs text-gray-700">{settings?.marketplaceRepo}</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Default</span>
+                    <code className="text-xs text-gray-400">
+                      {settings?.defaultMarketplaceOwner}/{settings?.defaultMarketplaceRepo}
+                    </code>
+                  </div>
+                </div>
+
+                {/* Edit fields */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-gray-700">Owner</label>
+                    <input
+                      type="text"
+                      value={marketplaceOwnerInput}
+                      onChange={(e) => setMarketplaceOwnerInput(e.target.value)}
+                      placeholder={settings?.defaultMarketplaceOwner}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-gray-700">Repo</label>
+                    <input
+                      type="text"
+                      value={marketplaceRepoInput}
+                      onChange={(e) => setMarketplaceRepoInput(e.target.value)}
+                      placeholder={settings?.defaultMarketplaceRepo}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  {isMarketplaceCustomized ? (
+                    <button
+                      type="button"
+                      onClick={handleResetMarketplace}
+                      disabled={isSaving}
+                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
+                    >
+                      Reset to default
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </section>
+
+          {/* Shared save feedback */}
+          {saveMessage ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {saveMessage}
+            </div>
+          ) : null}
+          {saveError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {saveError}
+            </div>
+          ) : null}
 
           {/* How it works */}
           <section className="space-y-3 border-t border-gray-100 pt-6 text-sm text-gray-500">
             <h3 className="font-medium text-gray-700">How it works</h3>
             <ul className="space-y-1.5 list-disc pl-5">
               <li>
-                The override path is saved to{' '}
+                Settings are saved to{' '}
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">.codex-ui-settings.json</code>{' '}
                 next to the server.
               </li>
               <li>
-                On startup, the server resolves{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">CODEX_HOME</code> in this
-                order: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">CODEXUI_CODEX_HOME</code>{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">CODEX_HOME</code> resolution order:{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">CODEXUI_CODEX_HOME</code>{' '}
                 env var → saved override → default local{' '}
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">.codex/</code>.
+                <strong className="text-gray-700"> Restart required</strong> after changing.
               </li>
               <li>
-                Skills are installed under{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">$CODEX_HOME/skills/</code>.
+                Marketplace changes are applied <strong className="text-gray-700">immediately</strong>{' '}
+                (no restart needed) and the skills cache is cleared.
               </li>
               <li>
-                <strong className="text-gray-700">Restart the server</strong> after changing this path
-                for the new value to take effect.
+                The marketplace repo must follow the{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">skills/&lt;owner&gt;/&lt;name&gt;/</code>{' '}
+                directory layout with a <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">SKILL.md</code> in each skill folder.
               </li>
             </ul>
           </section>

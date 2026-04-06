@@ -19,6 +19,8 @@ const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
 type CodexUiSettings = {
   codexHome?: string;
+  marketplaceOwner?: string;
+  marketplaceRepo?: string;
 };
 
 function readSettingsSync(): CodexUiSettings {
@@ -534,8 +536,17 @@ type MetaJson = {
   latest?: { publishedAt?: number };
 };
 
-const HUB_SKILLS_OWNER = 'openclaw';
-const HUB_SKILLS_REPO = 'skills';
+const DEFAULT_HUB_SKILLS_OWNER = 'openclaw';
+const DEFAULT_HUB_SKILLS_REPO = 'skills';
+
+function resolveMarketplaceCoords(): { owner: string; repo: string } {
+  const saved = readSettingsSync();
+  const owner = (saved.marketplaceOwner ?? '').trim() || DEFAULT_HUB_SKILLS_OWNER;
+  const repo = (saved.marketplaceRepo ?? '').trim() || DEFAULT_HUB_SKILLS_REPO;
+  return { owner, repo };
+}
+
+let { owner: HUB_SKILLS_OWNER, repo: HUB_SKILLS_REPO } = resolveMarketplaceCoords();
 const TREE_CACHE_TTL_MS = 5 * 60 * 1000;
 const SKILLS_HUB_GITHUB_TIMEOUT_MS = 8_000;
 const SKILLS_HUB_BRIDGE_TIMEOUT_MS = 5_000;
@@ -1589,6 +1600,13 @@ app.get('/codex-api/settings', async (_req, res) => {
         defaultCodexHome: DEFAULT_CODEX_HOME,
         skillsDir: getSkillsInstallDir(),
         settingsFile: SETTINGS_FILE,
+        marketplaceOwner: HUB_SKILLS_OWNER,
+        marketplaceRepo: HUB_SKILLS_REPO,
+        savedMarketplaceOwner: settings.marketplaceOwner ?? null,
+        savedMarketplaceRepo: settings.marketplaceRepo ?? null,
+        defaultMarketplaceOwner: DEFAULT_HUB_SKILLS_OWNER,
+        defaultMarketplaceRepo: DEFAULT_HUB_SKILLS_REPO,
+        marketplaceUrl: `https://github.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
       },
     });
   } catch (error) {
@@ -1623,8 +1641,30 @@ app.put('/codex-api/settings', async (req, res) => {
         nextSettings.codexHome = '';
       }
     }
+    if (typeof record.marketplaceOwner === 'string') {
+      const trimmed = record.marketplaceOwner.trim();
+      nextSettings.marketplaceOwner = trimmed;
+      // Apply immediately (no restart needed for marketplace)
+      HUB_SKILLS_OWNER = trimmed || DEFAULT_HUB_SKILLS_OWNER;
+      skillsTreeCache = null;
+      metaCache.clear();
+    }
+    if (typeof record.marketplaceRepo === 'string') {
+      const trimmed = record.marketplaceRepo.trim();
+      nextSettings.marketplaceRepo = trimmed;
+      HUB_SKILLS_REPO = trimmed || DEFAULT_HUB_SKILLS_REPO;
+      skillsTreeCache = null;
+      metaCache.clear();
+    }
     await writeSettingsAsync(nextSettings);
-    res.json({ ok: true, restartRequired: true, message: 'Settings saved. Restart the server for changes to take effect.' });
+    const codexHomeChanged = 'codexHome' in nextSettings;
+    res.json({
+      ok: true,
+      restartRequired: codexHomeChanged,
+      message: codexHomeChanged
+        ? 'Settings saved. Restart the server for the Codex Home change to take effect.'
+        : 'Settings saved.',
+    });
   } catch (error) {
     res.status(500).json({ error: getErrorMessage(error, 'Failed to save settings') });
   }

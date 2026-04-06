@@ -1451,6 +1451,13 @@ export type CodexUiSettingsInfo = {
   defaultCodexHome: string;
   skillsDir: string;
   settingsFile: string;
+  marketplaceOwner: string;
+  marketplaceRepo: string;
+  savedMarketplaceOwner: string | null;
+  savedMarketplaceRepo: string | null;
+  defaultMarketplaceOwner: string;
+  defaultMarketplaceRepo: string;
+  marketplaceUrl: string;
 };
 
 export async function getSettings(): Promise<CodexUiSettingsInfo> {
@@ -1462,7 +1469,7 @@ export async function getSettings(): Promise<CodexUiSettingsInfo> {
   return payload.data;
 }
 
-export async function saveSettings(params: { codexHome?: string }): Promise<{ restartRequired: boolean; message: string }> {
+export async function saveSettings(params: { codexHome?: string; marketplaceOwner?: string; marketplaceRepo?: string }): Promise<{ restartRequired: boolean; message: string }> {
   const response = await fetch('/codex-api/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
