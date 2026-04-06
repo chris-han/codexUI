@@ -539,6 +539,12 @@ function SettingsPane() {
                       Agent can write inside its thread workspace <strong>and</strong> the
                       configured User Files directory. Cannot write elsewhere.
                     </p>
+                    <div className="mt-2 rounded-md bg-gray-50 px-2.5 py-2 text-xs text-gray-600">
+                      <span className="font-medium text-gray-700">User Files Directory:</span>{' '}
+                      <code className="break-all rounded bg-white px-1 py-0.5 text-[11px] text-gray-700">
+                        {settings?.userFilesPath || settings?.defaultUserFilesPath || 'Not configured'}
+                      </code>
+                    </div>
                   </div>
                 </label>
 
@@ -566,6 +572,12 @@ function SettingsPane() {
                       Useful when the agent needs to touch paths outside the workspace
                       (e.g. system config, arbitrary project directories).
                     </p>
+                    <div className="mt-2 rounded-md bg-orange-100/60 px-2.5 py-2 text-xs text-orange-800">
+                      <span className="font-medium">User Files Directory:</span>{' '}
+                      <code className="break-all rounded bg-white/80 px-1 py-0.5 text-[11px] text-orange-900">
+                        {settings?.userFilesPath || settings?.defaultUserFilesPath || 'Not configured'}
+                      </code>
+                    </div>
                   </div>
                 </label>
 

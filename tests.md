@@ -938,6 +938,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - No cleanup required.
 
+### Feature: Sandbox mode cards show the configured User Files Directory
+
+#### Prerequisites
+- The React app is running from `/home/chris/repo/codexUI/codex-ui-react`.
+- Open the `Settings` page in the app.
+- A `User Files Directory` value is visible in settings.
+
+#### Steps
+1. Navigate to `/settings` in the React UI.
+2. Scroll to the `Agent Sandbox Mode` section.
+3. Inspect the `Workspace Write` card.
+4. Inspect the `Full Access` card.
+5. Change the `User Files Directory` value and return to the sandbox section if needed.
+
+#### Expected Results
+- Each sandbox mode card shows a `User Files Directory` line inside the card.
+- The displayed path matches the currently configured user-files path.
+- The path remains readable even for longer directory values.
+
+#### Rollback/Cleanup
+- Restore the previous `User Files Directory` value if it was changed only for testing.
+
 ### Feature: Rollback API/UI no longer requires turn index in rollback payload
 
 #### Prerequisites
