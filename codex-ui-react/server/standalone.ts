@@ -828,8 +828,13 @@ function parseSkillMdFrontMatter(content: string): { name?: string; description?
   if (!fmMatch) return {};
   const fm = fmMatch[1];
   const nameMatch = /^name:\s*["']?([^"'\n]+)["']?\s*$/m.exec(fm);
-  // description may be a quoted string, possibly containing backticks
-  const descMatch = /^description:\s*"([\s\S]*?)"\s*$/m.exec(fm);
+  // description may be a quoted string or an unquoted multi-word value.
+  // Quoted:   description: "Some text with 'quotes' and `backticks`"
+  // Unquoted: description: Some plain text value
+  const descMatch =
+    /^description:\s*"([\s\S]*?)"\s*$/m.exec(fm) ??
+    /^description:\s*'([\s\S]*?)'\s*$/m.exec(fm) ??
+    /^description:\s*([^"'\n][^\n]*?)\s*$/m.exec(fm);
   return {
     name: nameMatch?.[1]?.trim(),
     description: descMatch?.[1]?.replace(/\s+/g, ' ').trim(),
@@ -940,6 +945,14 @@ function searchSkillsHub(entries: SkillsTreeEntry[], query: string, limit: numbe
   rows.sort((left, right) => {
     if (sort === 'name') {
       return left.name.localeCompare(right.name);
+    }
+    // Official/builtin market entries always sort first so they are included within the page limit.
+    // This matters because the community market may have thousands of dated entries that would
+    // otherwise push official (undated, publishedAt=0) entries beyond the page limit.
+    const leftIsOfficial = left.marketOwner === BUILTIN_MARKET_OWNER && left.marketRepo === BUILTIN_MARKET_REPO;
+    const rightIsOfficial = right.marketOwner === BUILTIN_MARKET_OWNER && right.marketRepo === BUILTIN_MARKET_REPO;
+    if (leftIsOfficial !== rightIsOfficial) {
+      return leftIsOfficial ? -1 : 1;
     }
     return (right.publishedAt ?? 0) - (left.publishedAt ?? 0) || left.name.localeCompare(right.name);
   });
