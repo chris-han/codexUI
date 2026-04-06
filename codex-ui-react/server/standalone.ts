@@ -978,6 +978,9 @@ class CodexBridge {
       // Disable any other API keys to force proxy usage
       ANTHROPIC_API_KEY: '',
       GEMINI_API_KEY: '',
+      // Expose configured user-files path so shell commands can reference $CODEXUI_USER_FILES_PATH
+      CODEXUI_USER_FILES_PATH: userFilesPath,
+      CODEXUI_SKILLS_DIR: getSkillsInstallDir(),
     };
 
     console.log('Proxy config:', {
@@ -1260,16 +1263,45 @@ app.use('/codex-api', (req, res, next) => {
   next();
 });
 
+/** Build the developer_instructions block injected into every thread/start */
+function buildThreadDevInstructions(): string {
+  const skillsDir = getSkillsInstallDir();
+  return [
+    '## Codex UI — Runtime Configuration',
+    '',
+    'The following paths are configured by the user in the Settings page.',
+    'Always use these paths when reading/writing files or installing skills.',
+    '',
+    `- **CODEX_HOME** (Codex home directory): \`${CODEX_HOME}\``,
+    `- **Skills directory** (installed skills live here): \`${skillsDir}\``,
+    `- **User files directory** (write user outputs here — documents, exports, articles, etc.): \`${userFilesPath}\``,
+    '',
+    'When the user asks you to save, export, or write a file, use the **user files directory** above.',
+    'Do NOT write to the skills directory or CODEX_HOME for user content.',
+    'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
+  ].join('\n');
+}
+
 app.post('/codex-api/rpc', async (req, res) => {
   try {
-    const { method, params } = req.body;
+    const { method } = req.body;
+    let { params } = req.body;
 
     // Ensure the cwd directory exists before starting a new thread
     if (method === 'thread/start') {
-      const cwd = readNonEmptyString((params as Record<string, unknown>)?.cwd);
+      const p = (params ?? {}) as Record<string, unknown>;
+      const cwd = readNonEmptyString(p.cwd);
       if (cwd) {
         await mkdir(cwd, { recursive: true });
       }
+
+      // Inject configured-path context into developer_instructions
+      const configBlock = buildThreadDevInstructions();
+      const existing = typeof p.developer_instructions === 'string' ? p.developer_instructions.trim() : '';
+      params = {
+        ...p,
+        developer_instructions: existing ? `${existing}\n\n${configBlock}` : configBlock,
+      };
     }
 
     const result = await bridge.call(method, params);
