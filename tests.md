@@ -24,7 +24,7 @@ This file tracks manual regression and feature verification steps.
 ## Feature: HTML preview card skill guidance
 
 ### Prerequisites
-- `codex-ui-react/.codex/skills/html-preview-card/SKILL.md` exists
+- `codex-ui-react/.codex/skills/semantier/html-preview-card/SKILL.md` exists
 - Start a fresh chat turn or session so skill discovery picks up the new skill
 - `codex-ui-react` running if you also want to render the result in the UI
 
