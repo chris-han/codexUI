@@ -19,6 +19,36 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - <cleanup action, if any>
 
+---
+
+## Feature: MessageFeedback — thumbs up / down for assistant messages
+
+### Prerequisites
+- `codex-ui-react` running (`bun run dev` or the 4173 instance)
+- An open thread with at least one completed assistant response
+
+### Steps
+1. Open any thread that has a finished assistant message (not a live/streaming one).
+2. Scroll to the message action row below the assistant bubble — you should see **thumbs-up** and **thumbs-down** icon buttons next to the existing Rollback / Copy buttons.
+3. Click the **thumbs-up** button — it should turn green and a green "Submit" button should appear.
+4. Click **Submit** — the row should replace with the text "Thanks for your feedback".
+5. Refresh the page and open the same thread; the feedback is NOT expected to re-appear (state is session-local).
+6. Open a second assistant message, click **thumbs-down** — it should turn red and a comment textarea should expand below.
+7. Type optional feedback text and click **Submit** — row should show "Thanks for your feedback".
+8. Click thumbs-down again without submitting, then click **Cancel** — the textarea should collapse and the rating should clear.
+9. Click thumbs-up then click it again — it should toggle off (deselect).
+
+### Expected Results
+- Thumbs-up and thumbs-down buttons appear below every completed assistant response.
+- Positive rating shows green highlight + Submit button.
+- Negative rating shows red highlight + comment textarea form.
+- After submission, "Thanks for your feedback" text replaces the widget.
+- Feedback is persisted in `localStorage` under key `msg-feedback-<messageId>`.
+
+### Rollback/Cleanup
+- Remove `MessageFeedback` import and usage from `ThreadConversation.tsx`.
+- Delete `codex-ui-react/src/components/content/MessageFeedback.tsx`.
+
 ### Feature: Telegram bot token stored in dedicated global file
 
 #### Prerequisites

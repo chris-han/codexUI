@@ -13,7 +13,9 @@ import {
   IconTablerArrowUp,
   IconTablerChevronDown,
   IconTablerMicrophone,
+  IconLucidePlus,
   IconLucideSplinePointer,
+  IconLucideZap,
   IconTablerPlayerStopFilled,
   IconTablerX,
 } from '../icons';
@@ -495,7 +497,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
       <div
         ref={controlsRef}
-        className={`relative mt-2 border-t border-gray-100 pt-2 ${
+        className={`relative mt-2 border-t border-gray-300 pt-1 ${
           isMobile ? 'flex flex-col gap-3' : 'flex items-center gap-3'
         }`}
       >
@@ -517,7 +519,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           </button>
 
           {isPlusMenuOpen ? (
-            <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 text-gray-900 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+            <div className="absolute bottom-[calc(100%+12px)] left-0 z-[100] min-w-[260px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 text-gray-900 shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
               <div className="max-h-72 overflow-y-auto pr-1">
                 <button
                   type="button"
@@ -538,7 +540,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
                 >
-                  <span className="h-5 w-5 shrink-0 flex items-center justify-center text-green-700 font-bold text-xs">⚡</span>
+                  <IconLucideZap className="h-5 w-5 shrink-0 text-green-700" />
                   <div className="flex flex-col">
                     <span>{selectedCollaborationMode === 'full-auto' ? 'Exit Full Auto' : 'Full Auto'}</span>
                     <span className="text-xs text-gray-500">Tools run without approval</span>
@@ -552,7 +554,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
                   }}
                   className="flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-sm transition hover:bg-gray-50"
                 >
-                  <span className="text-2xl leading-none">+</span>
+                  <IconLucidePlus className="h-5 w-5" />
                   <span>Upload attachment</span>
                 </button>
               </div>
@@ -560,7 +562,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
           ) : null}
         </div>
 
-        <div className={`flex min-w-0 items-center ${isMobile ? 'order-2 gap-5' : 'gap-6'}`}>
+        <div className={`flex min-w-0 items-center ${isMobile ? 'order-2 gap-5' : 'gap-3'}`}>
           <div className="relative min-w-[120px]">
             <button
               ref={modelButtonRef}
@@ -710,7 +712,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               <button
                 type="submit"
                 disabled={!canSubmit || disabled}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                 title="Send"
               >
                 <IconTablerArrowUp className="h-4 w-4" />

@@ -7,6 +7,8 @@ import type { ThreadComposerSubmitPayload } from '../../types/codex';
 import ContentHeader from './ContentHeader';
 import ThreadComposer from './ThreadComposer';
 import MessageContent from './MessageContent';
+import { MessageFeedback } from './MessageFeedback';
+import { ApprovalCard } from './ApprovalCard';
 import SidebarThreadControls, { SidebarToolbarAction } from '../sidebar/SidebarThreadControls';
 import {
   IconTablerArrowBackUp,
@@ -78,125 +80,7 @@ function ReasoningPanel({ messageId, text, defaultCollapsed = true, isLive = fal
   );
 }
 
-type ApprovalCardProps = {
-  request: import('../../types/codex').UiServerRequest;
-  onRespond: (id: number, decision: string) => void;
-  onSendMessage: (payload: import('../../types/codex').ThreadComposerSubmitPayload) => void;
-};
-
-function ApprovalCard({ request, onRespond, onSendMessage }: ApprovalCardProps) {
-  const [showInstructions, setShowInstructions] = useState(false);
-  const [instructions, setInstructions] = useState('');
-
-  const params = request.params as Record<string, unknown> | null | undefined;
-  const command = typeof params?.command === 'string' ? params.command : null;
-  const cwd = typeof params?.cwd === 'string' ? params.cwd : null;
-  const reason = typeof params?.reason === 'string' ? params.reason : null;
-  const isFileChange = request.method === 'item/fileChange/requestApproval';
-  const grantRoot = isFileChange && typeof params?.grantRoot === 'string' ? params.grantRoot : null;
-
-  const title = isFileChange ? 'File write approval required' : 'Command execution approval required';
-
-  function handleDenyWithInstructions() {
-    onRespond(request.id, 'decline');
-    if (instructions.trim()) {
-      onSendMessage({ text: instructions.trim(), imageUrls: [], fileAttachments: [], skills: [] });
-    }
-  }
-
-  return (
-    <div className="flex justify-center my-4">
-      <div className="w-full max-w-lg rounded-xl border border-amber-200 bg-amber-50 shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-100 px-4 py-2.5">
-          <span className="text-amber-700 font-bold text-base">⚠</span>
-          <span className="text-sm font-semibold text-amber-800">{title}</span>
-        </div>
-
-        {/* Body */}
-        <div className="px-4 py-3 space-y-2">
-          {reason && (
-            <p className="text-xs text-amber-700 italic">{reason}</p>
-          )}
-          {command && (
-            <div>
-              <div className="text-xs font-medium text-gray-500 mb-1">Command</div>
-              <pre className="text-xs font-mono bg-gray-900 text-green-300 rounded-lg px-3 py-2 whitespace-pre-wrap break-all">{command}</pre>
-            </div>
-          )}
-          {grantRoot && (
-            <div>
-              <div className="text-xs font-medium text-gray-500 mb-1">Write access requested for</div>
-              <code className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5">{grantRoot}</code>
-            </div>
-          )}
-          {cwd && (
-            <div className="text-xs text-gray-400">
-              <span className="font-medium">cwd:</span> {cwd}
-            </div>
-          )}
-        </div>
-
-        {/* Primary actions */}
-        <div className="flex flex-wrap gap-2 px-4 pb-3">
-          <button
-            onClick={() => onRespond(request.id, 'accept')}
-            className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:opacity-90 font-medium"
-          >
-            Approve
-          </button>
-          <button
-            onClick={() => onRespond(request.id, 'acceptForSession')}
-            className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
-          >
-            Approve for session
-          </button>
-          <button
-            onClick={() => onRespond(request.id, 'decline')}
-            className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200"
-          >
-            Deny
-          </button>
-          <button
-            onClick={() => onRespond(request.id, 'cancel')}
-            className="px-3 py-1.5 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 hover:bg-red-100"
-          >
-            Cancel turn
-          </button>
-        </div>
-
-        {/* Instructions section */}
-        <div className="border-t border-amber-200">
-          <button
-            onClick={() => setShowInstructions((v) => !v)}
-            className="flex w-full items-center gap-1 px-4 py-2 text-xs text-amber-700 hover:bg-amber-100 text-left"
-          >
-            <span>{showInstructions ? '▾' : '▸'}</span>
-            <span>Deny and send instructions instead</span>
-          </button>
-          {showInstructions && (
-            <div className="px-4 pb-3 space-y-2">
-              <textarea
-                className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
-                rows={3}
-                placeholder="Tell the agent what to do differently..."
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-              />
-              <button
-                onClick={handleDenyWithInstructions}
-                disabled={!instructions.trim()}
-                className="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Deny &amp; send instructions
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ApprovalCard is now a standalone component in ./ApprovalCard.tsx
 
 function ThreadConversation() {
   const navigate = useNavigate();
@@ -476,27 +360,30 @@ function ThreadConversation() {
                     </div>
                   )}
                   {message.role === 'assistant' && message.text.trim() && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
-                      {message.turnId ? (
+                    <div className="mt-3 flex flex-col gap-2 text-xs text-gray-500">
+                      <div className="flex items-center gap-2">
+                        {message.turnId ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRollbackMessage(message.turnId)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 hover:bg-gray-50"
+                            title="Rollback to this response"
+                          >
+                            <IconTablerArrowBackUp className="h-3.5 w-3.5" />
+                            Rollback
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => handleRollbackMessage(message.turnId)}
+                          onClick={() => handleCopyMessage(message.id, message.text)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 hover:bg-gray-50"
-                          title="Rollback to this response"
+                          title={copiedMessageId === message.id ? 'Copied' : 'Copy response'}
                         >
-                          <IconTablerArrowBackUp className="h-3.5 w-3.5" />
-                          Rollback
+                          <IconTablerCopy className="h-3.5 w-3.5" />
+                          {copiedMessageId === message.id ? 'Copied' : 'Copy'}
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => handleCopyMessage(message.id, message.text)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 hover:bg-gray-50"
-                        title={copiedMessageId === message.id ? 'Copied' : 'Copy response'}
-                      >
-                        <IconTablerCopy className="h-3.5 w-3.5" />
-                        {copiedMessageId === message.id ? 'Copied' : 'Copy'}
-                      </button>
+                      </div>
+                      <MessageFeedback messageId={message.id} />
                     </div>
                   )}
                 </div>
