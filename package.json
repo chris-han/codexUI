@@ -35,13 +35,13 @@
     "dist-cli/"
   ],
   "scripts": {
-    "dev": "pnpm install && vite",
-    "dev:open": "pnpm run build:cli && sh -c 'pnpm run dev & VPID=$!; node dist-cli/index.js --open-project \"${1:-.}\"; wait $VPID' --",
+    "dev": "bun install && vite",
+    "dev:open": "bun run build:cli && sh -c 'bun run dev & VPID=$!; node dist-cli/index.js --open-project \"${1:-.}\"; wait $VPID' --",
     "build:frontend": "vue-tsc --noEmit && vite build",
     "build:cli": "tsup",
-    "build": "pnpm run build:frontend && pnpm run build:cli",
+    "build": "bun run build:frontend && bun run build:cli",
     "preview": "vite preview",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "commander": "^13.1.0",
