@@ -18,6 +18,7 @@ type InlineToken =
 type ListItem = { paragraphs: string[] };
 type TaskListItem = { checked: boolean; text: string };
 type TableAlignment = 'left' | 'center' | 'right';
+type HtmlCardMeta = { label: string; value: string };
 
 type Block =
   | { kind: 'paragraph'; value: string }
@@ -28,6 +29,7 @@ type Block =
   | { kind: 'taskList'; items: TaskListItem[] }
   | { kind: 'table'; headers: string[]; rows: string[][]; alignments: TableAlignment[] }
   | { kind: 'codeBlock'; language: string; value: string }
+  | { kind: 'htmlPreview'; value: string; title?: string; caption?: string; metadata?: HtmlCardMeta[]; height?: number }
   | { kind: 'thematicBreak' }
   | { kind: 'image'; url: string; alt: string; markdown: string };
 
@@ -102,6 +104,161 @@ function normalizeTableCells(cells: string[], width: number): string[] {
   const normalized = cells.slice(0, width);
   while (normalized.length < width) normalized.push('');
   return normalized;
+}
+
+function toTitleCase(value: string): string {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function extractHtmlTagText(value: string, tagName: string): string | null {
+  const match = value.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)</${tagName}>`, 'i'));
+  return match?.[1]?.trim() || null;
+}
+
+function extractHtmlMetaContent(value: string, metaName: string): string | null {
+  const patterns = [
+    new RegExp(`<meta[^>]+name=["']${metaName}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${metaName}["'][^>]*>`, 'i'),
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (match?.[1]?.trim()) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function stripUnsafeHtmlForPreview(value: string): string {
+  return value
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<base\b[^>]*>/gi, '')
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+}
+
+function wrapHtmlPreviewDocument(value: string): string {
+  const sanitized = stripUnsafeHtmlForPreview(value).trim();
+  if (!sanitized) {
+    return '<!doctype html><html><body style="margin:0;padding:16px;font-family:system-ui,sans-serif;color:#475569;">Empty HTML preview</body></html>';
+  }
+
+  if (/<!doctype html|<html[\s>]/i.test(sanitized)) {
+    return sanitized;
+  }
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: white;
+        color: #0f172a;
+      }
+    </style>
+  </head>
+  <body>${sanitized}</body>
+</html>`;
+}
+
+function isLikelyRawHtml(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('<') && !trimmed.toLowerCase().startsWith('<!doctype html')) {
+    return false;
+  }
+
+  return (
+    /^<!doctype html/i.test(trimmed) ||
+    /<html[\s>]/i.test(trimmed) ||
+    (/<([a-z][\w-]*)(?:\s[^>]*)?>/i.test(trimmed) && /<\/[a-z][\w-]*>/i.test(trimmed))
+  );
+}
+
+function isHtmlPreviewLanguage(language: string, value: string): boolean {
+  const normalized = normalizeCodeLanguage(language);
+  return ['html', 'htm', 'xhtml', 'svg'].includes(normalized) || (!normalized && isLikelyRawHtml(value));
+}
+
+function readHtmlPreviewDirective(
+  lines: string[],
+  startIndex: number
+): { block: Extract<Block, { kind: 'htmlPreview' }>; endIndex: number } | null {
+  const opener = (lines[startIndex] ?? '').trim();
+  if (!/^:::(html-card|html-preview|mdma-html)\s*$/i.test(opener)) {
+    return null;
+  }
+
+  let endIndex = startIndex + 1;
+  const bodyLines: string[] = [];
+  while (endIndex < lines.length && (lines[endIndex] ?? '').trim() !== ':::') {
+    bodyLines.push(lines[endIndex] ?? '');
+    endIndex += 1;
+  }
+
+  if (endIndex >= lines.length) {
+    return null;
+  }
+
+  const metadataMap = new Map<string, string>();
+  const metadata: HtmlCardMeta[] = [];
+  let cursor = 0;
+
+  while (cursor < bodyLines.length) {
+    const current = bodyLines[cursor] ?? '';
+    if (!current.trim()) {
+      cursor += 1;
+      break;
+    }
+    if (current.trim().startsWith('```')) {
+      break;
+    }
+
+    const metaMatch = current.match(/^([A-Za-z][A-Za-z0-9 _-]*):\s*(.+)$/u);
+    if (!metaMatch) {
+      break;
+    }
+
+    const rawKey = metaMatch[1].trim();
+    const key = rawKey.toLowerCase();
+    const rawValue = metaMatch[2].trim();
+    metadataMap.set(key, rawValue);
+
+    if (!['title', 'caption', 'description', 'height'].includes(key)) {
+      metadata.push({ label: toTitleCase(rawKey), value: rawValue });
+    }
+    cursor += 1;
+  }
+
+  const remainder = bodyLines.slice(cursor).join('\n').trim();
+  const fencedMatch = remainder.match(/```(?:html|htm|xhtml|svg)?\s*\n([\s\S]*?)\n```/i);
+  const value = (fencedMatch?.[1] ?? remainder).trim();
+  if (!value) {
+    return null;
+  }
+
+  const parsedHeight = Number.parseInt(metadataMap.get('height') ?? '', 10);
+  return {
+    block: {
+      kind: 'htmlPreview',
+      value,
+      title: metadataMap.get('title') ?? undefined,
+      caption: metadataMap.get('caption') ?? metadataMap.get('description') ?? undefined,
+      metadata,
+      height: Number.isFinite(parsedHeight) ? Math.max(180, Math.min(parsedHeight, 640)) : undefined,
+    },
+    endIndex,
+  };
 }
 
 function readTableBlock(lines: string[], startIndex: number): Extract<Block, { kind: 'table' }> | null {
@@ -204,6 +361,23 @@ function parseTextBlocks(text: string): Block[] {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
+
+    const htmlPreviewDirective = readHtmlPreviewDirective(lines, index);
+    if (htmlPreviewDirective) {
+      flushParagraph(paragraphLines, blocks);
+      blocks.push(htmlPreviewDirective.block);
+      index = htmlPreviewDirective.endIndex;
+      continue;
+    }
+
+    if (line.trim().startsWith('<')) {
+      const remainingText = lines.slice(index).join('\n').trim();
+      if (isLikelyRawHtml(remainingText)) {
+        flushParagraph(paragraphLines, blocks);
+        blocks.push({ kind: 'htmlPreview', value: remainingText });
+        break;
+      }
+    }
 
     const table = readTableBlock(lines, index);
     if (table) {
@@ -319,6 +493,10 @@ function parseTextBlocks(text: string): Block[] {
 }
 
 function parseBlocks(text: string): Block[] {
+  if (isLikelyRawHtml(text)) {
+    return [{ kind: 'htmlPreview', value: text.trim() }];
+  }
+
   if (!text.includes('![') || !text.includes('](')) {
     const blocks = parseTextBlocks(text);
     return blocks.length > 0 ? blocks : [{ kind: 'paragraph', value: text }];
@@ -451,7 +629,85 @@ const codeBlockExtensions = [
   }),
 ];
 
-function CodeBlock({ language, value }: { language: string; value: string }) {
+function HtmlPreviewCard({
+  html,
+  title,
+  caption,
+  metadata = [],
+  height = 280,
+}: {
+  html: string;
+  title?: string;
+  caption?: string;
+  metadata?: HtmlCardMeta[];
+  height?: number;
+}) {
+  const previewDocument = useMemo(() => wrapHtmlPreviewDocument(html), [html]);
+  const resolvedTitle = useMemo(
+    () => title?.trim() || extractHtmlTagText(html, 'title') || 'HTML Preview',
+    [html, title]
+  );
+  const resolvedCaption = useMemo(
+    () => caption?.trim() || extractHtmlMetaContent(html, 'description') || 'Rendered inline in a sandboxed preview.',
+    [html, caption]
+  );
+  const resolvedHeight = Math.max(180, Math.min(height, 640));
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      <div className="border-b border-slate-200 bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          MDMA HTML card
+        </div>
+        <div className="mt-1 text-sm font-semibold text-slate-900">{resolvedTitle}</div>
+        {resolvedCaption ? <p className="mt-1 text-xs text-slate-600">{resolvedCaption}</p> : null}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {metadata.map((item) => (
+            <span
+              key={`${item.label}:${item.value}`}
+              className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-700"
+            >
+              <span className="font-medium">{item.label}:</span>&nbsp;{item.value}
+            </span>
+          ))}
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] text-emerald-700">
+            Sandboxed preview
+          </span>
+        </div>
+      </div>
+
+      <div className="p-3">
+        <iframe
+          title={resolvedTitle}
+          srcDoc={previewDocument}
+          sandbox=""
+          referrerPolicy="no-referrer"
+          className="w-full rounded-lg border border-slate-200 bg-white"
+          style={{ height: `${resolvedHeight}px` }}
+        />
+      </div>
+
+      <details className="border-t border-slate-200 bg-white">
+        <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-slate-600">
+          Show HTML source
+        </summary>
+        <div className="px-3 pb-3">
+          <CodeBlock language="html" value={html} showHtmlPreview={false} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function CodeBlock({
+  language,
+  value,
+  showHtmlPreview = true,
+}: {
+  language: string;
+  value: string;
+  showHtmlPreview?: boolean;
+}) {
   const normalizedLanguage = normalizeCodeLanguage(language);
   const [copied, setCopied] = useState(false);
   const [languageSupport, setLanguageSupport] = useState<LanguageSupport | null>(null);
@@ -500,6 +756,8 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
     [languageSupport]
   );
 
+  const shouldRenderHtmlPreview = showHtmlPreview && isHtmlPreviewLanguage(language, value);
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(value);
@@ -508,6 +766,10 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
       setCopied(false);
     }
   };
+
+  if (shouldRenderHtmlPreview) {
+    return <HtmlPreviewCard html={value} />;
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border border-black/5 bg-gray-950 text-gray-100">
@@ -670,6 +932,19 @@ function MessageContent({ text }: MessageContentProps) {
         if (block.kind === 'codeBlock') {
           return (
             <CodeBlock key={`code:${blockIndex}`} language={block.language} value={block.value} />
+          );
+        }
+
+        if (block.kind === 'htmlPreview') {
+          return (
+            <HtmlPreviewCard
+              key={`html:${blockIndex}`}
+              html={block.value}
+              title={block.title}
+              caption={block.caption}
+              metadata={block.metadata}
+              height={block.height}
+            />
           );
         }
 

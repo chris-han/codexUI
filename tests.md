@@ -21,6 +21,39 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+## Feature: MDMA HTML preview card in chat
+
+### Prerequisites
+- `codex-ui-react` running on the local 4173 flow or via `cd codex-ui-react && bun run dev`
+- An open thread in the React chat UI
+
+### Steps
+1. Ask the assistant to return an HTML preview using either a fenced `html` block or this MDMA-style block:
+   ```md
+   :::html-card
+   title: Google Response
+   status: 200 OK
+   url: https://www.google.com
+
+   ```html
+   <!doctype html><html><head><title>Google</title></head><body><h1>Hello</h1></body></html>
+   ```
+   :::
+   ```
+2. Confirm the assistant bubble renders a styled card with an inline preview frame instead of only raw HTML text.
+3. Verify the card header shows the provided or inferred title and any metadata chips.
+4. Expand `Show HTML source` and confirm the underlying HTML source is still available in a copyable code block.
+5. Repeat with a plain fenced `html` block (without the `:::html-card` wrapper) and confirm it still renders as an inline preview card.
+
+### Expected Results
+- HTML responses render inside a sandboxed inline preview card in chat.
+- MDMA-style metadata such as `title`, `status`, and `url` appear as card header details when provided.
+- The HTML source remains accessible behind the `Show HTML source` disclosure.
+- Scripts are not executed in the preview.
+
+### Rollback/Cleanup
+- Remove the sample test message from the thread if desired.
+
 ## Feature: MessageFeedback — thumbs up / down for assistant messages
 
 ### Prerequisites
