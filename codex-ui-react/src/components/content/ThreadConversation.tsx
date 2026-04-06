@@ -463,8 +463,17 @@ function ThreadConversation() {
                   </div>
                   <MessageContent text={liveMessage} />
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                    <span className="text-xs text-gray-400">Typing...</span>
+                    <span className="text-xs text-gray-400">
+                      {'Typing...'.split('').map((char, index) => (
+                        <span
+                          key={index}
+                          className="animate-highlight"
+                          style={{ animationDelay: `${index * 0.1}s` }}
+                        >
+                          {char}
+                        </span>
+                      ))}
+                    </span>
                   </div>
                 </div>
               </div>

@@ -13,6 +13,19 @@ export default {
         danger: '#ef4444',
         warning: '#f59e0b',
       },
+      animation: {
+        highlight: "highlight 1.5s infinite",
+      },
+      keyframes: {
+        highlight: {
+          "0%, 100%": {
+            color: "#9ca3af", // gray-400
+          },
+          "50%": {
+            color: "#1f2937", // gray-800
+          },
+        },
+      },
     },
   },
   plugins: [],
