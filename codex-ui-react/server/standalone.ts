@@ -819,7 +819,12 @@ async function fetchSkillsTree(marketOwner: string, marketRepo: string): Promise
 }
 
 function parseSkillMdFrontMatter(content: string): { name?: string; description?: string } {
-  const fmMatch = /^---\s*\n([\s\S]*?)\n---/.exec(content);
+  // Try standard front matter at the top first (e.g. Jekyll/Hugo style).
+  // openai/skills convention places front matter at the BOTTOM of the file,
+  // so also check for a trailing ---...--- block.
+  const fmMatch =
+    /^---\s*\n([\s\S]*?)\n---/.exec(content) ??
+    /---\s*\n([\s\S]*?)\n---\s*$/.exec(content);
   if (!fmMatch) return {};
   const fm = fmMatch[1];
   const nameMatch = /^name:\s*["']?([^"'\n]+)["']?\s*$/m.exec(fm);
@@ -904,7 +909,7 @@ function buildSkillHubEntry(entry: SkillsTreeEntry): SkillHubEntry {
     description: meta?.description ?? '',
     displayName: meta?.displayName ?? '',
     publishedAt: meta?.publishedAt ?? 0,
-    avatarUrl: buildSkillOwnerAvatarUrl(entry.owner),
+    avatarUrl: buildSkillOwnerAvatarUrl(entry.owner) || buildSkillOwnerAvatarUrl(entry.marketOwner),
     url: entry.url,
     installed: false,
     marketOwner: entry.marketOwner,

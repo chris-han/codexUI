@@ -442,6 +442,25 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: Skills Hub market description parsing from openai/skills SKILL.md (trailing front matter)
+
+#### Prerequisites
+- React app server is running.
+- Skills Hub is open and a search query returns at least one result from the `openai/skills` market.
+
+#### Steps
+1. Open `Skills Hub` and search for a known skill such as `imagegen` or `playwright`.
+2. Click on the skill card to open the detail modal.
+3. Confirm the description field is populated (not blank).
+4. Confirm the skill card avatar shows the `openai` org icon (GitHub avatar for `openai` user) instead of a broken image or letter fallback.
+
+#### Expected Results
+- Description is non-empty; it should come from the YAML `description:` field in the SKILL.md trailing front matter.
+- Skill cards from the `openai/skills` market display the `openai` GitHub org avatar (since `.curated` is a bucket path, not a GitHub username; the code now falls back to the market repo owner's avatar).
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
 ### Feature: Kimi OpenAI-compatible models exposed in React dropdown
