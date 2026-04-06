@@ -21,6 +21,27 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+## Feature: HTML preview card skill guidance
+
+### Prerequisites
+- `codex-ui-react/.codex/skills/html-preview-card/SKILL.md` exists
+- Start a fresh chat turn or session so skill discovery picks up the new skill
+- `codex-ui-react` running if you also want to render the result in the UI
+
+### Steps
+1. Ask the assistant for a response such as: `Use curl https://www.google.com and display returned html in a card.`
+2. Confirm the assistant chooses the HTML preview-card format instead of returning only plain text or a generic code block.
+3. Verify the reply uses either an `:::html-card` / `:::html-preview` wrapper or a fenced `html` block that can render inline in chat.
+4. If sent into the React UI thread, confirm the response renders as the existing MDMA HTML preview card.
+
+### Expected Results
+- The agent prefers the HTML preview-card format for inline HTML rendering requests.
+- Helpful metadata such as `title`, `status`, or `url` is included when relevant.
+- The message remains readable as both a preview and copyable HTML source.
+
+### Rollback/Cleanup
+- Remove the repo-local skill folder if this guidance is no longer desired.
+
 ## Feature: MDMA HTML preview card in chat
 
 ### Prerequisites
