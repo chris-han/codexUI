@@ -15,6 +15,33 @@ interface SkillCardProps {
   onClick: () => void;
 }
 
+function SkillAvatar({ skill, title }: { skill: SkillMarketplaceInfo; title: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const fallbackLabel = title.trim().charAt(0).toUpperCase() || 'S';
+
+  if (skill.avatarUrl && !imageFailed) {
+    return (
+      <img
+        src={skill.avatarUrl}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        onError={() => setImageFailed(true)}
+        className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gray-100 object-cover"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-sm font-semibold text-gray-600"
+      aria-hidden="true"
+    >
+      {fallbackLabel}
+    </div>
+  );
+}
+
 function SkillCard({ skill, onClick }: SkillCardProps) {
   const title = skill.displayName || skill.name || 'Unnamed skill';
 
@@ -24,9 +51,7 @@ function SkillCard({ skill, onClick }: SkillCardProps) {
       className="w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-primary hover:shadow-md"
     >
       <div className="flex items-start gap-3">
-        {skill.avatarUrl ? (
-          <img src={skill.avatarUrl} alt={skill.owner} className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
-        ) : null}
+        <SkillAvatar skill={skill} title={title} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-3">
             <h3 className="min-w-0 flex-1 break-words font-semibold text-gray-800">{title}</h3>

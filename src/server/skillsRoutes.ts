@@ -267,6 +267,14 @@ async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
   return entries
 }
 
+function buildSkillOwnerAvatarUrl(owner: string): string {
+  const normalizedOwner = owner.trim()
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(normalizedOwner)) {
+    return ''
+  }
+  return `https://github.com/${normalizedOwner}.png?size=40`
+}
+
 async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
   const toFetch = entries.filter((e) => !metaCache.has(`${e.owner}/${e.name}`))
   if (toFetch.length === 0) return
@@ -294,7 +302,7 @@ function buildHubEntry(e: SkillsTreeEntry): SkillHubEntry {
     description: cached?.description ?? '',
     displayName: cached?.displayName ?? '',
     publishedAt: cached?.publishedAt ?? 0,
-    avatarUrl: `https://github.com/${e.owner}.png?size=40`,
+    avatarUrl: buildSkillOwnerAvatarUrl(e.owner),
     url: e.url,
     installed: false,
   }

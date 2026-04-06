@@ -836,6 +836,14 @@ function extractH1Title(content: string): string {
   return match?.[1]?.trim() ?? '';
 }
 
+function buildSkillOwnerAvatarUrl(owner: string): string {
+  const normalizedOwner = owner.trim();
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(normalizedOwner)) {
+    return '';
+  }
+  return `https://github.com/${normalizedOwner}.png?size=40`;
+}
+
 async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
   // Group by market, fetch uncached entries
   const byMarket = new Map<string, SkillsTreeEntry[]>();
@@ -896,7 +904,7 @@ function buildSkillHubEntry(entry: SkillsTreeEntry): SkillHubEntry {
     description: meta?.description ?? '',
     displayName: meta?.displayName ?? '',
     publishedAt: meta?.publishedAt ?? 0,
-    avatarUrl: `https://github.com/${entry.owner}.png?size=40`,
+    avatarUrl: buildSkillOwnerAvatarUrl(entry.owner),
     url: entry.url,
     installed: false,
     marketOwner: entry.marketOwner,

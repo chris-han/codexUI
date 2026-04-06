@@ -419,6 +419,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Return appearance and runtime selection to the previous user preference.
 
+### Feature: Skills Hub installed skill avatar fallback
+
+#### Prerequisites
+- React app is running from `codex-ui-react/`.
+- The `Skills Hub` view shows at least one installed skill from `.curated` or another non-GitHub owner group.
+
+#### Steps
+1. Open `Skills Hub` in the React UI.
+2. Inspect one or more cards in the `Installed` section.
+3. Confirm pseudo-owner skills (for example `.curated`) show a circular fallback avatar instead of a broken image icon or overflowing alt text.
+4. Open one of those installed skills and close the detail modal to confirm the card layout remains stable.
+5. If a marketplace skill with a normal GitHub owner is visible, confirm its avatar still renders as an image.
+
+#### Expected Results
+- Installed skill cards no longer show broken-image placeholders.
+- Non-GitHub owner groups render a clean fallback avatar in the card header.
+- Valid GitHub-backed skills still display their remote avatar when available.
+
+#### Rollback/Cleanup
+- None.
+
 ### Feature: pnpm dev script installs dependencies and starts Vite
 
 ### Feature: Kimi OpenAI-compatible models exposed in React dropdown
