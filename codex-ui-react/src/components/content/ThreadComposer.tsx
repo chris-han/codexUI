@@ -317,8 +317,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
   return (
     <form
       onSubmit={handleSubmit}
-      className={`relative flex h-full flex-col rounded-2xl border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] ${
-        isMobile ? 'p-5' : 'p-4'
+      className={`relative flex h-full flex-col rounded-xl border border-gray-200 bg-white shadow-[0_4px_12px_rgba(15,23,42,0.06)] ${
+        isMobile ? 'p-4' : 'p-3'
       }`}
     >
       {uploadError ? (
@@ -495,8 +495,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
 
       <div
         ref={controlsRef}
-        className={`relative mt-3 border-t border-gray-100 pt-3 ${
-          isMobile ? 'flex flex-col gap-4' : 'flex items-center gap-4'
+        className={`relative mt-2 border-t border-gray-100 pt-2 ${
+          isMobile ? 'flex flex-col gap-3' : 'flex items-center gap-3'
         }`}
       >
         <div className={`relative flex items-center shrink-0 ${isMobile ? 'order-1' : ''}`}>
@@ -510,7 +510,7 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
             disabled={disabled || isInProgress}
             aria-label="More actions"
           >
-            <span className="relative block h-3 w-3">
+            <span className="relative block h-2 w-2">
               <span className="absolute left-1/2 top-1/2 h-[1px] w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
               <span className="absolute left-1/2 top-1/2 h-3 w-[1px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-current" />
             </span>

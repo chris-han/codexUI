@@ -18,8 +18,8 @@ import {
 } from '../icons';
 
 const DEFAULT_FOOTER_HEIGHT = 140;
-const MIN_FOOTER_HEIGHT = 100;
-const MAX_FOOTER_HEIGHT = 400;
+const MIN_FOOTER_HEIGHT = 140;
+const MAX_FOOTER_HEIGHT = 300;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 48;
 
 type ReasoningPanelProps = {
