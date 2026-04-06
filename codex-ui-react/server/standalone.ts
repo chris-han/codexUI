@@ -1285,7 +1285,8 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
     return [
       '## Codex UI — File Output Reminder',
       '',
-      `- Default output location for unspecified created files: \`${userFilesPath}\``,
+      `- **Thread fallback output path** for unspecified created files: \`${userFilesPath}\``,
+      '- If the current user message does not mention a file path, you MUST use this fallback path.',
       '- This overrides the usual tendency to save generic files in the repo/workspace cwd.',
       '- Only use another location when the user explicitly provides a path or the task is clearly modifying repository code.',
     ].join('\n');
@@ -1300,6 +1301,7 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
     `- **CODEX_HOME** (Codex home directory): \`${CODEX_HOME}\``,
     `- **Skills directory** (installed skills live here): \`${skillsDir}\``,
     `- **User files directory** (default output location for user-created files): \`${userFilesPath}\``,
+    `- **Thread fallback output path** (use this when the user does not specify a file path): \`${userFilesPath}\``,
   ];
 
   if (threadCwd && threadCwd !== userFilesPath) {
@@ -1309,11 +1311,12 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
   lines.push(
     '',
     'IMPORTANT FILE-WRITE RULES:',
-    '1. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **User files directory** above.',
-    '2. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
-    '3. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
-    '4. Only write somewhere else when the user explicitly gives a different path or the task is clearly editing repository code in the workspace.',
-    '5. Do NOT write user content into the skills directory or CODEX_HOME.',
+    '1. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **Thread fallback output path / User files directory** above.',
+    '2. This rule is part of the system context for every thread and every turn; it applies even when the user does not mention the configured path explicitly.',
+    '3. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
+    '4. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
+    '5. Only write somewhere else when the user explicitly gives a different path or the task is clearly editing repository code in the workspace.',
+    '6. Do NOT write user content into the skills directory or CODEX_HOME.',
     'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
   );
 
