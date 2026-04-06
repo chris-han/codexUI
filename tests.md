@@ -980,6 +980,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete the test file and restore the previous override path if needed.
 
+### Feature: `bun run dev` restarts both local servers and logs the restart flow
+
+#### Prerequisites
+- The React app project exists at `/home/chris/repo/codexUI/codex-ui-react`.
+- `bun` dependencies are installed.
+- Optional: an older proxy/app-server/Vite instance is already running.
+
+#### Steps
+1. From `/home/chris/repo/codexUI/codex-ui-react`, run `bun run dev`.
+2. Watch the terminal output before the services start.
+3. Confirm the script logs restart messages for the proxy, app-server, and Vite ports.
+4. If prior instances were running, confirm they are terminated and replaced by the new run.
+
+#### Expected Results
+- `bun run dev` always attempts a clean restart before launching the stack.
+- The terminal prints restart status messages such as `Restarting proxy`, `Restarting app-server`, and `Starting proxy, app-server, and Vite`.
+- The new proxy, app-server, and Vite processes start from the same command run.
+
+#### Rollback/Cleanup
+- Stop the dev stack with `Ctrl+C` if it was started only for verification.
+
 ### Feature: Rollback API/UI no longer requires turn index in rollback payload
 
 #### Prerequisites
