@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SquareLibrary } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as api from '../../api/codexGateway';
+import type { MarketEntry } from '../../api/codexGateway';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
 import { useCodexStore } from '../../stores';
 import type { SkillMarketplaceInfo } from '../../types/codex';
@@ -225,8 +226,24 @@ function SkillsHub() {
   const [actingSkillKey, setActingSkillKey] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Market filter
+  const [activeMarkets, setActiveMarkets] = useState<MarketEntry[]>([]);
+  const [builtInMarket, setBuiltInMarket] = useState<{ owner: string; repo: string } | null>(null);
+  const [selectedMarket, setSelectedMarket] = useState<string>('openai/skills'); // default to official
+
   useEffect(() => {
     void loadSkills();
+    // Load active markets for the filter
+    api.getSettings().then((s) => {
+      setActiveMarkets(s.markets.filter((m) => m.active));
+      setBuiltInMarket(s.builtInMarket);
+      // Default selection: official market if active, otherwise 'all'
+      const official = `${s.builtInMarket.owner}/${s.builtInMarket.repo}`;
+      const isOfficialActive = s.markets.some((m) => m.active && `${m.owner}/${m.repo}` === official);
+      setSelectedMarket(isOfficialActive ? official : 'all');
+    }).catch(() => {
+      setSelectedMarket('all');
+    });
   }, [loadSkills]);
 
   useEffect(() => {
@@ -251,6 +268,12 @@ function SkillsHub() {
       return haystack.includes(normalizedQuery);
     });
   }, [installedMarketSkills, searchQuery]);
+
+  // Apply market filter to marketplace skills
+  const visibleMarketplaceSkills = useMemo(() => {
+    if (selectedMarket === 'all') return marketplaceSkills;
+    return marketplaceSkills.filter((s) => `${s.marketOwner}/${s.marketRepo}` === selectedMarket);
+  }, [marketplaceSkills, selectedMarket]);
 
   const installedNames = useMemo(() => new Set(installedSkills.map((skill) => skill.name)), [installedSkills]);
   const selectedSkillKey = selectedSkill ? `${selectedSkill.owner}/${selectedSkill.name}` : '';
@@ -373,6 +396,46 @@ function SkillsHub() {
             </div>
           ) : null}
 
+          {/* Market filter tabs */}
+          {activeMarkets.length > 1 ? (
+            <div className="mb-5 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedMarket('all')}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  selectedMarket === 'all'
+                    ? 'bg-primary text-white'
+                    : 'border border-gray-200 bg-white text-gray-600 hover:border-primary hover:text-primary'
+                }`}
+              >
+                All
+              </button>
+              {activeMarkets.map((m) => {
+                const key = `${m.owner}/${m.repo}`;
+                const isOfficial = builtInMarket && m.owner === builtInMarket.owner && m.repo === builtInMarket.repo;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedMarket(key)}
+                    className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition ${
+                      selectedMarket === key
+                        ? 'bg-primary text-white'
+                        : 'border border-gray-200 bg-white text-gray-600 hover:border-primary hover:text-primary'
+                    }`}
+                  >
+                    {key}
+                    {isOfficial ? (
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        selectedMarket === key ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+                      }`}>Official</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           <div className="mb-6 flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">
               <IconTablerSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -404,7 +467,9 @@ function SkillsHub() {
               {sortMode === 'date' ? 'Newest' : 'A-Z'}
             </button>
             <div className="flex items-center px-1 text-sm text-gray-400">
-              {totalSkills > 0 ? `${totalSkills} skills` : ''}
+              {visibleMarketplaceSkills.length > 0
+                ? `${visibleMarketplaceSkills.length}${selectedMarket !== 'all' ? ` / ${totalSkills}` : ''} skills`
+                : totalSkills > 0 ? `${totalSkills} skills` : ''}
             </div>
           </div>
 
@@ -418,9 +483,13 @@ function SkillsHub() {
             <div className="py-12 text-center text-gray-400">
               {activeQuery ? `No skills found for "${activeQuery}".` : 'No marketplace skills available.'}
             </div>
+          ) : visibleMarketplaceSkills.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              No skills from <code className="text-xs">{selectedMarket}</code>{activeQuery ? ` matching "${activeQuery}"` : ''}.
+            </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {marketplaceSkills.map((skill) => (
+              {visibleMarketplaceSkills.map((skill) => (
                 <SkillCard
                   key={`${skill.owner}-${skill.name}`}
                   skill={skill}
