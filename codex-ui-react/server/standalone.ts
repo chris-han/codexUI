@@ -1299,6 +1299,7 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
       `- Configured file output fallback path for unspecified created files: \`${userFilesPath}\``,
       '- The thread `cwd` may be different; do NOT confuse the cwd with the configured file path fallback.',
       '- If the user asks about the configured/default file path, answer with the fallback path above, not the cwd.',
+      '- Bare relative filenames like `test.js`, `test.txt`, or `output.json` are NOT allowed for generic outputs; expand them to an absolute path under the fallback directory.',
       '- When using file-writing tools for unspecified outputs, use an absolute path under that fallback directory rather than a bare relative filename.',
       '- This overrides the usual tendency to save generic files in the repo/workspace cwd.',
       '- Only use another location when the user explicitly provides a different config or the task is clearly modifying repository code.',
@@ -1331,9 +1332,11 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
     '3. If the user asks about the configured/default file path, the correct answer is the configured **User files directory** above — not the thread cwd.',
     '4. This rule is part of the system context for every thread and every turn; it applies even when the user does not mention the configured path explicitly.',
     '5. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
-    '6. When calling tools that accept a file path, prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of a bare relative filename in the workspace cwd.',
-    '7. Only use different paths, sandbox behavior, or skill sources when the user explicitly requests them or the task is clearly editing repository code in the workspace.',
-    '8. Do NOT write user content into the skills directory or CODEX_HOME.',
+    '6. Bare relative filenames like `test.js` are not acceptable for unspecified generic outputs; convert them to an absolute path under `${CODEXUI_USER_FILES_PATH}`.',
+    '7. When calling tools that accept a file path, prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of a bare relative filename in the workspace cwd.',
+    '8. If you claim a file was created, moved, or corrected into that directory, you must actually perform the file operation and verify the resulting path before replying.',
+    '9. Only use different paths, sandbox behavior, or skill sources when the user explicitly requests them or the task is clearly editing repository code in the workspace.',
+    '10. Do NOT write user content into the skills directory or CODEX_HOME.',
     'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
   );
 
