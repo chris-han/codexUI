@@ -73,11 +73,6 @@ export function buildProjectEntries(
     usedCwds.add(normalizedCwd);
   }
 
-  const shouldAppendUntrackedGroups = configuredCwds.size === 0;
-  if (!shouldAppendUntrackedGroups) {
-    return entries;
-  }
-
   for (const projectGroup of projectGroups) {
     const cwd = projectGroup.threads[0]?.cwd?.trim() ?? '';
     if (!cwd || usedCwds.has(cwd)) continue;
