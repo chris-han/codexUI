@@ -42,8 +42,34 @@ function SkillAvatar({ skill, title }: { skill: SkillMarketplaceInfo; title: str
   );
 }
 
+function isPseudoSkillOwner(owner: string): boolean {
+  return owner.trim().startsWith('.');
+}
+
+function getSkillSubtitle(skill: SkillMarketplaceInfo): string {
+  const marketLabel = skill.marketOwner && skill.marketRepo ? `${skill.marketOwner}/${skill.marketRepo}` : '';
+
+  if (skill.installed) {
+    return isPseudoSkillOwner(skill.owner) ? 'Installed skill' : (skill.owner || 'Installed skill');
+  }
+
+  if (isPseudoSkillOwner(skill.owner)) {
+    return marketLabel || 'Official market';
+  }
+
+  return skill.owner;
+}
+
+function getSkillCollectionBadge(skill: SkillMarketplaceInfo): string | null {
+  if (!isPseudoSkillOwner(skill.owner)) return null;
+  const label = skill.owner.replace(/^[.]+/, '').trim();
+  return label || null;
+}
+
 function SkillCard({ skill, onClick }: SkillCardProps) {
   const title = skill.displayName || skill.name || 'Unnamed skill';
+  const subtitle = getSkillSubtitle(skill);
+  const collectionBadge = getSkillCollectionBadge(skill);
 
   return (
     <button
@@ -61,7 +87,16 @@ function SkillCard({ skill, onClick }: SkillCardProps) {
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-xs text-gray-400">{skill.owner}</p>
+          {(subtitle || collectionBadge) ? (
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+              {subtitle ? <span>{subtitle}</span> : null}
+              {collectionBadge ? (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-500">
+                  {collectionBadge}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           {skill.description ? (
             <p className="mt-1 line-clamp-2 text-sm text-gray-500">{skill.description}</p>
           ) : null}
@@ -155,6 +190,8 @@ function SkillDetailModal({
   const title = skill.displayName || skill.name || 'Unnamed skill';
   const effectiveDescription = description || skill.description || '';
   const renderedReadme = simpleMarkdown(readme);
+  const subtitle = getSkillSubtitle(skill);
+  const collectionBadge = getSkillCollectionBadge(skill);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -162,7 +199,16 @@ function SkillDetailModal({
         <div className="flex items-start justify-between gap-4 px-6 py-5">
           <div className="min-w-0">
             <h2 className="truncate text-xl font-semibold text-gray-900">{title}</h2>
-            <p className="text-sm text-gray-400">{skill.owner}</p>
+            {(subtitle || collectionBadge) ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-400">
+                {subtitle ? <span>{subtitle}</span> : null}
+                {collectionBadge ? (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-500">
+                    {collectionBadge}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <button
             onClick={onClose}
@@ -281,18 +327,22 @@ function SkillsHub() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const filteredInstalledSkills = useMemo(() => {
-    const normalizedQuery = searchQuery.toLowerCase();
-    return installedMarketSkills.filter((skill) => {
-      const haystack = [
-        skill.name,
-        skill.displayName ?? '',
-        skill.owner,
-        skill.description ?? '',
-      ].join(' ').toLowerCase();
-      return haystack.includes(normalizedQuery);
+  const visibleInstalledSkills = useMemo(() => {
+    return [...installedMarketSkills].sort((left, right) => {
+      const leftTitle = (left.displayName || left.name).toLowerCase();
+      const rightTitle = (right.displayName || right.name).toLowerCase();
+      return leftTitle.localeCompare(rightTitle);
     });
-  }, [installedMarketSkills, searchQuery]);
+  }, [installedMarketSkills]);
+
+  const selectedMarketInfo = useMemo(() => {
+    if (selectedMarket === 'all') return null;
+    return activeMarkets.find((market) => `${market.owner}/${market.repo}` === selectedMarket) ?? null;
+  }, [activeMarkets, selectedMarket]);
+
+  const selectedMarketUrl = selectedMarketInfo
+    ? `https://github.com/${selectedMarketInfo.owner}/${selectedMarketInfo.repo}`
+    : null;
 
   // Apply market filter to marketplace skills
   const visibleMarketplaceSkills = useMemo(() => {
@@ -401,13 +451,13 @@ function SkillsHub() {
             </div>
           ) : null}
 
-          {filteredInstalledSkills.length > 0 ? (
+          {visibleInstalledSkills.length > 0 ? (
             <div className="mb-8">
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
-                Installed ({filteredInstalledSkills.length})
+                Installed ({visibleInstalledSkills.length})
               </h2>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredInstalledSkills.map((skill) => (
+                {visibleInstalledSkills.map((skill) => (
                   <SkillCard
                     key={`installed-${skill.owner}-${skill.name}`}
                     skill={{ ...skill, installed: true }}
@@ -460,6 +510,24 @@ function SkillsHub() {
               })}
             </div>
           ) : null}
+
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <span>Search source:</span>
+            {selectedMarket === 'all' ? (
+              <span>All active markets</span>
+            ) : selectedMarketUrl ? (
+              <a
+                className="font-medium text-primary hover:underline"
+                href={selectedMarketUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {selectedMarketInfo?.owner}/{selectedMarketInfo?.repo}
+              </a>
+            ) : (
+              <span>{selectedMarket}</span>
+            )}
+          </div>
 
           <div className="mb-6 flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">
