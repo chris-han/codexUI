@@ -14,11 +14,13 @@ import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './rev
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 const DEFAULT_CODEX_HOME = join(__dirname, '..', '.codex');
+const DEFAULT_USER_FILES_PATH = join(homedir(), 'user_files');
 const SETTINGS_FILE = join(__dirname, '..', '.codex-ui-settings.json');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
 type CodexUiSettings = {
   codexHome?: string;
+  userFilesPath?: string;
   markets?: Array<{ owner: string; repo: string; active: boolean }>;
 };
 
@@ -65,7 +67,19 @@ function resolveCodexHome(): string {
   return DEFAULT_CODEX_HOME;
 }
 
+function resolveUserFilesPath(): string {
+  const saved = readSettingsSync();
+  if (saved.userFilesPath && saved.userFilesPath.trim()) return saved.userFilesPath.trim();
+  return DEFAULT_USER_FILES_PATH;
+}
+
 const CODEX_HOME = resolveCodexHome();
+let userFilesPath = resolveUserFilesPath();
+
+/** Ensure userFilesPath exists with 0o755 (rw for owner, no exec by default on files) */
+async function ensureUserFilesDir(dir: string): Promise<void> {
+  await mkdir(dir, { recursive: true, mode: 0o755 });
+}
 
 type CommandInvocation = {
   command: string;
@@ -1736,6 +1750,9 @@ app.get('/codex-api/settings', async (_req, res) => {
         defaultCodexHome: DEFAULT_CODEX_HOME,
         skillsDir: getSkillsInstallDir(),
         settingsFile: SETTINGS_FILE,
+        userFilesPath,
+        savedUserFilesPath: settings.userFilesPath ?? null,
+        defaultUserFilesPath: DEFAULT_USER_FILES_PATH,
         markets: allMarkets,
         builtInMarket: { owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO },
       },
@@ -1775,6 +1792,24 @@ app.put('/codex-api/settings', async (req, res) => {
       codexHomeChanged = true;
     }
 
+    if (typeof record.userFilesPath === 'string') {
+      const trimmed = record.userFilesPath.trim();
+      if (trimmed) {
+        const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
+        // Must not overlap with CODEX_HOME or the app directory
+        const appDir = join(__dirname, '..');
+        if (normalized.startsWith(appDir + '/') || normalized === appDir) {
+          res.status(400).json({ error: 'userFilesPath must not be inside the app directory' });
+          return;
+        }
+        nextSettings.userFilesPath = normalized;
+        userFilesPath = normalized;
+      } else {
+        nextSettings.userFilesPath = '';
+        userFilesPath = DEFAULT_USER_FILES_PATH;
+      }
+    }
+
     if (Array.isArray(record.markets)) {
       const normalized = (record.markets as unknown[])
         .filter((m): m is { owner: string; repo: string; active: boolean } => {
@@ -1805,6 +1840,52 @@ app.put('/codex-api/settings', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: getErrorMessage(error, 'Failed to save settings') });
+  }
+});
+
+// ── User-files endpoints (isolated writable area) ──────────────────────────
+
+/** Resolve and validate that a requested path is inside userFilesPath (no path traversal) */
+function resolveInsideUserFiles(relOrAbs: string): string | null {
+  const base = userFilesPath;
+  const candidate = isAbsolute(relOrAbs) ? relOrAbs : join(base, relOrAbs);
+  const normalized = resolve(candidate);
+  if (!normalized.startsWith(base + '/') && normalized !== base) return null;
+  return normalized;
+}
+
+app.post('/codex-api/user-files/write', async (req, res) => {
+  try {
+    const record = asRecord(req.body);
+    if (!record) { res.status(400).json({ error: 'Invalid body' }); return; }
+    const relPath = typeof record.path === 'string' ? record.path.trim() : '';
+    const content = typeof record.content === 'string' ? record.content : null;
+    if (!relPath) { res.status(400).json({ error: 'path is required' }); return; }
+    if (content === null) { res.status(400).json({ error: 'content is required' }); return; }
+
+    const target = resolveInsideUserFiles(relPath);
+    if (!target) { res.status(400).json({ error: 'Path must be inside the user_files directory' }); return; }
+
+    await ensureUserFilesDir(dirname(target));
+    await writeFile(target, content, { encoding: 'utf8', mode: 0o644 });
+    res.json({ ok: true, path: target });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to write file') });
+  }
+});
+
+app.get('/codex-api/user-files/list', async (req, res) => {
+  try {
+    const subPath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    const targetDir = subPath ? resolveInsideUserFiles(subPath) : userFilesPath;
+    if (!targetDir) { res.status(400).json({ error: 'Path must be inside the user_files directory' }); return; }
+
+    await ensureUserFilesDir(targetDir);
+    const rawEntries = await readdir(targetDir, { withFileTypes: true });
+    const entries = rawEntries.map((e) => ({ name: e.name, isDirectory: e.isDirectory(), path: join(targetDir, e.name) }));
+    res.json({ data: { path: targetDir, entries } });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to list user files') });
   }
 });
 

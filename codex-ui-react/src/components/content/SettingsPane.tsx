@@ -123,6 +123,10 @@ function SettingsPane() {
   // Codex home edit
   const [codexHomeInput, setCodexHomeInput] = useState('');
 
+  // User files path edit
+  const [userFilesInput, setUserFilesInput] = useState('');
+  const [isUserFilesBrowsing, setIsUserFilesBrowsing] = useState(false);
+
   // Markets state
   const [markets, setMarkets] = useState<MarketEntry[]>([]);
 
@@ -136,6 +140,7 @@ function SettingsPane() {
       const data = await api.getSettings();
       setSettings(data);
       setCodexHomeInput(data.savedCodexHome ?? '');
+      setUserFilesInput(data.savedUserFilesPath ?? '');
       setMarkets(data.markets ?? []);
     } catch {
       // ignore
@@ -250,6 +255,43 @@ function SettingsPane() {
     }
   };
 
+  const handleSaveUserFilesPath = async () => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      const result = await api.saveSettings({ userFilesPath: userFilesInput.trim() || undefined });
+      setSaveMessage(result.message);
+      await loadSettings();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetUserFilesPath = async () => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      const result = await api.saveSettings({ userFilesPath: '' });
+      setSaveMessage(result.message);
+      setUserFilesInput('');
+      await loadSettings();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOpenUserFilesBrowser = async () => {
+    const startPath = userFilesInput.trim() || settings?.userFilesPath || '/';
+    setIsUserFilesBrowsing(true);
+    await browseDirectory(startPath);
+  };
+
   const builtIn = settings?.builtInMarket;
 
   return (
@@ -339,6 +381,94 @@ function SettingsPane() {
                     <button
                       type="button"
                       onClick={handleResetCodexHome}
+                      disabled={isSaving}
+                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
+                    >
+                      Reset to default
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </section>
+
+          {/* User Files section */}
+          <section className="space-y-4 border-t border-gray-100 pt-6">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800">User Files Directory</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                An isolated writable directory for saving outputs (documents, exports, etc.).
+                Kept separate from system and Codex files. Files are created with read/write
+                permissions only (no execute).
+              </p>
+            </div>
+
+            {isLoading ? (
+              <div className="text-sm text-gray-400">Loading…</div>
+            ) : (
+              <>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Active path</span>
+                    <code className="min-w-0 break-all text-xs text-gray-700">{settings?.userFilesPath}</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Default</span>
+                    <code className="min-w-0 break-all text-xs text-gray-400">{settings?.defaultUserFilesPath}</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Permissions</span>
+                    <code className="min-w-0 text-xs text-gray-400">rw-r--r-- (0644 files, 0755 dirs)</code>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Override path <span className="font-normal text-gray-400">(leave blank to use default)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={userFilesInput}
+                      onChange={(e) => setUserFilesInput(e.target.value)}
+                      placeholder={settings?.defaultUserFilesPath}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleOpenUserFilesBrowser}
+                      className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 transition hover:border-primary hover:text-primary"
+                      title="Browse…"
+                    >
+                      <IconTablerFolder className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {isUserFilesBrowsing ? (
+                    <DirectoryBrowser
+                      currentPath={browserPath}
+                      parentPath={browserParentPath}
+                      entries={browserEntries}
+                      isLoading={isBrowserLoading}
+                      onNavigate={handleBrowserNavigate}
+                      onSelect={(path) => { setUserFilesInput(path); setIsUserFilesBrowsing(false); }}
+                    />
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveUserFilesPath}
+                    disabled={isSaving}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  {settings?.savedUserFilesPath ? (
+                    <button
+                      type="button"
+                      onClick={handleResetUserFilesPath}
                       disabled={isSaving}
                       className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
                     >
@@ -487,6 +617,12 @@ function SettingsPane() {
                 env var → saved override → default local{' '}
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">.codex/</code>.
                 <strong className="text-gray-700"> Restart required</strong> after changing.
+              </li>
+              <li>
+                <strong className="text-gray-700">User Files</strong> is an isolated writable area
+                (default: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">~/user_files/</code>).
+                Files saved here are never mixed with Codex system files. File API endpoint:{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">POST /codex-api/user-files/write</code>.
               </li>
               <li>
                 Marketplace changes are applied <strong className="text-gray-700">immediately</strong>{' '}

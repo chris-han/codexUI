@@ -1469,6 +1469,9 @@ export type CodexUiSettingsInfo = {
   defaultCodexHome: string;
   skillsDir: string;
   settingsFile: string;
+  userFilesPath: string;
+  savedUserFilesPath: string | null;
+  defaultUserFilesPath: string;
   markets: MarketEntry[];
   builtInMarket: { owner: string; repo: string };
 };
@@ -1482,7 +1485,18 @@ export async function getSettings(): Promise<CodexUiSettingsInfo> {
   return payload.data;
 }
 
-export async function saveSettings(params: { codexHome?: string; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
+export async function writeUserFile(path: string, content: string): Promise<{ path: string }> {
+  const response = await fetch('/codex-api/user-files/write', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, content }),
+  });
+  const payload = await response.json() as { ok?: boolean; path?: string; error?: string };
+  if (!response.ok || !payload.path) throw new Error(payload.error ?? 'Failed to write file');
+  return { path: payload.path };
+}
+
+export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
   const response = await fetch('/codex-api/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
