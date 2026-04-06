@@ -1299,14 +1299,29 @@ app.post('/codex-api/rpc', async (req, res) => {
       const configBlock = buildThreadDevInstructions();
       const existing = typeof p.developer_instructions === 'string' ? p.developer_instructions.trim() : '';
 
-      // Grant full filesystem access so the agent can write to userFilesPath
-      // (workspace-write sandbox only allows writes inside cwd, which blocks
-      // writes to the configured user files directory).
-      const sandboxOverride = p.sandbox == null ? 'danger-full-access' : undefined;
+      // Use workspace-write sandbox with userFilesPath added as a writable root.
+      // This is safer than danger-full-access: the agent can write inside cwd
+      // (the thread workspace) AND inside userFilesPath, but nowhere else.
+      const existingConfig = (p.config != null && typeof p.config === 'object' && !Array.isArray(p.config))
+        ? p.config as Record<string, unknown>
+        : {};
+      const existingWritableRoots: string[] = Array.isArray(
+        (existingConfig.sandbox_workspace_write as Record<string, unknown> | undefined)?.writable_roots
+      )
+        ? ((existingConfig.sandbox_workspace_write as Record<string, unknown>).writable_roots as string[])
+        : [];
 
       params = {
         ...p,
-        ...(sandboxOverride !== undefined ? { sandbox: sandboxOverride } : {}),
+        // Only override sandbox mode when the caller hasn't already set one
+        ...(p.sandbox == null ? { sandbox: 'workspace-write' } : {}),
+        config: {
+          ...existingConfig,
+          sandbox_workspace_write: {
+            ...((existingConfig.sandbox_workspace_write as Record<string, unknown>) ?? {}),
+            writable_roots: [...new Set([...existingWritableRoots, userFilesPath])],
+          },
+        },
         developer_instructions: existing ? `${existing}\n\n${configBlock}` : configBlock,
       };
     }
