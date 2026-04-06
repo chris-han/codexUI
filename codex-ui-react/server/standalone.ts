@@ -1356,7 +1356,18 @@ app.post('/codex-api/rpc', async (req, res) => {
     // Ensure the cwd directory exists before starting a new thread
     if (method === 'thread/start') {
       const p = (params ?? {}) as Record<string, unknown>;
-      const cwd = readNonEmptyString(p.cwd);
+      const originalCwd = readNonEmptyString(p.cwd);
+
+      // Apply the user-configured sandbox mode (workspace-write or danger-full-access).
+      const effectiveSandbox = p.sandbox == null ? sandboxModeSetting : (p.sandbox as string);
+
+      // In workspace-write sandbox mode, override the thread cwd to userFilesPath
+      // so that relative file writes from the agent land in the configured output
+      // directory instead of the thread-specific folder.
+      const cwd = (effectiveSandbox === 'workspace-write' && userFilesPath)
+        ? userFilesPath
+        : originalCwd;
+
       if (cwd) {
         await mkdir(cwd, { recursive: true });
       }
@@ -1364,10 +1375,9 @@ app.post('/codex-api/rpc', async (req, res) => {
       // Inject configured-path context into developer_instructions
       const configBlock = buildThreadDevInstructions({ threadCwd: cwd });
 
-      // Apply the user-configured sandbox mode (workspace-write or danger-full-access).
       // For workspace-write, also inject userFilesPath as an additional writable root so
-      // the agent can write there in addition to its cwd.
-      const effectiveSandbox = p.sandbox == null ? sandboxModeSetting : (p.sandbox as string);
+      // the agent can write there in addition to its cwd.  When the original cwd differs
+      // from userFilesPath, keep the original cwd writable too so project edits still work.
 
       const existingConfig = (p.config != null && typeof p.config === 'object' && !Array.isArray(p.config))
         ? p.config as Record<string, unknown>
@@ -1380,14 +1390,19 @@ app.post('/codex-api/rpc', async (req, res) => {
         )
           ? ((existingConfig.sandbox_workspace_write as Record<string, unknown>).writable_roots as string[])
           : [];
+        const roots = [...existingWritableRoots, userFilesPath];
+        if (originalCwd && originalCwd !== userFilesPath) {
+          roots.push(originalCwd);
+        }
         configPatch.sandbox_workspace_write = {
           ...((existingConfig.sandbox_workspace_write as Record<string, unknown>) ?? {}),
-          writable_roots: [...new Set([...existingWritableRoots, userFilesPath])],
+          writable_roots: [...new Set(roots)],
         };
       }
 
       params = {
         ...p,
+        cwd,
         ...(p.sandbox == null ? { sandbox: effectiveSandbox } : {}),
         config: configPatch,
         developer_instructions: mergeDeveloperInstructions(configBlock, p.developer_instructions),

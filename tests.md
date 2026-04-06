@@ -2260,3 +2260,26 @@ Configurable list of GitHub-based skill marketplaces with active/inactive toggle
 ### Rollback/Cleanup
 - Delete `codex-ui-react/.codex-ui-settings.json` to reset to a clean state.
 - Restart the server.
+
+---
+
+### Feature: Agent Sandbox Mode – File Output to Configured Path
+
+#### Prerequisites
+- codex-ui-react server running on port 4173
+- Sandbox mode set to `workspace-write` in Settings
+- A configured user files path (Settings → User Files Directory)
+
+#### Steps
+1. Open the app and start a new thread from a project folder.
+2. Ask the agent to create a file, e.g. "Create a file called hello.txt with the text Hello World".
+3. Do NOT specify an absolute path – let the agent choose where to save.
+
+#### Expected Result
+- The file is saved inside the configured **User Files Directory** (shown in Settings), NOT in the thread's original cwd folder.
+- The agent's cwd is overridden to `userFilesPath` when sandbox mode is `workspace-write`.
+- If the original project cwd differs from userFilesPath, both directories remain in `writable_roots` so project code edits still work.
+
+#### Rollback/Cleanup
+- Delete any test files created in the user files directory.
+- No server restart needed.

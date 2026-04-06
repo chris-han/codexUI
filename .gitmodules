@@ -1,3 +1,6 @@
 [submodule "codex"]
 	path = codex
 	url = https://github.com/chris-han/codex.git
+[submodule "pi-mono"]
+	path = pi-mono
+	url = https://github.com/chris-han/pi-mono.git
