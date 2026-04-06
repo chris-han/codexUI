@@ -104,6 +104,8 @@ function SkillDetailModal({
       name: skill.name,
       installed: skill.installed,
       path: skill.path,
+      marketOwner: skill.marketOwner,
+      marketRepo: skill.marketRepo,
     }).then((data) => {
       if (cancelled) return;
       setReadme(data.content);
@@ -283,7 +285,7 @@ function SkillsHub() {
     setActionError(null);
     setIsInstalling(true);
     try {
-      await api.installMarketplaceSkill({ owner: skill.owner, name: skill.name });
+      await api.installMarketplaceSkill({ owner: skill.owner, name: skill.name, marketOwner: skill.marketOwner, marketRepo: skill.marketRepo });
       await Promise.all([loadSkills(), reloadMarketplace(activeQuery || searchQuery)]);
       setToast(`${skill.displayName || skill.name} installed`);
       setSelectedSkill(null);

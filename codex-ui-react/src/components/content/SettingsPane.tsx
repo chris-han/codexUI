@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { IconTablerFolder, IconTablerChevronLeft } from '../icons';
 import * as api from '../../api/codexGateway';
-import type { CodexUiSettingsInfo } from '../../api/codexGateway';
+import type { CodexUiSettingsInfo, MarketEntry } from '../../api/codexGateway';
 import ContentHeader from './ContentHeader';
 
 type DirectoryBrowseEntry = {
@@ -38,7 +38,6 @@ function DirectoryBrowser({
 }: DirectoryBrowserProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50">
-      {/* Current path + up button */}
       <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-2">
         {parentPath ? (
           <button
@@ -63,7 +62,6 @@ function DirectoryBrowser({
           Select
         </button>
       </div>
-      {/* Directory entries */}
       <div className="max-h-52 overflow-y-auto">
         {isLoading ? (
           <div className="px-4 py-6 text-center text-sm text-gray-400">Loading…</div>
@@ -87,6 +85,25 @@ function DirectoryBrowser({
   );
 }
 
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${checked ? 'bg-primary' : 'bg-gray-200'}`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
+      />
+    </button>
+  );
+}
+
 // ── Settings pane ─────────────────────────────────────────────────────────────
 
 function SettingsPane() {
@@ -103,10 +120,15 @@ function SettingsPane() {
   const [browserEntries, setBrowserEntries] = useState<DirectoryBrowseEntry[]>([]);
   const [isBrowserLoading, setIsBrowserLoading] = useState(false);
 
-  // Editable fields
+  // Codex home edit
   const [codexHomeInput, setCodexHomeInput] = useState('');
-  const [marketplaceOwnerInput, setMarketplaceOwnerInput] = useState('');
-  const [marketplaceRepoInput, setMarketplaceRepoInput] = useState('');
+
+  // Markets state
+  const [markets, setMarkets] = useState<MarketEntry[]>([]);
+
+  // Add market form
+  const [addOwner, setAddOwner] = useState('');
+  const [addRepo, setAddRepo] = useState('');
 
   const loadSettings = async () => {
     setIsLoading(true);
@@ -114,8 +136,7 @@ function SettingsPane() {
       const data = await api.getSettings();
       setSettings(data);
       setCodexHomeInput(data.savedCodexHome ?? '');
-      setMarketplaceOwnerInput(data.savedMarketplaceOwner ?? '');
-      setMarketplaceRepoInput(data.savedMarketplaceRepo ?? '');
+      setMarkets(data.markets ?? []);
     } catch {
       // ignore
     } finally {
@@ -158,16 +179,52 @@ function SettingsPane() {
     setIsBrowsing(false);
   };
 
-  const handleSave = async () => {
+  const saveMarkets = async (next: MarketEntry[]) => {
     setSaveError('');
     setSaveMessage('');
     setIsSaving(true);
     try {
-      const result = await api.saveSettings({
-        codexHome: codexHomeInput.trim() || undefined,
-        marketplaceOwner: marketplaceOwnerInput.trim() || undefined,
-        marketplaceRepo: marketplaceRepoInput.trim() || undefined,
-      });
+      const result = await api.saveSettings({ markets: next });
+      setSaveMessage(result.message);
+      setMarkets(next);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleMarket = (index: number) => {
+    const next = markets.map((m, i) => (i === index ? { ...m, active: !m.active } : m));
+    void saveMarkets(next);
+  };
+
+  const handleRemoveMarket = (index: number) => {
+    const next = markets.filter((_, i) => i !== index);
+    void saveMarkets(next);
+  };
+
+  const handleAddMarket = () => {
+    const owner = addOwner.trim();
+    const repo = addRepo.trim();
+    if (!owner || !repo) return;
+    const alreadyExists = markets.some((m) => m.owner === owner && m.repo === repo);
+    if (alreadyExists) {
+      setSaveError(`${owner}/${repo} is already in the list`);
+      return;
+    }
+    const next = [...markets, { owner, repo, active: true }];
+    void saveMarkets(next);
+    setAddOwner('');
+    setAddRepo('');
+  };
+
+  const handleSaveCodexHome = async () => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      const result = await api.saveSettings({ codexHome: codexHomeInput.trim() || undefined });
       setSaveMessage(result.message);
       await loadSettings();
     } catch (err) {
@@ -193,25 +250,7 @@ function SettingsPane() {
     }
   };
 
-  const handleResetMarketplace = async () => {
-    setSaveError('');
-    setSaveMessage('');
-    setIsSaving(true);
-    try {
-      const result = await api.saveSettings({ marketplaceOwner: '', marketplaceRepo: '' });
-      setSaveMessage(result.message);
-      setMarketplaceOwnerInput('');
-      setMarketplaceRepoInput('');
-      await loadSettings();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Reset failed');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const isMarketplaceCustomized =
-    !!(settings?.savedMarketplaceOwner || settings?.savedMarketplaceRepo);
+  const builtIn = settings?.builtInMarket;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -238,7 +277,6 @@ function SettingsPane() {
               <div className="text-sm text-gray-400">Loading…</div>
             ) : (
               <>
-                {/* Active value (read-only info) */}
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1.5 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Active now</span>
@@ -254,7 +292,6 @@ function SettingsPane() {
                   </div>
                 </div>
 
-                {/* Edit field */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
                     Override path <span className="font-normal text-gray-400">(leave blank to use default)</span>
@@ -277,7 +314,6 @@ function SettingsPane() {
                     </button>
                   </div>
 
-                  {/* Directory browser */}
                   {isBrowsing ? (
                     <DirectoryBrowser
                       currentPath={browserPath}
@@ -293,7 +329,7 @@ function SettingsPane() {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={handleSave}
+                    onClick={handleSaveCodexHome}
                     disabled={isSaving}
                     className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
                   >
@@ -317,10 +353,12 @@ function SettingsPane() {
           {/* Skills Marketplace section */}
           <section className="space-y-4 border-t border-gray-100 pt-6">
             <div>
-              <h2 className="text-base font-semibold text-gray-800">Skills Marketplace</h2>
+              <h2 className="text-base font-semibold text-gray-800">Skills Marketplaces</h2>
               <p className="mt-1 text-sm text-gray-500">
-                The GitHub repository used as the skill marketplace. Skills are fetched from{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">github.com/&lt;owner&gt;/&lt;repo&gt;</code>.
+                GitHub repositories used as skill sources. Skills from all active marketplaces are
+                merged in the Skills Hub. Each repo must use the{' '}
+                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">skills/&lt;author&gt;/&lt;name&gt;/</code>{' '}
+                layout.
               </p>
             </div>
 
@@ -328,78 +366,95 @@ function SettingsPane() {
               <div className="text-sm text-gray-400">Loading…</div>
             ) : (
               <>
-                {/* Current marketplace info */}
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1.5 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Active URL</span>
-                    <a
-                      href={settings?.marketplaceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="min-w-0 break-all text-xs text-primary underline underline-offset-2"
-                    >
-                      {settings?.marketplaceUrl}
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Owner</span>
-                    <code className="text-xs text-gray-700">{settings?.marketplaceOwner}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Repo</span>
-                    <code className="text-xs text-gray-700">{settings?.marketplaceRepo}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 text-xs font-medium text-gray-500">Default</span>
-                    <code className="text-xs text-gray-400">
-                      {settings?.defaultMarketplaceOwner}/{settings?.defaultMarketplaceRepo}
-                    </code>
-                  </div>
+                {/* Market rows */}
+                <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 overflow-hidden">
+                  {markets.map((market, i) => {
+                    const isBuiltIn = builtIn &&
+                      market.owner === builtIn.owner &&
+                      market.repo === builtIn.repo;
+                    const url = `https://github.com/${market.owner}/${market.repo}`;
+                    return (
+                      <div
+                        key={`${market.owner}/${market.repo}`}
+                        className="flex items-center gap-3 bg-white px-3 py-2.5"
+                      >
+                        <Toggle
+                          checked={market.active}
+                          onChange={() => handleToggleMarket(i)}
+                          label={`Toggle ${market.owner}/${market.repo}`}
+                        />
+
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <code className="min-w-0 truncate text-sm text-gray-700">
+                            {market.owner}/{market.repo}
+                          </code>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-gray-400 transition hover:text-primary"
+                            title={url}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
+
+                        {isBuiltIn ? (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                            Official
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMarket(i)}
+                            disabled={isSaving}
+                            className="shrink-0 rounded p-1 text-gray-400 transition hover:text-red-500 disabled:opacity-50"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {markets.length === 0 ? (
+                    <div className="bg-white px-4 py-4 text-center text-sm text-gray-400">
+                      No marketplaces configured. The official marketplace will be used.
+                    </div>
+                  ) : null}
                 </div>
 
-                {/* Edit fields */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Owner</label>
+                {/* Add marketplace form */}
+                <div className="rounded-lg border border-dashed border-gray-200 p-3">
+                  <p className="mb-2.5 text-xs font-medium text-gray-500">Add marketplace</p>
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      value={marketplaceOwnerInput}
-                      onChange={(e) => setMarketplaceOwnerInput(e.target.value)}
-                      placeholder={settings?.defaultMarketplaceOwner}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
+                      value={addOwner}
+                      onChange={(e) => setAddOwner(e.target.value)}
+                      placeholder="owner"
+                      className="min-w-0 w-28 flex-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Repo</label>
+                    <span className="self-center text-gray-400">/</span>
                     <input
                       type="text"
-                      value={marketplaceRepoInput}
-                      onChange={(e) => setMarketplaceRepoInput(e.target.value)}
-                      placeholder={settings?.defaultMarketplaceRepo}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
+                      value={addRepo}
+                      onChange={(e) => setAddRepo(e.target.value)}
+                      placeholder="repo"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddMarket(); }}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-primary"
                     />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {isSaving ? 'Saving…' : 'Save'}
-                  </button>
-                  {isMarketplaceCustomized ? (
                     <button
                       type="button"
-                      onClick={handleResetMarketplace}
-                      disabled={isSaving}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
+                      onClick={handleAddMarket}
+                      disabled={isSaving || !addOwner.trim() || !addRepo.trim()}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
                     >
-                      Reset to default
+                      <Plus className="h-4 w-4" />
+                      Add
                     </button>
-                  ) : null}
+                  </div>
                 </div>
               </>
             )}
@@ -435,12 +490,10 @@ function SettingsPane() {
               </li>
               <li>
                 Marketplace changes are applied <strong className="text-gray-700">immediately</strong>{' '}
-                (no restart needed) and the skills cache is cleared.
+                (no restart needed). The skills cache is cleared on each change.
               </li>
               <li>
-                The marketplace repo must follow the{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">skills/&lt;owner&gt;/&lt;name&gt;/</code>{' '}
-                directory layout with a <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">SKILL.md</code> in each skill folder.
+                Skills from multiple active marketplaces are merged. If two marketplaces share a skill name, the first one in the list takes priority.
               </li>
             </ul>
           </section>

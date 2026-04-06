@@ -655,6 +655,8 @@ export async function getSkillMarketplaceReadme(params: {
   name: string;
   installed?: boolean;
   path?: string;
+  marketOwner?: string;
+  marketRepo?: string;
 }): Promise<{ content: string; description: string }> {
   const search = new URLSearchParams({
     owner: params.owner,
@@ -665,6 +667,12 @@ export async function getSkillMarketplaceReadme(params: {
   }
   if (params.path?.trim()) {
     search.set('path', params.path.trim());
+  }
+  if (params.marketOwner) {
+    search.set('marketOwner', params.marketOwner);
+  }
+  if (params.marketRepo) {
+    search.set('marketRepo', params.marketRepo);
   }
 
   const response = await fetch(`/codex-api/skills-hub/readme?${search.toString()}`);
@@ -685,6 +693,8 @@ export async function getSkillMarketplaceReadme(params: {
 export async function installMarketplaceSkill(params: {
   owner: string;
   name: string;
+  marketOwner?: string;
+  marketRepo?: string;
 }): Promise<{ path: string }> {
   const response = await fetch('/codex-api/skills-hub/install', {
     method: 'POST',
@@ -1432,6 +1442,8 @@ function normalizeSkillsMarketplaceEntries(data: unknown): SkillMarketplaceInfo[
       installed: record.installed === true,
       path: typeof record.path === 'string' ? record.path : undefined,
       enabled: typeof record.enabled === 'boolean' ? record.enabled : undefined,
+      marketOwner: typeof record.marketOwner === 'string' ? record.marketOwner : undefined,
+      marketRepo: typeof record.marketRepo === 'string' ? record.marketRepo : undefined,
     });
   }
 
@@ -1445,19 +1457,20 @@ function extractProjectName(cwd: string): string {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+export type MarketEntry = {
+  owner: string;
+  repo: string;
+  active: boolean;
+};
+
 export type CodexUiSettingsInfo = {
   codexHome: string;
   savedCodexHome: string | null;
   defaultCodexHome: string;
   skillsDir: string;
   settingsFile: string;
-  marketplaceOwner: string;
-  marketplaceRepo: string;
-  savedMarketplaceOwner: string | null;
-  savedMarketplaceRepo: string | null;
-  defaultMarketplaceOwner: string;
-  defaultMarketplaceRepo: string;
-  marketplaceUrl: string;
+  markets: MarketEntry[];
+  builtInMarket: { owner: string; repo: string };
 };
 
 export async function getSettings(): Promise<CodexUiSettingsInfo> {
@@ -1469,7 +1482,7 @@ export async function getSettings(): Promise<CodexUiSettingsInfo> {
   return payload.data;
 }
 
-export async function saveSettings(params: { codexHome?: string; marketplaceOwner?: string; marketplaceRepo?: string }): Promise<{ restartRequired: boolean; message: string }> {
+export async function saveSettings(params: { codexHome?: string; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
   const response = await fetch('/codex-api/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

@@ -19,8 +19,7 @@ const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
 type CodexUiSettings = {
   codexHome?: string;
-  marketplaceOwner?: string;
-  marketplaceRepo?: string;
+  markets?: Array<{ owner: string; repo: string; active: boolean }>;
 };
 
 function readSettingsSync(): CodexUiSettings {
@@ -502,7 +501,7 @@ function resolveCodexInvocation(): CommandInvocation {
 
 type SkillHubEntry = {
   name: string;
-  owner: string;
+  owner: string;           // skill author within the market tree
   description: string;
   displayName: string;
   publishedAt: number;
@@ -511,17 +510,16 @@ type SkillHubEntry = {
   installed: boolean;
   path?: string;
   enabled?: boolean;
+  marketOwner: string;     // which market repo this came from
+  marketRepo: string;
 };
 
 type SkillsTreeEntry = {
   name: string;
   owner: string;
   url: string;
-};
-
-type SkillsTreeCache = {
-  entries: SkillsTreeEntry[];
-  fetchedAt: number;
+  marketOwner: string;
+  marketRepo: string;
 };
 
 type InstalledSkillInfo = {
@@ -536,22 +534,34 @@ type MetaJson = {
   latest?: { publishedAt?: number };
 };
 
-const DEFAULT_HUB_SKILLS_OWNER = 'openclaw';
-const DEFAULT_HUB_SKILLS_REPO = 'skills';
+const BUILTIN_MARKET_OWNER = 'openclaw';
+const BUILTIN_MARKET_REPO = 'skills';
 
-function resolveMarketplaceCoords(): { owner: string; repo: string } {
+type MarketEntry = { owner: string; repo: string; active: boolean };
+
+function resolveAllMarkets(): MarketEntry[] {
   const saved = readSettingsSync();
-  const owner = (saved.marketplaceOwner ?? '').trim() || DEFAULT_HUB_SKILLS_OWNER;
-  const repo = (saved.marketplaceRepo ?? '').trim() || DEFAULT_HUB_SKILLS_REPO;
-  return { owner, repo };
+  const savedMarkets: MarketEntry[] = Array.isArray(saved.markets)
+    ? (saved.markets as Array<{ owner?: unknown; repo?: unknown; active?: unknown }>)
+        .filter((m) => typeof m.owner === 'string' && typeof m.repo === 'string' && m.owner.trim() && m.repo.trim())
+        .map((m) => ({ owner: (m.owner as string).trim(), repo: (m.repo as string).trim(), active: m.active !== false }))
+    : [];
+
+  // Built-in is always first; pick its active state from saved if present
+  const builtInSaved = savedMarkets.find((m) => m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO);
+  const builtIn: MarketEntry = { owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO, active: builtInSaved ? builtInSaved.active : true };
+  const custom = savedMarkets.filter((m) => !(m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO));
+  return [builtIn, ...custom];
 }
 
-let { owner: HUB_SKILLS_OWNER, repo: HUB_SKILLS_REPO } = resolveMarketplaceCoords();
+let allMarkets: MarketEntry[] = resolveAllMarkets();
+
 const TREE_CACHE_TTL_MS = 5 * 60 * 1000;
 const SKILLS_HUB_GITHUB_TIMEOUT_MS = 8_000;
 const SKILLS_HUB_BRIDGE_TIMEOUT_MS = 5_000;
-let skillsTreeCache: SkillsTreeCache | null = null;
-const metaCache = new Map<string, { description: string; displayName: string; publishedAt: number }>();
+// Per-market caches keyed as "owner/repo"
+const skillsTreeCacheMap = new Map<string, { entries: SkillsTreeEntry[]; fetchedAt: number }>();
+const metaCacheMap = new Map<string, Map<string, { description: string; displayName: string; publishedAt: number }>>();
 
 function getSkillsInstallDir(): string {
   return join(CODEX_HOME, 'skills');
@@ -712,12 +722,14 @@ async function ghFetch(url: string): Promise<Response> {
   });
 }
 
-async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
-  if (skillsTreeCache && Date.now() - skillsTreeCache.fetchedAt < TREE_CACHE_TTL_MS) {
-    return skillsTreeCache.entries;
+async function fetchSkillsTree(marketOwner: string, marketRepo: string): Promise<SkillsTreeEntry[]> {
+  const cacheKey = `${marketOwner}/${marketRepo}`;
+  const cached = skillsTreeCacheMap.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < TREE_CACHE_TTL_MS) {
+    return cached.entries;
   }
 
-  const response = await ghFetch(`https://api.github.com/repos/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/git/trees/main?recursive=1`);
+  const response = await ghFetch(`https://api.github.com/repos/${marketOwner}/${marketRepo}/git/trees/main?recursive=1`);
   if (!response.ok) {
     throw new Error(`GitHub tree API returned ${response.status}`);
   }
@@ -737,24 +749,41 @@ async function fetchSkillsTree(): Promise<SkillsTreeEntry[]> {
     entries.push({
       owner,
       name,
-      url: `https://github.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/tree/main/skills/${owner}/${name}`,
+      url: `https://github.com/${marketOwner}/${marketRepo}/tree/main/skills/${owner}/${name}`,
+      marketOwner,
+      marketRepo,
     });
   }
 
-  skillsTreeCache = { entries, fetchedAt: Date.now() };
+  skillsTreeCacheMap.set(cacheKey, { entries, fetchedAt: Date.now() });
   return entries;
 }
 
 async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
-  const batch = entries.filter((entry) => !metaCache.has(`${entry.owner}/${entry.name}`)).slice(0, 50);
-  await Promise.allSettled(batch.map(async (entry) => {
+  // Group by market, fetch uncached entries
+  const byMarket = new Map<string, SkillsTreeEntry[]>();
+  for (const entry of entries) {
+    const mk = `${entry.marketOwner}/${entry.marketRepo}`;
+    if (!byMarket.has(mk)) byMarket.set(mk, []);
+    const mc = metaCacheMap.get(mk) ?? new Map();
+    if (!mc.has(`${entry.owner}/${entry.name}`)) {
+      byMarket.get(mk)!.push(entry);
+    }
+  }
+
+  const toFetch: SkillsTreeEntry[] = [];
+  for (const list of byMarket.values()) toFetch.push(...list.slice(0, 50));
+
+  await Promise.allSettled(toFetch.map(async (entry) => {
     const response = await fetch(
-      `https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${entry.owner}/${entry.name}/_meta.json`,
+      `https://raw.githubusercontent.com/${entry.marketOwner}/${entry.marketRepo}/main/skills/${entry.owner}/${entry.name}/_meta.json`,
       { signal: AbortSignal.timeout(SKILLS_HUB_GITHUB_TIMEOUT_MS) }
     );
     if (!response.ok) return;
     const meta = await response.json() as MetaJson;
-    metaCache.set(`${entry.owner}/${entry.name}`, {
+    const mk = `${entry.marketOwner}/${entry.marketRepo}`;
+    if (!metaCacheMap.has(mk)) metaCacheMap.set(mk, new Map());
+    metaCacheMap.get(mk)!.set(`${entry.owner}/${entry.name}`, {
       description: typeof meta.description === 'string' ? meta.description : '',
       displayName: typeof meta.displayName === 'string' ? meta.displayName : '',
       publishedAt: meta.latest?.publishedAt ?? 0,
@@ -763,7 +792,8 @@ async function fetchMetaBatch(entries: SkillsTreeEntry[]): Promise<void> {
 }
 
 function buildSkillHubEntry(entry: SkillsTreeEntry): SkillHubEntry {
-  const meta = metaCache.get(`${entry.owner}/${entry.name}`);
+  const mk = `${entry.marketOwner}/${entry.marketRepo}`;
+  const meta = metaCacheMap.get(mk)?.get(`${entry.owner}/${entry.name}`);
   return {
     name: entry.name,
     owner: entry.owner,
@@ -773,6 +803,8 @@ function buildSkillHubEntry(entry: SkillsTreeEntry): SkillHubEntry {
     avatarUrl: `https://github.com/${entry.owner}.png?size=40`,
     url: entry.url,
     installed: false,
+    marketOwner: entry.marketOwner,
+    marketRepo: entry.marketRepo,
   };
 }
 
@@ -1385,12 +1417,29 @@ app.get('/codex-api/skills-hub', async (req, res) => {
   const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 200);
 
   try {
-    const [entriesResult, installedResult] = await Promise.allSettled([
-      fetchSkillsTree(),
+    const activeMarkets = allMarkets.filter((m) => m.active);
+
+    const [treesResult, installedResult] = await Promise.allSettled([
+      Promise.allSettled(activeMarkets.map((m) => fetchSkillsTree(m.owner, m.repo))),
       scanInstalledSkills(bridge),
     ]);
 
-    const allEntries = entriesResult.status === 'fulfilled' ? entriesResult.value : [];
+    // Merge entries from all active markets; first market wins on name collision
+    const allEntries: SkillsTreeEntry[] = [];
+    const seenNames = new Set<string>();
+    if (treesResult.status === 'fulfilled') {
+      for (const treeResult of treesResult.value) {
+        if (treeResult.status === 'fulfilled') {
+          for (const entry of treeResult.value) {
+            if (!seenNames.has(entry.name)) {
+              seenNames.add(entry.name);
+              allEntries.push(entry);
+            }
+          }
+        }
+      }
+    }
+
     const installed = installedResult.status === 'fulfilled' ? installedResult.value : new Map<string, InstalledSkillInfo>();
 
     if (allEntries.length > 0) {
@@ -1410,6 +1459,8 @@ app.get('/codex-api/skills-hub', async (req, res) => {
             avatarUrl: '',
             url: '',
             installed: true,
+            marketOwner: '',
+            marketRepo: '',
           };
       return {
         ...base,
@@ -1419,14 +1470,24 @@ app.get('/codex-api/skills-hub', async (req, res) => {
       };
     });
 
+    const partialErrors: string[] = [];
+    if (treesResult.status === 'fulfilled') {
+      for (let i = 0; i < treesResult.value.length; i++) {
+        if (treesResult.value[i].status === 'rejected') {
+          const m = activeMarkets[i];
+          partialErrors.push(`${m.owner}/${m.repo}: ${getErrorMessageFromPayload((treesResult.value[i] as PromiseRejectedResult).reason, 'Failed to load marketplace')}`);
+        }
+      }
+    }
+    if (installedResult.status === 'rejected') {
+      partialErrors.push(getErrorMessageFromPayload(installedResult.reason, 'Failed to load installed skills'));
+    }
+
     res.json({
       data: allEntries.length > 0 ? searchSkillsHub(allEntries, query, limit, sort, installed) : [],
       installed: installedEntries,
       total: allEntries.length,
-      partialError: [
-        entriesResult.status === 'rejected' ? getErrorMessageFromPayload(entriesResult.reason, 'Failed to load marketplace') : '',
-        installedResult.status === 'rejected' ? getErrorMessageFromPayload(installedResult.reason, 'Failed to load installed skills') : '',
-      ].filter(Boolean).join('; ') || undefined,
+      partialError: partialErrors.join('; ') || undefined,
     });
   } catch (error) {
     res.status(500).json({ error: getErrorMessageFromPayload(error, 'Failed to fetch skills hub') });
@@ -1439,6 +1500,9 @@ app.get('/codex-api/skills-hub/readme', async (req, res) => {
     const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
     const installed = req.query.installed === 'true';
     const skillPath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    // marketOwner/marketRepo tell us which market repo to fetch SKILL.md from
+    const marketOwner = (typeof req.query.marketOwner === 'string' ? req.query.marketOwner.trim() : '') || BUILTIN_MARKET_OWNER;
+    const marketRepo = (typeof req.query.marketRepo === 'string' ? req.query.marketRepo.trim() : '') || BUILTIN_MARKET_REPO;
 
     if (!owner || !name) {
       res.status(400).json({ error: 'Missing owner or name' });
@@ -1456,7 +1520,7 @@ app.get('/codex-api/skills-hub/readme', async (req, res) => {
       return;
     }
 
-    const response = await fetch(`https://raw.githubusercontent.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}/main/skills/${owner}/${name}/SKILL.md`);
+    const response = await fetch(`https://raw.githubusercontent.com/${marketOwner}/${marketRepo}/main/skills/${owner}/${name}/SKILL.md`);
     if (!response.ok) {
       throw new Error(`Failed to fetch SKILL.md: ${response.status}`);
     }
@@ -1475,6 +1539,9 @@ app.post('/codex-api/skills-hub/install', async (req, res) => {
   try {
     const owner = typeof req.body?.owner === 'string' ? req.body.owner.trim() : '';
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    // marketOwner/marketRepo identify which market repo to install from
+    const marketOwner = (typeof req.body?.marketOwner === 'string' ? req.body.marketOwner.trim() : '') || BUILTIN_MARKET_OWNER;
+    const marketRepo = (typeof req.body?.marketRepo === 'string' ? req.body.marketRepo.trim() : '') || BUILTIN_MARKET_REPO;
     if (!owner || !name) {
       res.status(400).json({ error: 'Missing owner or name' });
       return;
@@ -1499,7 +1566,7 @@ app.post('/codex-api/skills-hub/install', async (req, res) => {
     await runCommand(python.command, [
       ...python.args,
       installerScript,
-      '--repo', `${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
+      '--repo', `${marketOwner}/${marketRepo}`,
       '--path', `skills/${owner}/${name}`,
       '--dest', installDir,
       '--method', 'auto',
@@ -1600,13 +1667,8 @@ app.get('/codex-api/settings', async (_req, res) => {
         defaultCodexHome: DEFAULT_CODEX_HOME,
         skillsDir: getSkillsInstallDir(),
         settingsFile: SETTINGS_FILE,
-        marketplaceOwner: HUB_SKILLS_OWNER,
-        marketplaceRepo: HUB_SKILLS_REPO,
-        savedMarketplaceOwner: settings.marketplaceOwner ?? null,
-        savedMarketplaceRepo: settings.marketplaceRepo ?? null,
-        defaultMarketplaceOwner: DEFAULT_HUB_SKILLS_OWNER,
-        defaultMarketplaceRepo: DEFAULT_HUB_SKILLS_REPO,
-        marketplaceUrl: `https://github.com/${HUB_SKILLS_OWNER}/${HUB_SKILLS_REPO}`,
+        markets: allMarkets,
+        builtInMarket: { owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO },
       },
     });
   } catch (error) {
@@ -1622,6 +1684,8 @@ app.put('/codex-api/settings', async (req, res) => {
       return;
     }
     const nextSettings: CodexUiSettings = {};
+    let codexHomeChanged = false;
+
     if (typeof record.codexHome === 'string') {
       const trimmed = record.codexHome.trim();
       if (trimmed) {
@@ -1637,27 +1701,32 @@ app.put('/codex-api/settings', async (req, res) => {
         }
         nextSettings.codexHome = normalized;
       } else {
-        // empty string → reset to default
         nextSettings.codexHome = '';
       }
+      codexHomeChanged = true;
     }
-    if (typeof record.marketplaceOwner === 'string') {
-      const trimmed = record.marketplaceOwner.trim();
-      nextSettings.marketplaceOwner = trimmed;
-      // Apply immediately (no restart needed for marketplace)
-      HUB_SKILLS_OWNER = trimmed || DEFAULT_HUB_SKILLS_OWNER;
-      skillsTreeCache = null;
-      metaCache.clear();
+
+    if (Array.isArray(record.markets)) {
+      const normalized = (record.markets as unknown[])
+        .filter((m): m is { owner: string; repo: string; active: boolean } => {
+          if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
+          const r = m as Record<string, unknown>;
+          return typeof r.owner === 'string' && typeof r.repo === 'string' && r.owner.trim().length > 0 && r.repo.trim().length > 0;
+        })
+        .map((m) => ({ owner: m.owner.trim(), repo: m.repo.trim(), active: m.active !== false }));
+      // Ensure built-in is always in the list
+      const hasBuiltIn = normalized.some((m) => m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO);
+      if (!hasBuiltIn) {
+        normalized.unshift({ owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO, active: true });
+      }
+      nextSettings.markets = normalized;
+      // Apply immediately
+      allMarkets = normalized;
+      skillsTreeCacheMap.clear();
+      metaCacheMap.clear();
     }
-    if (typeof record.marketplaceRepo === 'string') {
-      const trimmed = record.marketplaceRepo.trim();
-      nextSettings.marketplaceRepo = trimmed;
-      HUB_SKILLS_REPO = trimmed || DEFAULT_HUB_SKILLS_REPO;
-      skillsTreeCache = null;
-      metaCache.clear();
-    }
+
     await writeSettingsAsync(nextSettings);
-    const codexHomeChanged = 'codexHome' in nextSettings;
     res.json({
       ok: true,
       restartRequired: codexHomeChanged,

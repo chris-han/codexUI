@@ -328,6 +328,8 @@ export type SkillMarketplaceInfo = {
   installed: boolean
   path?: string
   enabled?: boolean
+  marketOwner?: string
+  marketRepo?: string
 }
 
 export type ThreadComposerSubmitPayload = {

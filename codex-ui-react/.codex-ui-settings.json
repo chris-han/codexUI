@@ -1,0 +1,9 @@
+{
+  "markets": [
+    {
+      "owner": "openclaw",
+      "repo": "skills",
+      "active": true
+    }
+  ]
+}
