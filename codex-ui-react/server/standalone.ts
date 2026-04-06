@@ -1298,8 +1298,15 @@ app.post('/codex-api/rpc', async (req, res) => {
       // Inject configured-path context into developer_instructions
       const configBlock = buildThreadDevInstructions();
       const existing = typeof p.developer_instructions === 'string' ? p.developer_instructions.trim() : '';
+
+      // Grant full filesystem access so the agent can write to userFilesPath
+      // (workspace-write sandbox only allows writes inside cwd, which blocks
+      // writes to the configured user files directory).
+      const sandboxOverride = p.sandbox == null ? 'danger-full-access' : undefined;
+
       params = {
         ...p,
+        ...(sandboxOverride !== undefined ? { sandbox: sandboxOverride } : {}),
         developer_instructions: existing ? `${existing}\n\n${configBlock}` : configBlock,
       };
     }
@@ -1952,6 +1959,9 @@ async function main() {
   } catch (err) {
     console.warn(`Could not create folder ${USER_THREADS_PATH}:`, err);
   }
+
+  // Ensure user_files directory exists at startup
+  await ensureUserFilesDir(userFilesPath);
 
   await bridge.start();
   console.log('Bridge ready');
