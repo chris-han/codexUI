@@ -18,9 +18,13 @@ const DEFAULT_USER_FILES_PATH = join(__dirname, '..', 'user_files');
 const SETTINGS_FILE = join(__dirname, '..', '.codex-ui-settings.json');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
+type SandboxModeSetting = 'workspace-write' | 'danger-full-access';
+const DEFAULT_SANDBOX_MODE: SandboxModeSetting = 'workspace-write';
+
 type CodexUiSettings = {
   codexHome?: string;
   userFilesPath?: string;
+  sandboxMode?: SandboxModeSetting;
   markets?: Array<{ owner: string; repo: string; active: boolean }>;
 };
 
@@ -75,6 +79,15 @@ function resolveUserFilesPath(): string {
 
 const CODEX_HOME = resolveCodexHome();
 let userFilesPath = resolveUserFilesPath();
+
+function resolveSandboxMode(): SandboxModeSetting {
+  const saved = readSettingsSync();
+  if (saved.sandboxMode === 'danger-full-access' || saved.sandboxMode === 'workspace-write') {
+    return saved.sandboxMode;
+  }
+  return DEFAULT_SANDBOX_MODE;
+}
+let sandboxModeSetting: SandboxModeSetting = resolveSandboxMode();
 
 /** Ensure userFilesPath exists with 0o755 (rw for owner, no exec by default on files) */
 async function ensureUserFilesDir(dir: string): Promise<void> {
@@ -1299,29 +1312,32 @@ app.post('/codex-api/rpc', async (req, res) => {
       const configBlock = buildThreadDevInstructions();
       const existing = typeof p.developer_instructions === 'string' ? p.developer_instructions.trim() : '';
 
-      // Use workspace-write sandbox with userFilesPath added as a writable root.
-      // This is safer than danger-full-access: the agent can write inside cwd
-      // (the thread workspace) AND inside userFilesPath, but nowhere else.
+      // Apply the user-configured sandbox mode (workspace-write or danger-full-access).
+      // For workspace-write, also inject userFilesPath as an additional writable root so
+      // the agent can write there in addition to its cwd.
+      const effectiveSandbox = p.sandbox == null ? sandboxModeSetting : (p.sandbox as string);
+
       const existingConfig = (p.config != null && typeof p.config === 'object' && !Array.isArray(p.config))
         ? p.config as Record<string, unknown>
         : {};
-      const existingWritableRoots: string[] = Array.isArray(
-        (existingConfig.sandbox_workspace_write as Record<string, unknown> | undefined)?.writable_roots
-      )
-        ? ((existingConfig.sandbox_workspace_write as Record<string, unknown>).writable_roots as string[])
-        : [];
+
+      const configPatch: Record<string, unknown> = { ...existingConfig };
+      if (effectiveSandbox === 'workspace-write') {
+        const existingWritableRoots: string[] = Array.isArray(
+          (existingConfig.sandbox_workspace_write as Record<string, unknown> | undefined)?.writable_roots
+        )
+          ? ((existingConfig.sandbox_workspace_write as Record<string, unknown>).writable_roots as string[])
+          : [];
+        configPatch.sandbox_workspace_write = {
+          ...((existingConfig.sandbox_workspace_write as Record<string, unknown>) ?? {}),
+          writable_roots: [...new Set([...existingWritableRoots, userFilesPath])],
+        };
+      }
 
       params = {
         ...p,
-        // Only override sandbox mode when the caller hasn't already set one
-        ...(p.sandbox == null ? { sandbox: 'workspace-write' } : {}),
-        config: {
-          ...existingConfig,
-          sandbox_workspace_write: {
-            ...((existingConfig.sandbox_workspace_write as Record<string, unknown>) ?? {}),
-            writable_roots: [...new Set([...existingWritableRoots, userFilesPath])],
-          },
-        },
+        ...(p.sandbox == null ? { sandbox: effectiveSandbox } : {}),
+        config: configPatch,
         developer_instructions: existing ? `${existing}\n\n${configBlock}` : configBlock,
       };
     }
@@ -1807,6 +1823,9 @@ app.get('/codex-api/settings', async (_req, res) => {
         userFilesPath,
         savedUserFilesPath: settings.userFilesPath ?? null,
         defaultUserFilesPath: DEFAULT_USER_FILES_PATH,
+        sandboxMode: sandboxModeSetting,
+        savedSandboxMode: settings.sandboxMode ?? null,
+        defaultSandboxMode: DEFAULT_SANDBOX_MODE,
         markets: allMarkets,
         builtInMarket: { owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO },
       },
@@ -1857,6 +1876,20 @@ app.put('/codex-api/settings', async (req, res) => {
         nextSettings.userFilesPath = '';
         userFilesPath = DEFAULT_USER_FILES_PATH;
         await ensureUserFilesDir(DEFAULT_USER_FILES_PATH);
+      }
+    }
+
+    if (typeof record.sandboxMode === 'string') {
+      const mode = record.sandboxMode.trim();
+      if (mode === 'workspace-write' || mode === 'danger-full-access') {
+        nextSettings.sandboxMode = mode;
+        sandboxModeSetting = mode;
+      } else if (mode === '') {
+        nextSettings.sandboxMode = DEFAULT_SANDBOX_MODE;
+        sandboxModeSetting = DEFAULT_SANDBOX_MODE;
+      } else {
+        res.status(400).json({ error: 'sandboxMode must be "workspace-write" or "danger-full-access"' });
+        return;
       }
     }
 

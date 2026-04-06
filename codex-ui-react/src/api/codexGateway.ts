@@ -1463,6 +1463,8 @@ export type MarketEntry = {
   active: boolean;
 };
 
+export type SandboxModeSetting = 'workspace-write' | 'danger-full-access';
+
 export type CodexUiSettingsInfo = {
   codexHome: string;
   savedCodexHome: string | null;
@@ -1472,6 +1474,9 @@ export type CodexUiSettingsInfo = {
   userFilesPath: string;
   savedUserFilesPath: string | null;
   defaultUserFilesPath: string;
+  sandboxMode: SandboxModeSetting;
+  savedSandboxMode: SandboxModeSetting | null;
+  defaultSandboxMode: SandboxModeSetting;
   markets: MarketEntry[];
   builtInMarket: { owner: string; repo: string };
 };
@@ -1496,7 +1501,7 @@ export async function writeUserFile(path: string, content: string): Promise<{ pa
   return { path: payload.path };
 }
 
-export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
+export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; sandboxMode?: SandboxModeSetting | ''; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
   const response = await fetch('/codex-api/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

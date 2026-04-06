@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Settings, ExternalLink, Plus, Trash2 } from 'lucide-react';
+import { Settings, ExternalLink, Plus, Trash2, Shield } from 'lucide-react';
 import { IconTablerFolder, IconTablerChevronLeft } from '../icons';
 import * as api from '../../api/codexGateway';
-import type { CodexUiSettingsInfo, MarketEntry } from '../../api/codexGateway';
+import type { CodexUiSettingsInfo, MarketEntry, SandboxModeSetting } from '../../api/codexGateway';
 import ContentHeader from './ContentHeader';
 
 type DirectoryBrowseEntry = {
@@ -127,6 +127,9 @@ function SettingsPane() {
   const [userFilesInput, setUserFilesInput] = useState('');
   const [isUserFilesBrowsing, setIsUserFilesBrowsing] = useState(false);
 
+  // Sandbox mode
+  const [sandboxMode, setSandboxMode] = useState<SandboxModeSetting>('workspace-write');
+
   // Markets state
   const [markets, setMarkets] = useState<MarketEntry[]>([]);
 
@@ -141,6 +144,7 @@ function SettingsPane() {
       setSettings(data);
       setCodexHomeInput(data.savedCodexHome ?? '');
       setUserFilesInput(data.savedUserFilesPath ?? '');
+      setSandboxMode(data.sandboxMode ?? 'workspace-write');
       setMarkets(data.markets ?? []);
     } catch {
       // ignore
@@ -281,6 +285,21 @@ function SettingsPane() {
       await loadSettings();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveSandboxMode = async (mode: SandboxModeSetting) => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      setSandboxMode(mode);
+      const result = await api.saveSettings({ sandboxMode: mode });
+      setSaveMessage(result.message);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setIsSaving(false);
     }
@@ -477,6 +496,90 @@ function SettingsPane() {
                   ) : null}
                 </div>
               </>
+            )}
+          </section>
+
+          {/* Sandbox Mode section */}
+          <section className="space-y-4 border-t border-gray-100 pt-6">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <Shield className="h-4 w-4 text-gray-400" strokeWidth={1.8} />
+                Agent Sandbox Mode
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Controls what the agent is allowed to write on the filesystem.
+                Changes apply to new threads; existing threads keep their sandbox.
+              </p>
+            </div>
+
+            {isLoading ? (
+              <div className="text-sm text-gray-400">Loading…</div>
+            ) : (
+              <div className="space-y-3">
+                {/* workspace-write option */}
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition ${
+                  sandboxMode === 'workspace-write'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="sandboxMode"
+                    value="workspace-write"
+                    checked={sandboxMode === 'workspace-write'}
+                    onChange={() => void handleSaveSandboxMode('workspace-write')}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-800">Workspace Write</span>
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Recommended</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Agent can write inside its thread workspace <strong>and</strong> the
+                      configured User Files directory. Cannot write elsewhere.
+                    </p>
+                  </div>
+                </label>
+
+                {/* danger-full-access option */}
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition ${
+                  sandboxMode === 'danger-full-access'
+                    ? 'border-orange-400 bg-orange-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="sandboxMode"
+                    value="danger-full-access"
+                    checked={sandboxMode === 'danger-full-access'}
+                    onChange={() => void handleSaveSandboxMode('danger-full-access')}
+                    className="mt-0.5 accent-orange-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-800">Full Access</span>
+                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">⚠ Use with care</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Agent has unrestricted read/write access to the entire filesystem.
+                      Useful when the agent needs to touch paths outside the workspace
+                      (e.g. system config, arbitrary project directories).
+                    </p>
+                  </div>
+                </label>
+
+                {settings?.sandboxMode !== settings?.defaultSandboxMode ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveSandboxMode(settings?.defaultSandboxMode ?? 'workspace-write')}
+                    disabled={isSaving}
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-800 disabled:opacity-50"
+                  >
+                    Reset to default
+                  </button>
+                ) : null}
+              </div>
             )}
           </section>
 
