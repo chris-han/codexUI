@@ -1276,10 +1276,22 @@ app.use('/codex-api', (req, res, next) => {
   next();
 });
 
-/** Build the developer_instructions block injected into every thread/start */
-function buildThreadDevInstructions(): string {
+/** Build the developer_instructions block injected into thread starts and turns. */
+function buildThreadDevInstructions(options: { threadCwd?: string | null; compact?: boolean } = {}): string {
+  const { threadCwd = null, compact = false } = options;
   const skillsDir = getSkillsInstallDir();
-  return [
+
+  if (compact) {
+    return [
+      '## Codex UI — File Output Reminder',
+      '',
+      `- Default output location for unspecified created files: \`${userFilesPath}\``,
+      '- This overrides the usual tendency to save generic files in the repo/workspace cwd.',
+      '- Only use another location when the user explicitly provides a path or the task is clearly modifying repository code.',
+    ].join('\n');
+  }
+
+  const lines = [
     '## Codex UI — Runtime Configuration',
     '',
     'The following paths are configured by the user in the Settings page.',
@@ -1288,14 +1300,29 @@ function buildThreadDevInstructions(): string {
     `- **CODEX_HOME** (Codex home directory): \`${CODEX_HOME}\``,
     `- **Skills directory** (installed skills live here): \`${skillsDir}\``,
     `- **User files directory** (default output location for user-created files): \`${userFilesPath}\``,
+  ];
+
+  if (threadCwd && threadCwd !== userFilesPath) {
+    lines.push(`- **Workspace / repo cwd** (use this for code edits when the user is working on repo files): \`${threadCwd}\``);
+  }
+
+  lines.push(
     '',
     'IMPORTANT FILE-WRITE RULES:',
     '1. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **User files directory** above.',
-    '2. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
-    '3. Only write somewhere else when the user explicitly gives a different path or the task is clearly editing repository code in the workspace.',
-    '4. Do NOT write user content into the skills directory or CODEX_HOME.',
+    '2. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
+    '3. Prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of writing relative files into the workspace cwd.',
+    '4. Only write somewhere else when the user explicitly gives a different path or the task is clearly editing repository code in the workspace.',
+    '5. Do NOT write user content into the skills directory or CODEX_HOME.',
     'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
-  ].join('\n');
+  );
+
+  return lines.join('\n');
+}
+
+function mergeDeveloperInstructions(baseBlock: string, existing: unknown): string {
+  const existingText = typeof existing === 'string' ? existing.trim() : '';
+  return existingText ? `${baseBlock}\n\n${existingText}` : baseBlock;
 }
 
 app.post('/codex-api/rpc', async (req, res) => {
@@ -1312,8 +1339,7 @@ app.post('/codex-api/rpc', async (req, res) => {
       }
 
       // Inject configured-path context into developer_instructions
-      const configBlock = buildThreadDevInstructions();
-      const existing = typeof p.developer_instructions === 'string' ? p.developer_instructions.trim() : '';
+      const configBlock = buildThreadDevInstructions({ threadCwd: cwd });
 
       // Apply the user-configured sandbox mode (workspace-write or danger-full-access).
       // For workspace-write, also inject userFilesPath as an additional writable root so
@@ -1341,7 +1367,26 @@ app.post('/codex-api/rpc', async (req, res) => {
         ...p,
         ...(p.sandbox == null ? { sandbox: effectiveSandbox } : {}),
         config: configPatch,
-        developer_instructions: existing ? `${configBlock}\n\n${existing}` : configBlock,
+        developer_instructions: mergeDeveloperInstructions(configBlock, p.developer_instructions),
+      };
+    }
+
+    if (method === 'turn/start') {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const reminderBlock = buildThreadDevInstructions({ compact: true });
+      const collaborationMode = asRecord(p.collaborationMode) ?? asRecord(p.collaboration_mode);
+      const existingSettings = asRecord(collaborationMode?.settings) ?? {};
+      const patchedCollaborationMode = {
+        ...(collaborationMode ?? {}),
+        settings: {
+          ...existingSettings,
+          developer_instructions: mergeDeveloperInstructions(reminderBlock, existingSettings.developer_instructions),
+        },
+      };
+
+      params = {
+        ...p,
+        collaborationMode: patchedCollaborationMode,
       };
     }
 

@@ -971,10 +971,12 @@ This file tracks manual regression and feature verification steps.
 1. Open `Settings` and set a distinctive `User Files Directory` path.
 2. Start a brand-new thread.
 3. Ask the agent to create a simple file such as `test_file.txt` without specifying any explicit folder.
-4. Inspect the created file path reported by the agent.
+4. Continue the same thread with another generic file-create request to confirm the reminder still applies on later turns.
+5. Inspect the created file paths reported by the agent.
 
 #### Expected Results
 - The agent uses the configured `User Files Directory` as the default output location for generic created files.
+- The same rule still applies on later turns in the same thread, not only on the first turn after thread creation.
 - It does not default to the workspace cwd unless the task is explicitly about editing repo files.
 
 #### Rollback/Cleanup
