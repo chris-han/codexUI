@@ -2111,3 +2111,61 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Delete `codex-ui-react/.codex-ui-settings.json` to revert to defaults.
 - Restart the server.
+
+---
+
+## Multi-Marketplace Support in Settings (React)
+
+### Feature
+Configurable list of GitHub-based skill marketplaces with active/inactive toggles, add, and remove. The official `openclaw/skills` marketplace is always shown (labeled "Official") and cannot be removed, but can be toggled off.
+
+### Prerequisites
+- `codex-ui-react` server running (port 3457 or via `bun server/standalone.ts`).
+- Navigate to Settings via the gear icon in the sidebar.
+
+### Steps
+
+#### Verify official marketplace always appears
+1. Open Settings.
+2. In the "Skills Marketplaces" section, confirm `openclaw/skills` is listed with an "Official" badge and an active toggle (ON by default).
+3. Confirm there is no Remove (trash) button on the official row.
+
+#### Toggle a marketplace on/off
+1. Click the toggle switch on the `openclaw/skills` row to turn it OFF.
+2. Confirm the toggle visually turns off and "Settings saved." message appears.
+3. Go to Skills Hub — confirm no marketplace skills are listed (since the only active market is now off).
+4. Return to Settings, toggle `openclaw/skills` back ON.
+5. Reload Skills Hub — official skills appear again.
+
+#### Add a custom marketplace
+1. In the "Add marketplace" form, enter `owner` = `testuser` and `repo` = `my-skills`.
+2. Click **Add** (or press Enter in the repo field).
+3. Confirm a new row appears for `testuser/my-skills` with an active toggle ON and a link icon.
+4. Confirm no error is shown.
+
+#### Remove a custom marketplace
+1. With `testuser/my-skills` in the list, click the Trash icon on that row.
+2. Confirm the row disappears and "Settings saved." appears.
+3. Confirm the official `openclaw/skills` row is still present.
+
+#### Duplicate prevention
+1. Try adding `openclaw/skills` (the built-in) again via the Add form.
+2. Confirm an error message "openclaw/skills is already in the list" is shown.
+
+#### Install from a specific marketplace
+1. Add a valid second marketplace that has skills (e.g. a fork of `openclaw/skills`).
+2. Open Skills Hub — both markets' skills should appear merged.
+3. Install a skill from the second market.
+4. Confirm installation succeeds (the server uses the correct `--repo` flag from that skill's market).
+
+### Expected Results
+- `openclaw/skills` is always shown with the "Official" badge; toggle works; trash button absent.
+- Custom marketplaces can be added (owner/repo) and removed.
+- All active marketplaces are fetched concurrently; skills are merged (first market wins on name collision).
+- Each marketplace row has an external link icon opening `https://github.com/<owner>/<repo>`.
+- Toggling and adding/removing saves immediately (no restart required); skills cache is cleared.
+- Duplicate markets are rejected with an inline error message.
+
+### Rollback/Cleanup
+- Delete `codex-ui-react/.codex-ui-settings.json` to reset to a clean state.
+- Restart the server.
