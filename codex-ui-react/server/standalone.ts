@@ -718,6 +718,9 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
         if (!skill.name) continue;
         const normalizedPath = typeof skill.path === 'string' ? skill.path.trim() : '';
         if (normalizedPath && !normalizedPath.startsWith(`${localSkillsDir}/`)) continue;
+        // Skills installed under the .system sub-folder are pre-bundled system skills,
+        // not user-installed ones. Exclude them so they remain browseable in the marketplace.
+        if (normalizedPath.startsWith(`${localSkillsDir}/.system/`)) continue;
         installed.set(skill.name, {
           name: skill.name,
           path: normalizedPath,
