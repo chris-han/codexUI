@@ -418,6 +418,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: React bridge prefers repo-local Codex
+
+#### Prerequisites
+- React bridge is started from `codex-ui-react/`.
+- The local Codex checkout exists at `/home/chris/repo/codexUI/codex`.
+- Port `3457` is available for the standalone bridge.
+
+#### Steps
+1. From `codex-ui-react/`, restart the bridge with `PORT=3457 bun run server`.
+2. Watch the startup logs printed by `server/standalone.ts`.
+3. Confirm the `Proxy config` block shows `CODEX_COMMAND` pointing to the repo-local Codex path under `/home/chris/repo/codexUI/codex/` instead of the global Bun install path under `~/.local/share/reflex/...`.
+4. Confirm the bridge completes initialization and keeps serving on `http://localhost:3457`.
+
+#### Expected Results
+- The standalone React bridge prefers the repo-local Codex checkout before falling back to the globally installed CLI.
+- Startup logs clearly show the selected local command path.
+- The bridge still initializes successfully and remains reachable on port `3457`.
+
+#### Rollback/Cleanup
+- Restore the old command-resolution order in `codex-ui-react/server/standalone.ts` if you need to revert to the global CLI.
+
 ### Feature: React thread actions follow Vue sidebar behavior
 
 #### Prerequisites

@@ -179,6 +179,48 @@ function canRunCommand(command: string, args: string[] = []): boolean {
   return !result.error && result.status === 0;
 }
 
+function canRunInvocation(invocation: CommandInvocation, probeArgs: string[] = ['--version']): boolean {
+  return canRunCommand(invocation.command, [...invocation.args, ...probeArgs]);
+}
+
+function resolveLocalCodexInvocation(): CommandInvocation | null {
+  const codexBinaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
+  const localCodexRepoRoot = resolve(__dirname, '..', '..', 'codex');
+  const binaryCandidates = [
+    join(localCodexRepoRoot, 'target', 'release', codexBinaryName),
+    join(localCodexRepoRoot, 'target', 'debug', codexBinaryName),
+    join(localCodexRepoRoot, 'codex-rs', 'target', 'release', codexBinaryName),
+    join(localCodexRepoRoot, 'codex-rs', 'target', 'debug', codexBinaryName),
+  ];
+
+  for (const candidate of binaryCandidates) {
+    if (existsSync(candidate) && canRunCommand(candidate, ['--version'])) {
+      return {
+        command: candidate,
+        args: [],
+      };
+    }
+  }
+
+  const localCliEntry = join(localCodexRepoRoot, 'codex-cli', 'bin', 'codex.js');
+  if (existsSync(localCliEntry) && canRunCommand('node', [localCliEntry, '--version'])) {
+    return {
+      command: 'node',
+      args: [localCliEntry],
+    };
+  }
+
+  const localCargoManifest = join(localCodexRepoRoot, 'codex-rs', 'Cargo.toml');
+  if (existsSync(localCargoManifest) && canRunCommand('cargo', ['--version'])) {
+    return {
+      command: 'cargo',
+      args: ['run', '--manifest-path', localCargoManifest, '--bin', 'codex', '--'],
+    };
+  }
+
+  return null;
+}
+
 function resolveRipgrepCommand(): string | null {
   return canRunCommand('rg', ['--version']) ? 'rg' : null;
 }
@@ -516,11 +558,19 @@ async function browseDirectory(rawPath: string): Promise<DirectoryBrowseResponse
 
 function resolveCodexInvocation(): CommandInvocation {
   const explicit = process.env.CODEXUI_CODEX_COMMAND?.trim();
-  if (explicit && canRunCommand(explicit, ['--version'])) {
-    return {
+  if (explicit) {
+    const explicitInvocation: CommandInvocation = {
       command: explicit,
       args: [],
     };
+    if (canRunInvocation(explicitInvocation)) {
+      return explicitInvocation;
+    }
+  }
+
+  const localCodexInvocation = resolveLocalCodexInvocation();
+  if (localCodexInvocation) {
+    return localCodexInvocation;
   }
 
   if (canRunCommand('codex', ['--version'])) {
@@ -540,7 +590,7 @@ function resolveCodexInvocation(): CommandInvocation {
   }
 
   throw new Error(
-    'Unable to find a runnable Codex CLI. Install `codex` globally or ensure `bunx --bun @openai/codex` works.',
+    'Unable to find a runnable Codex CLI. Build the repo-local Codex under `../codex`, install `codex` globally, or ensure `bunx --bun @openai/codex` works.',
   );
 }
 
@@ -1345,6 +1395,8 @@ class CodexBridge {
       // Disable any other API keys to force proxy usage
       ANTHROPIC_API_KEY: '',
       GEMINI_API_KEY: '',
+      // Skip the vendored bubblewrap build when using the repo-local Rust Codex source on Linux.
+      CODEX_SKIP_VENDORED_BWRAP: process.env.CODEX_SKIP_VENDORED_BWRAP || '1',
       // Expose configured user-files path so shell commands can reference $CODEXUI_USER_FILES_PATH
       CODEXUI_USER_FILES_PATH: userFilesPath,
       CODEXUI_SKILLS_DIR: getSkillsInstallDir(),
