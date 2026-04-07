@@ -12,6 +12,9 @@ import { homedir, tmpdir } from 'node:os';
 import yaml from 'js-yaml';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
 import { IMBridge } from './im-bridge/index.js';
+import { config } from 'dotenv';
+
+config({ path: resolve(__dirname, '../.env') });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -2725,81 +2728,30 @@ async function main() {
   await bridge.start();
   console.log('Bridge ready');
 
-  // Start IM bridge if any channel is enabled
-  const imBridge = new IMBridge(
-    bridge,
-    {
-      feishu: {
-        enabled: process.env.IM_FEISHU_ENABLED === 'true',
-        appId: process.env.IM_FEISHU_APP_ID ?? '',
-        appSecret: process.env.IM_FEISHU_APP_SECRET ?? '',
-        domain: process.env.IM_FEISHU_DOMAIN,
-        allowedUsers: process.env.IM_FEISHU_ALLOWED_USERS
-          ? process.env.IM_FEISHU_ALLOWED_USERS.split(',')
-          : undefined,
-      },
-      defaultModel: process.env.IM_DEFAULT_MODEL,
-      autoApprove: process.env.IM_AUTO_APPROVE === 'true',
+  // Start IM Bridge with Feishu as default
+  const imBridge = new IMBridge(bridge, {
+    feishu: {
+      enabled: process.env.IM_FEISHU_ENABLED === 'true',
+      appId: process.env.IM_FEISHU_APP_ID || '',
+      appSecret: process.env.IM_FEISHU_APP_SECRET || '',
+      domain: process.env.IM_FEISHU_DOMAIN,
+      allowedUsers: process.env.IM_FEISHU_ALLOWED_USERS?.split(','),
     },
-    currentCodexHome,
-  );
+    defaultModel: process.env.IM_DEFAULT_MODEL,
+    autoApprove: process.env.IM_AUTO_APPROVE === 'true',
+  });
+
   await imBridge.start();
   console.log('IM Bridge ready');
 
-  const server = createServer(app);
+  // ... server setup ...
 
-  const wss = new WebSocketServer({ server, path: '/codex-api/ws' });
-
-  wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
-
-    ws.send(
-      JSON.stringify({
-        method: 'ready',
-        params: { ok: true },
-        atIso: new Date().toISOString(),
-      })
-    );
-
-    const unsubscribe = bridge.onNotification((notification) => {
-      if (ws.readyState === 1) {
-        ws.send(JSON.stringify(notification));
-      }
-    });
-
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-      unsubscribe();
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-      unsubscribe();
-    });
-  });
-
-  server.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`Port ${PORT} is already in use.`);
-      console.error(`Run: lsof -ti:${PORT} | xargs kill -9`);
-      process.exit(1);
-    } else {
-      console.error('Server error:', err);
-      process.exit(1);
-    }
-  });
-
-  server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-
+  // Cleanup
   const shutdown = () => {
     console.log('Shutting down...');
-    imBridge.stop().catch(() => {});
+    imBridge.stop();
     bridge.stop();
-    server.close(() => {
-      process.exit(0);
-    });
+    server.close(() => process.exit(0));
   };
 
   process.on('SIGINT', shutdown);

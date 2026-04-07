@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SquareLibrary } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import * as api from '../../api/codexGateway';
 import type { MarketEntry } from '../../api/codexGateway';
 import { useSidebarChrome } from '../../hooks/useSidebarChrome';
@@ -120,23 +122,15 @@ interface SkillDetailModalProps {
   onClose: () => void;
 }
 
-function simpleMarkdown(md: string): string {
-  if (!md.trim()) return '';
-  const escaped = md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  return escaped
-    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    .replace(/\n{2,}/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>');
+function stripYamlFrontmatter(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.startsWith('---')) {
+    const endIdx = trimmed.indexOf('---', 3);
+    if (endIdx !== -1) {
+      return trimmed.slice(endIdx + 3).trim();
+    }
+  }
+  return content;
 }
 
 function SkillDetailModal({
@@ -193,7 +187,7 @@ function SkillDetailModal({
 
   const title = skill.displayName || skill.name || 'Unnamed skill';
   const effectiveDescription = description || skill.description || '';
-  const renderedReadme = simpleMarkdown(readme);
+  const cleanedReadme = stripYamlFrontmatter(readme);
   const subtitle = getSkillSubtitle(skill);
   const collectionBadge = getSkillCollectionBadge(skill);
 
@@ -235,11 +229,12 @@ function SkillDetailModal({
 
           {isLoading ? (
             <p className="text-sm text-gray-400">Loading skill contents…</p>
-          ) : renderedReadme ? (
-            <div
-              className="prose prose-sm max-w-none text-gray-700"
-              dangerouslySetInnerHTML={{ __html: renderedReadme }}
-            />
+          ) : cleanedReadme ? (
+            <div className="prose prose-sm max-w-none text-gray-700">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {cleanedReadme}
+              </ReactMarkdown>
+            </div>
           ) : null}
 
           {skill.url ? (
