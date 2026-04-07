@@ -113,7 +113,7 @@ export class FeishuAdapter implements IMAdapter {
       return;
     }
     try {
-      if (response.buttons?.length) {
+      if (response.buttons?.length || response.text?.trim()) {
         await this.sendCardMessage(chatId, response);
       } else {
         await this.sendTextMessage(chatId, response.text ?? '');
@@ -243,8 +243,33 @@ export class FeishuAdapter implements IMAdapter {
     });
   }
 
+  private formatCardMarkdown(text: string, parseMode?: IMResponse['parseMode']): string {
+    let content = text.trim();
+
+    if (parseMode === 'html') {
+      content = content
+        .replace(/<b>(.*?)<\/b>/gi, '**$1**')
+        .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
+        .replace(/<i>(.*?)<\/i>/gi, '*$1*')
+        .replace(/<em>(.*?)<\/em>/gi, '*$1*')
+        .replace(/<code>(.*?)<\/code>/gi, '`$1`')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
+    return content.replace(/([^\n])```/g, '$1\n```') || '*No content provided.*';
+  }
+
   private async sendCardMessage(chatId: string, response: IMResponse): Promise<void> {
-    const text = (response.text ?? '').trim() || '*No content provided.*';
+    const text = this.formatCardMarkdown(response.text ?? '', response.parseMode);
 
     const buttonColumns = (response.buttons ?? []).map((b) => ({
       tag: 'column',

@@ -435,6 +435,7 @@ This file tracks manual regression and feature verification steps.
 #### Expected Results
 - Bot replies are sent with Feishu `msg_type: interactive` and render as card UI.
 - The card uses the Card JSON 2.0 structure (`schema: "2.0"`) without breaking normal message delivery.
+- Markdown content such as lists, bold text, inline code, and fenced code blocks renders inside the card body correctly.
 - Approval buttons continue to work through `card.action.trigger` callbacks.
 
 #### Rollback/Cleanup
