@@ -81,7 +81,7 @@ function resolveUserFilesPath(): string {
   return DEFAULT_USER_FILES_PATH;
 }
 
-const CODEX_HOME = resolveCodexHome();
+let currentCodexHome = resolveCodexHome();
 let userFilesPath = resolveUserFilesPath();
 
 function resolveSandboxMode(): SandboxModeSetting {
@@ -105,6 +105,7 @@ function resolveExcludeSlashTmp(): boolean {
 let networkAccessSetting: boolean = resolveNetworkAccess();
 let excludeTmpdirEnvVarSetting: boolean = resolveExcludeTmpdirEnvVar();
 let excludeSlashTmpSetting: boolean = resolveExcludeSlashTmp();
+let bridgeStartCodexHome = currentCodexHome;
 
 /** Ensure userFilesPath exists with 0o755 (rw for owner, no exec by default on files) */
 async function ensureUserFilesDir(dir: string): Promise<void> {
@@ -208,7 +209,7 @@ function isThreadNotMaterializedYetError(error: unknown): boolean {
 }
 
 function getStandaloneStatePath(): string {
-  return join(CODEX_HOME, 'global-state.json');
+  return join(currentCodexHome, 'global-state.json');
 }
 
 function normalizeStringArray(value: unknown): string[] {
@@ -267,7 +268,7 @@ async function writeWorkspaceRootsState(nextState: WorkspaceRootsState): Promise
   payload['electron-workspace-root-labels'] = normalizeStringRecord(nextState.labels);
   payload['active-workspace-roots'] = normalizeStringArray(nextState.active);
 
-  await mkdir(CODEX_HOME, { recursive: true });
+  await mkdir(currentCodexHome, { recursive: true });
   await writeFile(statePath, JSON.stringify(payload), 'utf8');
 }
 
@@ -624,19 +625,55 @@ const skillsTreeCacheMap = new Map<string, { entries: SkillsTreeEntry[]; fetched
 const metaCacheMap = new Map<string, Map<string, { description: string; displayName: string; publishedAt: number }>>();
 
 function getSkillsInstallDir(): string {
-  return join(CODEX_HOME, 'skills');
+  return join(currentCodexHome, 'skills');
 }
 
 function getMemoriesDir(): string {
-  return join(CODEX_HOME, 'memories');
+  return join(currentCodexHome, 'memories');
 }
 
 function getSessionsDir(): string {
-  return join(CODEX_HOME, 'sessions');
+  return join(currentCodexHome, 'sessions');
 }
 
 function getArchivedSessionsDir(): string {
-  return join(CODEX_HOME, 'archived_sessions');
+  return join(currentCodexHome, 'archived_sessions');
+}
+
+type RuntimeSettingsReloadSummary = {
+  previousCodexHome: string;
+  codexHome: string;
+  skillsDir: string;
+  userFilesPath: string;
+  codexHomeChanged: boolean;
+  bridgeRestartRecommended: boolean;
+};
+
+async function reloadRuntimeSettings(): Promise<RuntimeSettingsReloadSummary> {
+  const previousCodexHome = currentCodexHome;
+
+  currentCodexHome = resolveCodexHome();
+  userFilesPath = resolveUserFilesPath();
+  sandboxModeSetting = resolveSandboxMode();
+  networkAccessSetting = resolveNetworkAccess();
+  excludeTmpdirEnvVarSetting = resolveExcludeTmpdirEnvVar();
+  excludeSlashTmpSetting = resolveExcludeSlashTmp();
+  allMarkets = resolveAllMarkets();
+
+  await ensureCodexSubdirectories(currentCodexHome);
+  await ensureUserFilesDir(userFilesPath);
+
+  skillsTreeCacheMap.clear();
+  metaCacheMap.clear();
+
+  return {
+    previousCodexHome,
+    codexHome: currentCodexHome,
+    skillsDir: getSkillsInstallDir(),
+    userFilesPath,
+    codexHomeChanged: previousCodexHome !== currentCodexHome,
+    bridgeRestartRecommended: bridgeStartCodexHome !== currentCodexHome,
+  };
 }
 
 type SubdirectoryInfo = {
@@ -804,7 +841,7 @@ function resolvePythonCommand(): CommandInvocation | null {
 function resolveSkillInstallerScriptPath(): string | null {
   // Check CODEX_HOME first so the local skills dir takes priority, then fallbacks
   const candidates = [
-    join(CODEX_HOME, 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
+    join(currentCodexHome, 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
     join(homedir(), '.codex', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
     join(homedir(), '.cursor', 'skills', '.system', 'skill-installer', 'scripts', 'install-skill-from-github.py'),
   ];
@@ -1170,17 +1207,18 @@ class CodexBridge {
 
   async start(): Promise<void> {
     console.log('Starting codex app-server...');
-    console.log(`Using CODEX_HOME: ${CODEX_HOME}`);
+    console.log(`Using CODEX_HOME: ${currentCodexHome}`);
 
     const codexInvocation = resolveCodexInvocation();
+    bridgeStartCodexHome = currentCodexHome;
 
     // Always point Codex at the local Responses-compatible proxy. The proxy decides
     // whether to upstream to Kimi or Azure OpenAI based on model/env.
     const proxyEnv = {
       ...process.env,
       FORCE_COLOR: '0',
-      CODEX_HOME,
-      XDG_CONFIG_HOME: CODEX_HOME,
+      CODEX_HOME: currentCodexHome,
+      XDG_CONFIG_HOME: currentCodexHome,
       OPENAI_BASE_URL: 'http://localhost:3456/v1',
       OPENAI_API_KEY: process.env.KIMI_API_KEY || process.env.AZURE_OPENAI_API_KEY || 'sk-proxy',
       // Also try standard OpenAI env vars
@@ -1492,7 +1530,7 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
       'These settings are injected by the Codex UI server process, NOT from any AGENTS.md file on disk.',
       'If the current user message does not explicitly override a setting, use these Settings-page values as the fallback defaults for this thread:',
       `- Sandbox mode fallback: \`${sandboxModeSetting}\``,
-      `- Codex home fallback: \`${CODEX_HOME}\``,
+      `- Codex home fallback: \`${currentCodexHome}\``,
       `- Skills install directory fallback: \`${skillsDir}\``,
       `- Active skills marketplace fallback: \`${activeMarketsSummary}\``,
       `- Configured file output fallback path for unspecified created files: \`${userFilesPath}\``,
@@ -1514,7 +1552,7 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
     'The following values are configured by the user in the Settings page.',
     'If the user does not explicitly override a config in the chat, treat these as the thread fallback defaults.',
     '',
-    `- **CODEX_HOME fallback** (Codex home directory): \`${CODEX_HOME}\``,
+    `- **CODEX_HOME fallback** (Codex home directory): \`${currentCodexHome}\``,
     `- **Skills directory fallback** (installed skills live here): \`${skillsDir}\``,
     `- **Active skills marketplace fallback**: \`${activeMarketsSummary}\``,
     `- **Sandbox mode fallback**: \`${sandboxModeSetting}\``,
@@ -2256,10 +2294,10 @@ app.post('/codex-api/review/git/init', async (req, res) => {
 app.get('/codex-api/settings', async (_req, res) => {
   try {
     const settings = await readSettingsAsync();
-    const subdirectories = await getSubdirectoryInfo(CODEX_HOME);
+    const subdirectories = await getSubdirectoryInfo(currentCodexHome);
     res.json({
       data: {
-        codexHome: CODEX_HOME,
+        codexHome: currentCodexHome,
         savedCodexHome: settings.codexHome ?? null,
         defaultCodexHome: DEFAULT_CODEX_HOME,
         skillsDir: getSkillsInstallDir(),
@@ -2294,17 +2332,14 @@ app.put('/codex-api/settings', async (req, res) => {
       return;
     }
     const nextSettings: CodexUiSettings = {};
-    let codexHomeChanged = false;
+    let requestedCodexHomeChange = false;
 
     if (typeof record.codexHome === 'string') {
       const trimmed = record.codexHome.trim();
       if (trimmed) {
         const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
-        // Create the directory and subdirectories if they don't exist
         await mkdir(normalized, { recursive: true, mode: 0o755 });
-        // Create required subdirectories (skills, memories, sessions, archived_sessions)
         await ensureCodexSubdirectories(normalized);
-        // Verify it's a directory
         try {
           const info = await stat(normalized);
           if (!info.isDirectory()) {
@@ -2318,7 +2353,7 @@ app.put('/codex-api/settings', async (req, res) => {
       } else {
         nextSettings.codexHome = '';
       }
-      codexHomeChanged = true;
+      requestedCodexHomeChange = true;
     }
 
     if (typeof record.userFilesPath === 'string') {
@@ -2327,10 +2362,8 @@ app.put('/codex-api/settings', async (req, res) => {
         const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
         await ensureUserFilesDir(normalized);
         nextSettings.userFilesPath = normalized;
-        userFilesPath = normalized;
       } else {
         nextSettings.userFilesPath = '';
-        userFilesPath = DEFAULT_USER_FILES_PATH;
         await ensureUserFilesDir(DEFAULT_USER_FILES_PATH);
       }
     }
@@ -2339,10 +2372,8 @@ app.put('/codex-api/settings', async (req, res) => {
       const mode = record.sandboxMode.trim();
       if (mode === 'workspace-write' || mode === 'danger-full-access') {
         nextSettings.sandboxMode = mode;
-        sandboxModeSetting = mode;
       } else if (mode === '') {
         nextSettings.sandboxMode = DEFAULT_SANDBOX_MODE;
-        sandboxModeSetting = DEFAULT_SANDBOX_MODE;
       } else {
         res.status(400).json({ error: 'sandboxMode must be "workspace-write" or "danger-full-access"' });
         return;
@@ -2351,15 +2382,12 @@ app.put('/codex-api/settings', async (req, res) => {
 
     if (typeof record.networkAccess === 'boolean') {
       nextSettings.networkAccess = record.networkAccess;
-      networkAccessSetting = record.networkAccess;
     }
     if (typeof record.excludeTmpdirEnvVar === 'boolean') {
       nextSettings.excludeTmpdirEnvVar = record.excludeTmpdirEnvVar;
-      excludeTmpdirEnvVarSetting = record.excludeTmpdirEnvVar;
     }
     if (typeof record.excludeSlashTmp === 'boolean') {
       nextSettings.excludeSlashTmp = record.excludeSlashTmp;
-      excludeSlashTmpSetting = record.excludeSlashTmp;
     }
 
     if (Array.isArray(record.markets)) {
@@ -2370,28 +2398,51 @@ app.put('/codex-api/settings', async (req, res) => {
           return typeof r.owner === 'string' && typeof r.repo === 'string' && r.owner.trim().length > 0 && r.repo.trim().length > 0;
         })
         .map((m) => ({ owner: m.owner.trim(), repo: m.repo.trim(), active: m.active !== false }));
-      // Ensure built-in is always in the list
       const hasBuiltIn = normalized.some((m) => m.owner === BUILTIN_MARKET_OWNER && m.repo === BUILTIN_MARKET_REPO);
       if (!hasBuiltIn) {
         normalized.unshift({ owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO, active: true });
       }
       nextSettings.markets = normalized;
-      // Apply immediately
-      allMarkets = normalized;
-      skillsTreeCacheMap.clear();
-      metaCacheMap.clear();
     }
 
     await writeSettingsAsync(nextSettings);
+    const reloadSummary = await reloadRuntimeSettings();
+
+    let message = 'Settings saved and hot-reloaded safely.';
+    if (requestedCodexHomeChange && process.env.CODEXUI_CODEX_HOME?.trim()) {
+      message = 'Settings saved and server caches were refreshed safely, but a CODEXUI_CODEX_HOME environment override is still taking precedence over the saved path.';
+    } else if (reloadSummary.bridgeRestartRecommended) {
+      message = 'Settings saved and hot-reloaded safely for server caches and future installs. Existing running bridge work keeps its current configuration until restart.';
+    }
+
     res.json({
       ok: true,
-      restartRequired: codexHomeChanged,
-      message: codexHomeChanged
-        ? 'Settings saved. Restart the server for the Codex Home change to take effect.'
-        : 'Settings saved.',
+      hotReloadApplied: true,
+      restartRequired: false,
+      restartRecommended: reloadSummary.bridgeRestartRecommended,
+      data: reloadSummary,
+      message,
     });
   } catch (error) {
     res.status(500).json({ error: getErrorMessage(error, 'Failed to save settings') });
+  }
+});
+
+app.post('/codex-api/settings/reload', async (_req, res) => {
+  try {
+    const reloadSummary = await reloadRuntimeSettings();
+    res.json({
+      ok: true,
+      hotReloadApplied: true,
+      restartRequired: false,
+      restartRecommended: reloadSummary.bridgeRestartRecommended,
+      data: reloadSummary,
+      message: reloadSummary.bridgeRestartRecommended
+        ? 'Settings hot-reloaded safely. Server caches now use the latest saved values; existing running bridge work keeps its current configuration until restart.'
+        : 'Settings hot-reloaded safely.',
+    });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to hot-reload settings') });
   }
 });
 
@@ -2477,7 +2528,8 @@ async function main() {
     console.warn(`Could not create folder ${USER_THREADS_PATH}:`, err);
   }
 
-  // Ensure user_files directory exists at startup
+  // Ensure configured directories exist at startup
+  await ensureCodexSubdirectories(currentCodexHome);
   await ensureUserFilesDir(userFilesPath);
 
   await bridge.start();

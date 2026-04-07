@@ -1520,18 +1520,37 @@ export async function writeUserFile(path: string, content: string): Promise<{ pa
   return { path: payload.path };
 }
 
-export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; sandboxMode?: SandboxModeSetting | ''; networkAccess?: boolean; excludeTmpdirEnvVar?: boolean; excludeSlashTmp?: boolean; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; message: string }> {
+export async function saveSettings(params: { codexHome?: string; userFilesPath?: string; sandboxMode?: SandboxModeSetting | ''; networkAccess?: boolean; excludeTmpdirEnvVar?: boolean; excludeSlashTmp?: boolean; markets?: MarketEntry[] }): Promise<{ restartRequired: boolean; restartRecommended?: boolean; hotReloadApplied?: boolean; message: string }> {
   const response = await fetch('/codex-api/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   });
-  const payload = await response.json() as { ok?: boolean; restartRequired?: boolean; message?: string; error?: string };
+  const payload = await response.json() as { ok?: boolean; restartRequired?: boolean; restartRecommended?: boolean; hotReloadApplied?: boolean; message?: string; error?: string };
   if (!response.ok) {
     throw new Error(payload.error ?? 'Failed to save settings');
   }
   return {
     restartRequired: payload.restartRequired ?? false,
+    restartRecommended: payload.restartRecommended,
+    hotReloadApplied: payload.hotReloadApplied,
     message: payload.message ?? 'Settings saved.',
+  };
+}
+
+export async function reloadSettingsRuntime(): Promise<{ restartRequired: boolean; restartRecommended?: boolean; hotReloadApplied?: boolean; message: string }> {
+  const response = await fetch('/codex-api/settings/reload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const payload = await response.json() as { ok?: boolean; restartRequired?: boolean; restartRecommended?: boolean; hotReloadApplied?: boolean; message?: string; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'Failed to hot-reload settings');
+  }
+  return {
+    restartRequired: payload.restartRequired ?? false,
+    restartRecommended: payload.restartRecommended,
+    hotReloadApplied: payload.hotReloadApplied,
+    message: payload.message ?? 'Settings hot-reloaded.',
   };
 }

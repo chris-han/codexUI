@@ -336,6 +336,21 @@ function SettingsPane() {
     }
   };
 
+  const handleHotReload = async () => {
+    setSaveError('');
+    setSaveMessage('');
+    setIsSaving(true);
+    try {
+      const result = await api.reloadSettingsRuntime();
+      setSaveMessage(result.message);
+      await loadSettings();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Hot reload failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const builtIn = settings?.builtInMarket;
   const skillsWrapperCommand = 'bun run skills:with-settings -- npx <skills-cli> ...';
 
@@ -425,7 +440,7 @@ function SettingsPane() {
                   ) : null}
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={handleSaveCodexHome}
@@ -433,6 +448,14 @@ function SettingsPane() {
                     className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-50"
                   >
                     {isSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleHotReload}
+                    disabled={isSaving}
+                    className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm text-blue-700 transition hover:border-blue-300 hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    {isSaving ? 'Working…' : 'Safe hot reload'}
                   </button>
                   {settings?.savedCodexHome ? (
                     <button
@@ -727,6 +750,9 @@ function SettingsPane() {
                 Settings are saved to{' '}
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">.codex-ui-settings.json</code>{' '}
                 next to the server.
+              </li>
+              <li>
+                <strong className="font-medium text-gray-700">Safe hot reload</strong> refreshes server-side caches and future install paths without interrupting in-flight work.
               </li>
               <li>
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">CODEX_HOME</code> resolution order:{' '}

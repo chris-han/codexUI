@@ -2378,6 +2378,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove the `skills:with-settings` package script(s) and `codex-ui-react/scripts/run-skills-with-settings.mjs` if the helper is no longer needed.
 
+### Feature: Safe hot reload of saved settings
+
+#### Prerequisites
+- `codex-ui-react` server is running.
+- A saved settings file exists or the default `.codex` path is available.
+
+#### Steps
+1. Open **Settings** and change the Codex Home override or another settings value.
+2. Click **Save** and confirm the success message mentions a safe hot reload.
+3. Click **Safe hot reload** manually once to verify the explicit reload action also succeeds.
+4. Call the endpoint directly if needed:
+   `curl -X POST http://127.0.0.1:3457/codex-api/settings/reload`
+5. Refresh the Settings page and confirm **Active now** and **Current skills target** reflect the latest saved values.
+
+#### Expected Results
+- The server re-reads `.codex-ui-settings.json` without killing in-flight work.
+- Server-side caches and future install paths update immediately.
+- Existing running bridge work is not interrupted; restart is only recommended if you need that already-running bridge process to switch config too.
+
+#### Rollback/Cleanup
+- Use **Reset to default** or restore the previous saved settings file values.
+
 ---
 
 ## Multi-Marketplace Support in Settings (React)
