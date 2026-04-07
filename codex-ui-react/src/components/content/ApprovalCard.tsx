@@ -13,7 +13,7 @@ import type { UiServerRequest, ThreadComposerSubmitPayload } from '../../types/c
 
 type ApprovalCardProps = {
   request: UiServerRequest;
-  onRespond: (id: number, result: unknown) => void;
+  onRespond: (id: number | string, result: unknown) => void;
   onSendMessage: (payload: ThreadComposerSubmitPayload) => void;
 };
 

@@ -6,7 +6,7 @@ type RpcRequestBody = {
 };
 
 type ServerRequestReplyBody = {
-  id: number;
+  id: number | string;
   result?: unknown;
   error?: {
     code?: number;

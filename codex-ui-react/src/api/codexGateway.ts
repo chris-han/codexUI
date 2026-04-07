@@ -833,7 +833,7 @@ export async function getPendingServerRequests(): Promise<UiServerRequest[]> {
 }
 
 export async function replyToServerRequest(
-  requestId: number,
+  requestId: number | string,
   result: unknown
 ): Promise<void> {
   if (typeof result === 'string') {
@@ -1374,7 +1374,7 @@ export function normalizeServerRequest(request: unknown): UiServerRequest | null
       : '';
 
   return {
-    id: typeof r.id === 'number' ? r.id : 0,
+    id: typeof r.id === 'number' || typeof r.id === 'string' ? r.id : '',
     method: typeof r.method === 'string' ? r.method : '',
     threadId,
     turnId,

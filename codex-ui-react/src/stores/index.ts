@@ -191,7 +191,7 @@ export interface CodexActions {
   // Server request actions
   loadPendingServerRequests: () => Promise<void>;
   respondToServerRequest: (
-    requestId: number,
+    requestId: number | string,
     result: unknown
   ) => Promise<void>;
 
@@ -1124,15 +1124,16 @@ export const useCodexStore = create<CodexState & CodexActions>()(
             break;
           }
 
-          case 'server/request/resolved': {
+          case 'server/request/resolved':
+          case 'serverRequest/resolved': {
             const record = params && typeof params === 'object'
               ? (params as Record<string, unknown>)
               : null;
-            const requestId = typeof record?.requestId === 'number'
+            const requestId = typeof record?.requestId === 'number' || typeof record?.requestId === 'string'
               ? record.requestId
-              : typeof record?.request_id === 'number'
+              : typeof record?.request_id === 'number' || typeof record?.request_id === 'string'
                 ? record.request_id
-                : typeof record?.id === 'number'
+                : typeof record?.id === 'number' || typeof record?.id === 'string'
                   ? record.id
                   : undefined;
             const threadId = typeof record?.threadId === 'string'

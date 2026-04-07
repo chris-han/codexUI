@@ -205,7 +205,7 @@ export type UiMessage = {
 }
 
 export type UiServerRequest = {
-  id: number
+  id: number | string
   method: string
   threadId: string
   turnId: string
@@ -215,7 +215,7 @@ export type UiServerRequest = {
 }
 
 export type UiServerRequestReply = {
-  id: number
+  id: number | string
   result?: unknown
   error?: {
     code?: number

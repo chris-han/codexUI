@@ -1420,54 +1420,43 @@ class CodexBridge {
     }
   }
 
-  private handleMessage(message: { id?: number; method?: string; params?: unknown; result?: unknown; error?: { message?: string; code?: number } }) {
+  private handleMessage(message: { id?: number | string; method?: string; params?: unknown; result?: unknown; error?: { message?: string; code?: number } }) {
     if (message.method === 'ready' || message.method === 'initialized') {
       this.isReady = true;
     }
 
-    const hasPendingRequest = message.id !== undefined && this.pendingRequests.has(message.id);
+    if (message.method) {
+      const forwarded = message.id !== undefined
+        ? {
+            method: 'server/request',
+            params: {
+              id: message.id,
+              method: message.method,
+              ...(message.params && typeof message.params === 'object'
+                ? (message.params as Record<string, unknown>)
+                : { params: message.params }),
+            },
+          }
+        : message;
 
-    if (hasPendingRequest && message.id !== undefined) {
-      const pending = this.pendingRequests.get(message.id);
+      for (const listener of this.notificationListeners) {
+        try {
+          listener(forwarded);
+        } catch (e) {
+          console.error('Notification listener error:', e);
+        }
+      }
+      return;
+    }
+
+    if (message.id !== undefined) {
+      const pending = this.pendingRequests.get(Number(message.id));
       if (pending) {
-        this.pendingRequests.delete(message.id);
+        this.pendingRequests.delete(Number(message.id));
         if (message.error) {
           pending.reject(new Error(message.error.message || 'Unknown error'));
         } else {
           pending.resolve(message.result);
-        }
-      }
-      return;
-    }
-
-    if (message.method && message.id !== undefined) {
-      const serverRequest = {
-        method: 'server/request',
-        params: {
-          id: message.id,
-          method: message.method,
-          ...(message.params && typeof message.params === 'object'
-            ? (message.params as Record<string, unknown>)
-            : { params: message.params }),
-        },
-      };
-
-      for (const listener of this.notificationListeners) {
-        try {
-          listener(serverRequest);
-        } catch (e) {
-          console.error('Notification listener error:', e);
-        }
-      }
-      return;
-    }
-
-    if (message.method && message.id === undefined) {
-      for (const listener of this.notificationListeners) {
-        try {
-          listener(message);
-        } catch (e) {
-          console.error('Notification listener error:', e);
         }
       }
     }
@@ -1492,6 +1481,18 @@ class CodexBridge {
         }
       }, 60000);
     });
+  }
+
+  resolveServerRequest(id: number | string, result?: unknown, error?: { code?: number; message: string }) {
+    if (!this.process) {
+      throw new Error('codex app-server not running');
+    }
+
+    const response = error
+      ? { jsonrpc: '2.0', id, error: { code: error.code ?? -32000, message: error.message } }
+      : { jsonrpc: '2.0', id, result: result ?? {} };
+
+    this.process.stdin.write(JSON.stringify(response) + '\n');
   }
 
   onNotification(listener: (notification: unknown) => void): () => void {
@@ -1894,11 +1895,12 @@ app.get('/codex-api/server-requests/pending', (req, res) => {
 
 app.post('/codex-api/server-requests/respond', async (req, res) => {
   try {
-    const { id, result } = req.body;
-    await bridge.call('server/request/respond', { id, result });
-    pendingServerRequests = pendingServerRequests.filter(
-      (r: { id: number }) => r.id !== id
-    );
+    const { id, result, error } = req.body;
+    bridge.resolveServerRequest(id, result, error);
+    pendingServerRequests = pendingServerRequests.filter((request) => {
+      const record = request as { id?: number | string };
+      return record.id !== id;
+    });
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -2617,10 +2619,13 @@ bridge.onNotification((notification) => {
   if (n.method === 'server/request' && n.params) {
     pendingServerRequests.push(n.params);
   }
-  if (n.method === 'server/request/resolved' && n.params) {
-    pendingServerRequests = pendingServerRequests.filter(
-      (r: { id: number }) => r.id !== n.params!.id
-    );
+  if ((n.method === 'server/request/resolved' || n.method === 'serverRequest/resolved') && n.params) {
+    pendingServerRequests = pendingServerRequests.filter((request) => {
+      const record = request as { id?: number | string };
+      const resolved = n.params as { id?: number | string; requestId?: number | string; request_id?: number | string };
+      const resolvedId = resolved.id ?? resolved.requestId ?? resolved.request_id;
+      return record.id !== resolvedId;
+    });
   }
 });
 

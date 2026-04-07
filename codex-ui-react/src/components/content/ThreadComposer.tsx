@@ -323,6 +323,16 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
         isMobile ? 'p-4' : 'p-3'
       }`}
     >
+      {selectedCollaborationMode === 'plan' || selectedCollaborationMode === 'full-auto' ? (
+        <div className="-mt-1 mb-0">
+          <span className={`inline-flex items-center rounded-full px-2 py-0 text-xs font-small text-white ${
+            selectedCollaborationMode === 'full-auto' ? 'bg-pink-600' : 'bg-gray-600'
+          }`}>
+            {selectedCollaborationMode === 'full-auto' ? 'Full Auto' : 'Plan'}
+          </span>
+        </div>
+      ) : null}
+
       {uploadError ? (
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {uploadError}
@@ -376,16 +386,6 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
               </button>
             </span>
           ))}
-        </div>
-      ) : null}
-
-      {selectedCollaborationMode === 'plan' || selectedCollaborationMode === 'full-auto' ? (
-        <div className="mb-2">
-          <span className={`inline-flex items-center rounded-full px-2 py-0 text-xs font-small text-white ${
-            selectedCollaborationMode === 'full-auto' ? 'bg-green-700' : 'bg-gray-900'
-          }`}>
-            {selectedCollaborationMode === 'full-auto' ? 'Full Auto' : 'Plan'}
-          </span>
         </div>
       ) : null}
 

@@ -21,6 +21,29 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+## Feature: `/claude-to-im setup` interactive request card in React UI
+
+### Prerequisites
+- `codex-ui-react` is running on the local `4173` flow (`cd codex-ui-react && VITE_PORT=4173 BRIDGE_PORT=3457 bun run dev`)
+- Open a fresh thread in the React chat UI
+- Ensure there is no pre-existing `codex-ui-react/.codex/claude-to-im/config.env` if you want to exercise the full first-run setup flow
+
+### Steps
+1. Send `/claude-to-im setup` in a new thread.
+2. Wait for the first structured setup prompt to appear in chat.
+3. Confirm the card shows `User input required` and platform choices such as `Telegram`, `Discord`, `飞书 (Feishu/Lark)`, `微信 (WeChat)`, or `QQ`.
+4. Select `Telegram` and click `Submit answers`.
+5. Confirm the wizard advances to the next structured question instead of stalling or falling back to manual config-file instructions.
+
+### Expected Results
+- The React UI renders the setup prompt as a structured `request_user_input` card.
+- Clicking `Submit answers` resolves the pending server request and continues the setup wizard.
+- The flow stays interactive in-chat instead of requiring the user to edit `config.env` manually for the initial step.
+
+### Rollback/Cleanup
+- Delete `codex-ui-react/.codex/claude-to-im/config.env` if a test config was created.
+- Remove the test thread from chat history if desired.
+
 ## Feature: HTML preview card skill guidance
 
 ### Prerequisites
