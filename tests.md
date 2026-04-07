@@ -418,6 +418,28 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - None.
 
+### Feature: Feishu adapter sends Card JSON 2.0 messages
+
+#### Prerequisites
+- `codex-ui-react/server/standalone.ts` is running with Feishu IM enabled.
+- The Feishu app has bot capability, `im.message.receive_v1`, and `card.action.trigger` configured.
+- A Feishu chat is available to send a test prompt to the bot.
+
+#### Steps
+1. Send a normal text prompt to the Feishu bot, such as `Summarize what you can do in 3 bullets.`
+2. Confirm the bot reply renders as a native Feishu card instead of a plain text message bubble.
+3. Verify the card shows a `Codex` header and the response body content inside the card.
+4. Trigger a flow that returns approval buttons and confirm the buttons still render and remain clickable.
+5. Click one of the buttons and verify the callback is received and the bridge continues the approval flow.
+
+#### Expected Results
+- Bot replies are sent with Feishu `msg_type: interactive` and render as card UI.
+- The card uses the Card JSON 2.0 structure (`schema: "2.0"`) without breaking normal message delivery.
+- Approval buttons continue to work through `card.action.trigger` callbacks.
+
+#### Rollback/Cleanup
+- Revert `codex-ui-react/server/im-bridge/adapters/feishu.ts` if you need to restore the previous legacy card format.
+
 ### Feature: React bridge prefers repo-local Codex
 
 #### Prerequisites

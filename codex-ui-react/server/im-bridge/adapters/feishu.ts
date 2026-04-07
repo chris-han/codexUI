@@ -244,26 +244,62 @@ export class FeishuAdapter implements IMAdapter {
   }
 
   private async sendCardMessage(chatId: string, response: IMResponse): Promise<void> {
-    const actions = (response.buttons ?? []).map((b) => ({
-      tag: 'button',
-      text: { tag: 'plain_text', content: b.text },
-      type: b.action === 'allow' ? 'primary' : 'danger',
-      value: { action: b.action, requestId: (b.data as Record<string, unknown>)?.['requestId'] ?? '', chatId },
+    const text = (response.text ?? '').trim() || '*No content provided.*';
+
+    const buttonColumns = (response.buttons ?? []).map((b) => ({
+      tag: 'column',
+      width: 'auto',
+      elements: [
+        {
+          tag: 'button',
+          text: { tag: 'plain_text', content: b.text },
+          type: b.action === 'allow' ? 'primary' : b.action === 'deny' ? 'danger' : 'default',
+          size: 'medium',
+          value: {
+            action: b.action,
+            requestId: (b.data as Record<string, unknown>)?.['requestId'] ?? '',
+            chatId,
+          },
+        },
+      ],
     }));
 
+    const elements: Array<Record<string, unknown>> = [
+      {
+        tag: 'markdown',
+        content: text,
+      },
+    ];
+
+    if (buttonColumns.length > 0) {
+      elements.push(
+        { tag: 'hr' },
+        {
+          tag: 'column_set',
+          flex_mode: 'none',
+          horizontal_align: 'left',
+          columns: buttonColumns,
+        },
+      );
+    }
+
     const card = {
-      config: { wide_screen_mode: true },
+      schema: '2.0',
+      config: {
+        width_mode: 'fill',
+        enable_forward: true,
+        update_multi: true,
+      },
       header: {
         title: { tag: 'plain_text', content: 'Codex' },
         template: 'blue',
       },
-      elements: [
-        {
-          tag: 'div',
-          text: { tag: 'lark_md', content: response.text ?? '' },
-        },
-        ...(actions.length > 0 ? [{ tag: 'action', actions }] : []),
-      ],
+      body: {
+        direction: 'vertical',
+        vertical_spacing: '8px',
+        padding: '12px 12px 12px 12px',
+        elements,
+      },
     };
 
     await this.restClient!.im.message.create({
