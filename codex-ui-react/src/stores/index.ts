@@ -1063,7 +1063,13 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               let label = '';
               if (itemType === 'reasoning') label = 'Thinking';
               else if (itemType === 'agentmessage') label = 'Writing response';
-              else if (itemType === 'commandexecution') label = item.command ? `Running: ${item.command}` : 'Running command';
+              else if (itemType === 'commandexecution') {
+                // Truncate long commands for the header status label
+                const maxCmdLength = 40;
+                const cmd = item.command || '';
+                const displayCmd = cmd.length > maxCmdLength ? cmd.slice(0, maxCmdLength) + '...' : cmd;
+                label = displayCmd ? `Running: ${displayCmd}` : 'Running command';
+              }
               else if (itemType === 'filechange') label = 'Applying changes';
               else if (itemType === 'webSearch' || itemType === 'websearch') label = 'Searching';
               if (label) {

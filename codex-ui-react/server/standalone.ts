@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
+import yaml from 'js-yaml';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -570,6 +571,10 @@ type InstalledSkillInfo = {
   name: string;
   path: string;
   enabled: boolean;
+  iconSmall?: string;
+  iconLarge?: string;
+  displayName?: string;
+  shortDescription?: string;
 };
 
 type MetaJson = {
@@ -809,6 +814,42 @@ function resolveSkillInstallerScriptPath(): string | null {
   return null;
 }
 
+type SkillOpenAiYaml = {
+  interface?: {
+    display_name?: string;
+    short_description?: string;
+    icon_small?: string;
+    icon_large?: string;
+  };
+};
+
+function parseOpenAiYaml(content: string): SkillOpenAiYaml | null {
+  try {
+    const parsed = yaml.load(content) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as SkillOpenAiYaml;
+  } catch {
+    return null;
+  }
+}
+
+async function readSkillManifest(skillDir: string): Promise<SkillOpenAiYaml | null> {
+  const manifestPath = join(skillDir, 'agents', 'openai.yaml');
+  try {
+    const content = await readFile(manifestPath, 'utf8');
+    return parseOpenAiYaml(content);
+  } catch {
+    // Try alternative path: openai.yaml in skill root
+    const altPath = join(skillDir, 'openai.yaml');
+    try {
+      const content = await readFile(altPath, 'utf8');
+      return parseOpenAiYaml(content);
+    } catch {
+      return null;
+    }
+  }
+}
+
 async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, InstalledSkillInfo>> {
   const installed = new Map<string, InstalledSkillInfo>();
   const localSkillsDir = getSkillsInstallDir();
@@ -824,10 +865,21 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
         // Skills installed under the .system sub-folder are pre-bundled system skills,
         // not user-installed ones. Exclude them so they remain browseable in the marketplace.
         if (normalizedPath.startsWith(`${localSkillsDir}/.system/`)) continue;
+
+        // Read manifest to get icon paths
+        const skillDir = normalizedPath.endsWith('/SKILL.md')
+          ? normalizedPath.slice(0, -'/SKILL.md'.length)
+          : normalizedPath;
+        const manifest = skillDir ? await readSkillManifest(skillDir) : null;
+
         installed.set(skill.name, {
           name: skill.name,
           path: normalizedPath,
           enabled: skill.enabled !== false,
+          iconSmall: manifest?.interface?.icon_small,
+          iconLarge: manifest?.interface?.icon_large,
+          displayName: manifest?.interface?.display_name,
+          shortDescription: manifest?.interface?.short_description,
         });
       }
     }
@@ -841,11 +893,24 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
     const rows = await readdir(getSkillsInstallDir(), { withFileTypes: true });
     for (const row of rows) {
       if (!row.isDirectory() || row.name.startsWith('.')) continue;
-      const skillPath = join(getSkillsInstallDir(), row.name, 'SKILL.md');
+      const skillDir = join(getSkillsInstallDir(), row.name);
+      const skillPath = join(skillDir, 'SKILL.md');
       try {
         const info = await stat(skillPath);
         if (!info.isFile()) continue;
-        installed.set(row.name, { name: row.name, path: skillPath, enabled: true });
+
+        // Read manifest to get icon paths
+        const manifest = await readSkillManifest(skillDir);
+
+        installed.set(row.name, {
+          name: row.name,
+          path: skillPath,
+          enabled: true,
+          iconSmall: manifest?.interface?.icon_small,
+          iconLarge: manifest?.interface?.icon_large,
+          displayName: manifest?.interface?.display_name,
+          shortDescription: manifest?.interface?.short_description,
+        });
       } catch {
         // ignore invalid entry
       }
@@ -1775,6 +1840,99 @@ app.post('/codex-api/upload-file', async (req, res) => {
   await handleFileUpload(req, res);
 });
 
+// Serve skill assets (icons) from installed skills
+// Supports nested skill paths like /skills/semantier/html-preview-card/assets/icon.svg
+app.get('/codex-api/skills/*', async (req, res) => {
+  try {
+    const fullPath = (req.params as Record<string, string>)['0'] || '';
+
+    if (!fullPath) {
+      res.status(400).json({ error: 'Missing path' });
+      return;
+    }
+
+    // Parse path: skill/path/to/assets/filename.ext
+    // We need to find where 'assets/' is in the path
+    const assetsIndex = fullPath.indexOf('/assets/');
+    if (assetsIndex === -1) {
+      res.status(400).json({ error: 'Invalid asset path - must include /assets/' });
+      return;
+    }
+
+    const skillPath = fullPath.slice(0, assetsIndex);
+    const assetPath = fullPath.slice(assetsIndex + '/assets/'.length);
+
+    if (!skillPath || !assetPath) {
+      res.status(400).json({ error: 'Missing skill path or asset path' });
+      return;
+    }
+
+    // Prevent path traversal attacks
+    if (assetPath.includes('..') || assetPath.startsWith('/')) {
+      res.status(400).json({ error: 'Invalid asset path' });
+      return;
+    }
+
+    const skillsDir = getSkillsInstallDir();
+    const skillDir = join(skillsDir, skillPath);
+
+    // Verify skill directory exists
+    try {
+      const skillStat = await stat(skillDir);
+      if (!skillStat.isDirectory()) {
+        res.status(404).json({ error: 'Skill not found' });
+        return;
+      }
+    } catch {
+      res.status(404).json({ error: 'Skill not found' });
+      return;
+    }
+
+    // Resolve the asset path
+    const fullAssetPath = join(skillDir, assetPath);
+    const resolvedPath = resolve(fullAssetPath);
+
+    // Ensure the resolved path is still within the skill directory
+    if (!resolvedPath.startsWith(resolve(skillDir) + '/') && resolvedPath !== resolve(skillDir)) {
+      res.status(400).json({ error: 'Invalid asset path' });
+      return;
+    }
+
+    // Check file exists and is readable
+    try {
+      const assetStat = await stat(resolvedPath);
+      if (!assetStat.isFile()) {
+        res.status(404).json({ error: 'Asset not found' });
+        return;
+      }
+    } catch {
+      res.status(404).json({ error: 'Asset not found' });
+      return;
+    }
+
+    // Set content type based on file extension
+    const ext = assetPath.split('.').pop()?.toLowerCase();
+    const contentTypes: Record<string, string> = {
+      'svg': 'image/svg+xml',
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'ico': 'image/x-icon',
+    };
+    if (ext && contentTypes[ext]) {
+      res.setHeader('Content-Type', contentTypes[ext]);
+    }
+
+    // Stream the file
+    const fileContent = await readFile(resolvedPath);
+    res.send(fileContent);
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to serve asset') });
+  }
+});
+
 app.post('/codex-api/composer-file-search', async (req, res) => {
   try {
     const body = asRecord(req.body);
@@ -1851,25 +2009,60 @@ app.get('/codex-api/skills-hub', async (req, res) => {
 
     const installedEntries = Array.from(installed.values()).map((skill) => {
       const treeEntry = allEntries.find((entry) => entry.name === skill.name);
+
+      // Build local avatar URL from iconSmall if available
+      let localAvatarUrl = '';
+      if (skill.iconSmall) {
+        // iconSmall is like "./assets/semantier-logo-small.svg" - remove leading ./
+        const assetPath = skill.iconSmall.replace(/^\.\//, '');
+        // Extract skill's relative path from skills directory
+        // skill.path might be: .../.codex/skills/semantier/html-preview-card/SKILL.md
+        // We need to extract: semantier/html-preview-card
+        const skillsDir = getSkillsInstallDir();
+        let skillRelPath = skill.name;
+        if (skill.path) {
+          const skillDir = skill.path.endsWith('/SKILL.md')
+            ? skill.path.slice(0, -'/SKILL.md'.length)
+            : skill.path;
+          if (skillDir.startsWith(`${skillsDir}/`)) {
+            skillRelPath = skillDir.slice(skillsDir.length + 1);
+          }
+        }
+        localAvatarUrl = `/codex-api/skills/${skillRelPath.split('/').map(encodeURIComponent).join('/')}/assets/${assetPath}`;
+      }
+
+      // Use display name from manifest if available
+      const displayName = skill.displayName || (treeEntry ? undefined : '');
+
+      // Use short description from manifest if available
+      const description = skill.shortDescription || (treeEntry ? undefined : '');
+
       const base = treeEntry
         ? buildSkillHubEntry(treeEntry)
         : {
             name: skill.name,
             owner: 'local',
-            description: '',
-            displayName: '',
+            description: description || '',
+            displayName: displayName || '',
             publishedAt: 0,
-            avatarUrl: '',
+            avatarUrl: localAvatarUrl,
             url: '',
             installed: true,
             marketOwner: '',
             marketRepo: '',
           };
+
       return {
         ...base,
         installed: true,
         path: skill.path,
         enabled: skill.enabled,
+        // Override with local avatar URL if skill has iconSmall and base doesn't have one
+        avatarUrl: localAvatarUrl || base.avatarUrl,
+        // Use display name from manifest if treeEntry didn't have one
+        displayName: displayName || base.displayName,
+        // Use description from manifest if treeEntry didn't have one
+        description: description || base.description,
       };
     });
 

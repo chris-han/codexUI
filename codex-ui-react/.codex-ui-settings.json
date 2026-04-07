@@ -1,4 +1,4 @@
 {
-  "sandboxMode": "workspace-write",
+  "sandboxMode": "danger-full-access",
   "networkAccess": true
 }
