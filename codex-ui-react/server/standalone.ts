@@ -2730,16 +2730,16 @@ async function main() {
     bridge,
     {
       feishu: {
-        enabled: process.env.CTI_FEISHU_ENABLED === 'true',
-        appId: process.env.CTI_FEISHU_APP_ID ?? '',
-        appSecret: process.env.CTI_FEISHU_APP_SECRET ?? '',
-        domain: process.env.CTI_FEISHU_DOMAIN,
-        allowedUsers: process.env.CTI_FEISHU_ALLOWED_USERS
-          ? process.env.CTI_FEISHU_ALLOWED_USERS.split(',')
+        enabled: process.env.IM_FEISHU_ENABLED === 'true',
+        appId: process.env.IM_FEISHU_APP_ID ?? '',
+        appSecret: process.env.IM_FEISHU_APP_SECRET ?? '',
+        domain: process.env.IM_FEISHU_DOMAIN,
+        allowedUsers: process.env.IM_FEISHU_ALLOWED_USERS
+          ? process.env.IM_FEISHU_ALLOWED_USERS.split(',')
           : undefined,
       },
-      defaultModel: process.env.CTI_DEFAULT_MODEL,
-      autoApprove: process.env.CTI_AUTO_APPROVE === 'true',
+      defaultModel: process.env.IM_DEFAULT_MODEL,
+      autoApprove: process.env.IM_AUTO_APPROVE === 'true',
     },
     currentCodexHome,
   );

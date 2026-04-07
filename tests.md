@@ -2591,3 +2591,40 @@ Configurable list of GitHub-based skill marketplaces with active/inactive toggle
 #### Rollback/Cleanup
 - Interrupt the turn if you no longer want to continue the setup flow.
 - No server restart needed.
+
+---
+
+### Feature: IM Bridge — Feishu Long Connection
+
+#### Prerequisites
+- `codex-ui-react` is running (port 3457).
+- A Feishu Custom App exists with `im.message.receive_v1` + `card.action.trigger` enabled (Long Connection mode).
+- `.env` (at `codex-ui-react/.env`) contains valid `CTI_FEISHU_ENABLED=true`, `CTI_FEISHU_APP_ID`, `CTI_FEISHU_APP_SECRET`.
+
+#### Steps
+1. Set env vars in `codex-ui-react/.env`:
+   ```
+   CTI_FEISHU_ENABLED=true
+   CTI_FEISHU_APP_ID=<your-app-id>
+   CTI_FEISHU_APP_SECRET=<your-app-secret>
+   CTI_FEISHU_ALLOWED_USERS=<open_id1>,<open_id2>
+   CTI_DEFAULT_MODEL=kimi-for-coding
+   CTI_AUTO_APPROVE=false
+   ```
+2. Start the server: `bun --env-file=.env run server/standalone.ts`.
+3. Confirm startup log shows `[Feishu] Long Connection started` and `IM Bridge ready`.
+4. Send a message to your Feishu bot from an account in `CTI_FEISHU_ALLOWED_USERS`.
+5. Wait for the bot to reply with the Codex agent response.
+6. If Codex needs to run a shell command, confirm a card with ✅ Allow / ❌ Deny buttons appears.
+7. Tap Allow — server logs show `resolveServerRequest` and the command executes.
+8. Tap Deny — command is rejected and the bot sends a confirmation message.
+
+#### Expected Result
+- IM Bridge starts without error when config is valid; skips silently when `CTI_FEISHU_ENABLED` is not `true`.
+- Messages from allowed users are forwarded to Codex and replies are sent back to Feishu.
+- Shell-command permission cards appear and resolve correctly.
+- IM sessions survive a server restart (persisted in `<CODEX_HOME>/im-sessions.json`).
+
+#### Rollback/Cleanup
+- Remove `.env` file or set `CTI_FEISHU_ENABLED=false` to disable the bridge.
+- Delete `<CODEX_HOME>/im-sessions.json` to reset persisted sessions.

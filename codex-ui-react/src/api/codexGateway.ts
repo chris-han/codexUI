@@ -1408,7 +1408,10 @@ export function normalizeServerRequest(request: unknown): UiServerRequest | null
     turnId,
     itemId,
     receivedAtIso: new Date().toISOString(),
-    params: r.params,
+    // handleMessage() in the bridge spreads message.params directly into the forwarded
+    // notification params, so all params fields (questions, command, cwd, reason, …) live
+    // at the top level of `r` rather than in a nested `params` key.
+    params: r.params !== undefined ? r.params : r,
   };
 }
 
