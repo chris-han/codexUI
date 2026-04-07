@@ -2394,6 +2394,8 @@ This file tracks manual regression and feature verification steps.
 
 #### Expected Results
 - The server re-reads `.codex-ui-settings.json` without killing in-flight work.
+- Changing the Codex Home / skill path auto-applies the safe hot reload.
+- Other settings save normally and can still be refreshed later with the explicit **Safe hot reload** action.
 - Server-side caches and future install paths update immediately.
 - Existing running bridge work is not interrupted; restart is only recommended if you need that already-running bridge process to switch config too.
 

@@ -2362,8 +2362,10 @@ app.put('/codex-api/settings', async (req, res) => {
         const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
         await ensureUserFilesDir(normalized);
         nextSettings.userFilesPath = normalized;
+        userFilesPath = normalized;
       } else {
         nextSettings.userFilesPath = '';
+        userFilesPath = DEFAULT_USER_FILES_PATH;
         await ensureUserFilesDir(DEFAULT_USER_FILES_PATH);
       }
     }
@@ -2372,8 +2374,10 @@ app.put('/codex-api/settings', async (req, res) => {
       const mode = record.sandboxMode.trim();
       if (mode === 'workspace-write' || mode === 'danger-full-access') {
         nextSettings.sandboxMode = mode;
+        sandboxModeSetting = mode;
       } else if (mode === '') {
         nextSettings.sandboxMode = DEFAULT_SANDBOX_MODE;
+        sandboxModeSetting = DEFAULT_SANDBOX_MODE;
       } else {
         res.status(400).json({ error: 'sandboxMode must be "workspace-write" or "danger-full-access"' });
         return;
@@ -2382,12 +2386,15 @@ app.put('/codex-api/settings', async (req, res) => {
 
     if (typeof record.networkAccess === 'boolean') {
       nextSettings.networkAccess = record.networkAccess;
+      networkAccessSetting = record.networkAccess;
     }
     if (typeof record.excludeTmpdirEnvVar === 'boolean') {
       nextSettings.excludeTmpdirEnvVar = record.excludeTmpdirEnvVar;
+      excludeTmpdirEnvVarSetting = record.excludeTmpdirEnvVar;
     }
     if (typeof record.excludeSlashTmp === 'boolean') {
       nextSettings.excludeSlashTmp = record.excludeSlashTmp;
+      excludeSlashTmpSetting = record.excludeSlashTmp;
     }
 
     if (Array.isArray(record.markets)) {
@@ -2403,25 +2410,40 @@ app.put('/codex-api/settings', async (req, res) => {
         normalized.unshift({ owner: BUILTIN_MARKET_OWNER, repo: BUILTIN_MARKET_REPO, active: true });
       }
       nextSettings.markets = normalized;
+      allMarkets = normalized;
+      skillsTreeCacheMap.clear();
+      metaCacheMap.clear();
     }
 
     await writeSettingsAsync(nextSettings);
-    const reloadSummary = await reloadRuntimeSettings();
 
-    let message = 'Settings saved and hot-reloaded safely.';
-    if (requestedCodexHomeChange && process.env.CODEXUI_CODEX_HOME?.trim()) {
-      message = 'Settings saved and server caches were refreshed safely, but a CODEXUI_CODEX_HOME environment override is still taking precedence over the saved path.';
-    } else if (reloadSummary.bridgeRestartRecommended) {
-      message = 'Settings saved and hot-reloaded safely for server caches and future installs. Existing running bridge work keeps its current configuration until restart.';
+    if (requestedCodexHomeChange) {
+      const reloadSummary = await reloadRuntimeSettings();
+
+      let message = 'Skill path setting saved and hot-reloaded safely.';
+      if (process.env.CODEXUI_CODEX_HOME?.trim()) {
+        message = 'Skill path setting saved and server caches were refreshed safely, but a CODEXUI_CODEX_HOME environment override is still taking precedence over the saved path.';
+      } else if (reloadSummary.bridgeRestartRecommended) {
+        message = 'Skill path setting saved and hot-reloaded safely for server caches and future installs. Existing running bridge work keeps its current configuration until restart.';
+      }
+
+      res.json({
+        ok: true,
+        hotReloadApplied: true,
+        restartRequired: false,
+        restartRecommended: reloadSummary.bridgeRestartRecommended,
+        data: reloadSummary,
+        message,
+      });
+      return;
     }
 
     res.json({
       ok: true,
-      hotReloadApplied: true,
+      hotReloadApplied: false,
       restartRequired: false,
-      restartRecommended: reloadSummary.bridgeRestartRecommended,
-      data: reloadSummary,
-      message,
+      restartRecommended: false,
+      message: 'Settings saved.',
     });
   } catch (error) {
     res.status(500).json({ error: getErrorMessage(error, 'Failed to save settings') });

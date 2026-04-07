@@ -752,7 +752,7 @@ function SettingsPane() {
                 next to the server.
               </li>
               <li>
-                <strong className="font-medium text-gray-700">Safe hot reload</strong> refreshes server-side caches and future install paths without interrupting in-flight work.
+                Changing the <strong className="font-medium text-gray-700">Codex Home / skill path</strong> auto-applies a safe hot reload; other settings save normally unless you click <strong className="font-medium text-gray-700">Safe hot reload</strong> manually.
               </li>
               <li>
                 <code className="rounded bg-gray-100 px-1 py-0.5 text-xs">CODEX_HOME</code> resolution order:{' '}
