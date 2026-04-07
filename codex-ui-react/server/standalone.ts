@@ -1764,12 +1764,24 @@ app.post('/codex-api/rpc', async (req, res) => {
       const existingConfig = (p.config != null && typeof p.config === 'object' && !Array.isArray(p.config))
         ? p.config as Record<string, unknown>
         : {};
+      const existingFeatures =
+        (existingConfig.features != null && typeof existingConfig.features === 'object' && !Array.isArray(existingConfig.features))
+          ? existingConfig.features as Record<string, unknown>
+          : {};
+      const {
+        ['features.default_mode_request_user_input']: legacyDefaultModeRequestUserInput,
+        ...existingConfigWithoutLegacyFeatureKey
+      } = existingConfig;
 
       const configPatch: Record<string, unknown> = {
-        ...existingConfig,
-        // Allow structured UI-card questions in Default mode unless a caller explicitly overrides it.
-        'features.default_mode_request_user_input':
-          existingConfig['features.default_mode_request_user_input'] ?? true,
+        ...existingConfigWithoutLegacyFeatureKey,
+        features: {
+          ...existingFeatures,
+          // App-server feature flags live under the nested `features` object.
+          // Keep honoring the old flattened key if a caller still sends it.
+          default_mode_request_user_input:
+            existingFeatures.default_mode_request_user_input ?? legacyDefaultModeRequestUserInput ?? true,
+        },
       };
       if (effectiveSandbox === 'workspace-write') {
         const existingWorkspaceWrite: Record<string, unknown> =
