@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'node:url';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { execSync, spawnSync } from 'node:child_process';
@@ -887,6 +887,76 @@ async function readSkillManifest(skillDir: string): Promise<SkillOpenAiYaml | nu
   }
 }
 
+async function scanInstalledSkillsOnDisk(installed: Map<string, InstalledSkillInfo>): Promise<void> {
+  const rootDir = getSkillsInstallDir();
+
+  async function walk(dir: string): Promise<void> {
+    if (dir !== rootDir) {
+      const skillPath = join(dir, 'SKILL.md');
+      try {
+        const info = await stat(skillPath);
+        if (info.isFile()) {
+          const manifest = await readSkillManifest(dir);
+          let name = basename(dir);
+          let displayName = manifest?.interface?.display_name;
+          let shortDescription = manifest?.interface?.short_description;
+
+          try {
+            const content = await readFile(skillPath, 'utf8');
+            const frontMatter = parseSkillMdFrontMatter(content);
+            name = frontMatter.name || name;
+            displayName ||= extractH1Title(content) || frontMatter.name;
+            shortDescription ||= frontMatter.description;
+          } catch {
+            // ignore unreadable SKILL.md metadata
+          }
+
+          if (!installed.has(name)) {
+            installed.set(name, {
+              name,
+              path: skillPath,
+              enabled: true,
+              iconSmall: manifest?.interface?.icon_small,
+              iconLarge: manifest?.interface?.icon_large,
+              displayName,
+              shortDescription,
+            });
+          }
+          return;
+        }
+      } catch {
+        // current directory is not itself a skill root, continue walking
+      }
+    }
+
+    try {
+      const rows = await readdir(dir, { withFileTypes: true });
+      for (const row of rows) {
+        if (row.name.startsWith('.')) continue;
+        const nextDir = join(dir, row.name);
+        if (row.isDirectory()) {
+          await walk(nextDir);
+          continue;
+        }
+        if (row.isSymbolicLink()) {
+          try {
+            const linkedInfo = await stat(nextDir);
+            if (linkedInfo.isDirectory()) {
+              await walk(nextDir);
+            }
+          } catch {
+            // ignore broken symlinks
+          }
+        }
+      }
+    } catch {
+      // ignore unreadable directories
+    }
+  }
+
+  await walk(rootDir);
+}
+
 async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, InstalledSkillInfo>> {
   const installed = new Map<string, InstalledSkillInfo>();
   const localSkillsDir = getSkillsInstallDir();
@@ -921,41 +991,10 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
       }
     }
   } catch {
-    // fall through to disk scan
+    // fall through to disk merge
   }
 
-  if (installed.size > 0) return installed;
-
-  try {
-    const rows = await readdir(getSkillsInstallDir(), { withFileTypes: true });
-    for (const row of rows) {
-      if (!row.isDirectory() || row.name.startsWith('.')) continue;
-      const skillDir = join(getSkillsInstallDir(), row.name);
-      const skillPath = join(skillDir, 'SKILL.md');
-      try {
-        const info = await stat(skillPath);
-        if (!info.isFile()) continue;
-
-        // Read manifest to get icon paths
-        const manifest = await readSkillManifest(skillDir);
-
-        installed.set(row.name, {
-          name: row.name,
-          path: skillPath,
-          enabled: true,
-          iconSmall: manifest?.interface?.icon_small,
-          iconLarge: manifest?.interface?.icon_large,
-          displayName: manifest?.interface?.display_name,
-          shortDescription: manifest?.interface?.short_description,
-        });
-      } catch {
-        // ignore invalid entry
-      }
-    }
-  } catch {
-    // ignore missing dir
-  }
-
+  await scanInstalledSkillsOnDisk(installed);
   return installed;
 }
 
@@ -1035,6 +1074,20 @@ function parseSkillMdFrontMatter(content: string): { name?: string; description?
     /---\s*\n([\s\S]*?)\n---\s*$/.exec(content);
   if (!fmMatch) return {};
   const fm = fmMatch[1];
+
+  try {
+    const parsed = yaml.load(fm) as { name?: unknown; description?: unknown } | null;
+    const name = typeof parsed?.name === 'string' ? parsed.name.trim() : undefined;
+    const description = typeof parsed?.description === 'string'
+      ? parsed.description.replace(/\s+/g, ' ').trim()
+      : undefined;
+    if (name || description) {
+      return { name, description };
+    }
+  } catch {
+    // fall back to regex parsing for malformed YAML front matter
+  }
+
   const nameMatch = /^name:\s*["']?([^"'\n]+)["']?\s*$/m.exec(fm);
   // description may be a quoted string or an unquoted multi-word value.
   // Quoted:   description: "Some text with 'quotes' and `backticks`"

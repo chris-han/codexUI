@@ -190,6 +190,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Clear the search input and run a blank search to return to default listing.
 
+### Feature: Skills Hub shows manually installed local skills
+
+#### Prerequisites
+- App server is running from `codex-ui-react`.
+- A local skill folder with a valid `SKILL.md` exists under the configured Codex Home, for example `codex-ui-react/.codex/skills/claude-to-im/SKILL.md`.
+- Open the `Skills Hub` view.
+
+#### Steps
+1. Install, copy, or symlink a skill directly into the configured local skills directory instead of using the in-app install button.
+2. Refresh the `Skills Hub` page (or re-open it).
+3. Look at the `Installed` section near the top of the page.
+4. Confirm the manually installed skill appears there even if it is not currently returned by the bridge `skills/list` call.
+
+#### Expected Results
+- The `Installed` section includes direct filesystem installs such as `claude-to-im`.
+- Nested owner folders and top-level local skill folders are both detected.
+- The card title comes from the skill metadata or heading when available.
+
+#### Rollback/Cleanup
+- Remove the test skill folder from `.codex/skills` if it was only added for verification.
+
 ### Feature: Dark theme for trending GitHub projects and local project dropdown
 
 #### Prerequisites
