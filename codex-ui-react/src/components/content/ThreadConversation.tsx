@@ -338,6 +338,40 @@ function ThreadConversation() {
                     </div>
                   )}
                   <MessageContent text={message.text} />
+                  {message.commandExecution && (
+                    <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-950">
+                      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] uppercase tracking-[0.16em] text-gray-400">Terminal</span>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${
+                            message.commandExecution.status === 'inProgress'
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : message.commandExecution.status === 'completed'
+                              ? 'bg-green-500/20 text-green-400'
+                              : message.commandExecution.status === 'failed'
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {message.commandExecution.status === 'inProgress' && <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />}
+                            {message.commandExecution.status}
+                          </span>
+                        </div>
+                        {message.commandExecution.exitCode !== null && (
+                          <span className="text-[10px] text-gray-500">Exit: {message.commandExecution.exitCode}</span>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <div className="mb-2 font-mono text-xs text-green-400">
+                          <span className="text-gray-500">$</span> {message.commandExecution.command}
+                        </div>
+                        {message.commandExecution.aggregatedOutput && (
+                          <pre className="max-h-48 overflow-auto font-mono text-xs text-gray-300 whitespace-pre-wrap">
+                            {message.commandExecution.aggregatedOutput}
+                          </pre>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {message.fileChanges && message.fileChanges.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {message.fileChanges.map((change) => (

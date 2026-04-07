@@ -1425,7 +1425,9 @@ class CodexBridge {
       this.isReady = true;
     }
 
-    if (message.id !== undefined) {
+    const hasPendingRequest = message.id !== undefined && this.pendingRequests.has(message.id);
+
+    if (hasPendingRequest && message.id !== undefined) {
       const pending = this.pendingRequests.get(message.id);
       if (pending) {
         this.pendingRequests.delete(message.id);
@@ -1435,6 +1437,29 @@ class CodexBridge {
           pending.resolve(message.result);
         }
       }
+      return;
+    }
+
+    if (message.method && message.id !== undefined) {
+      const serverRequest = {
+        method: 'server/request',
+        params: {
+          id: message.id,
+          method: message.method,
+          ...(message.params && typeof message.params === 'object'
+            ? (message.params as Record<string, unknown>)
+            : { params: message.params }),
+        },
+      };
+
+      for (const listener of this.notificationListeners) {
+        try {
+          listener(serverRequest);
+        } catch (e) {
+          console.error('Notification listener error:', e);
+        }
+      }
+      return;
     }
 
     if (message.method && message.id === undefined) {
@@ -1739,7 +1764,12 @@ app.post('/codex-api/rpc', async (req, res) => {
         ? p.config as Record<string, unknown>
         : {};
 
-      const configPatch: Record<string, unknown> = { ...existingConfig };
+      const configPatch: Record<string, unknown> = {
+        ...existingConfig,
+        // Allow structured UI-card questions in Default mode unless a caller explicitly overrides it.
+        'features.default_mode_request_user_input':
+          existingConfig['features.default_mode_request_user_input'] ?? true,
+      };
       if (effectiveSandbox === 'workspace-write') {
         const existingWorkspaceWrite: Record<string, unknown> =
           (existingConfig.sandbox_workspace_write != null &&

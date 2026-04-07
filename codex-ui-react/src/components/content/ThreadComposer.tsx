@@ -380,8 +380,8 @@ function ThreadComposer({ onSend, onInterrupt, isInProgress, disabled, cwd }: Th
       ) : null}
 
       {selectedCollaborationMode === 'plan' || selectedCollaborationMode === 'full-auto' ? (
-        <div className="mb-3">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium text-white ${
+        <div className="mb-2">
+          <span className={`inline-flex items-center rounded-full px-2 py-0 text-xs font-small text-white ${
             selectedCollaborationMode === 'full-auto' ? 'bg-green-700' : 'bg-gray-900'
           }`}>
             {selectedCollaborationMode === 'full-auto' ? 'Full Auto' : 'Plan'}

@@ -1111,18 +1111,36 @@ export const useCodexStore = create<CodexState & CodexActions>()(
           }
 
           case 'server/request': {
-            const request = params as UiServerRequest;
+            const request = api.normalizeServerRequest(params);
             if (request?.threadId) {
               set((state) => {
                 const existing = state.pendingServerRequestsByThreadId.get(request.threadId) || [];
-                state.pendingServerRequestsByThreadId.set(request.threadId, [...existing, request]);
+                const existingIds = new Set(existing.map((entry) => entry.id));
+                if (!existingIds.has(request.id)) {
+                  state.pendingServerRequestsByThreadId.set(request.threadId, [...existing, request]);
+                }
               });
             }
             break;
           }
 
           case 'server/request/resolved': {
-            const { requestId, threadId } = (params as { requestId: number; threadId: string }) || {};
+            const record = params && typeof params === 'object'
+              ? (params as Record<string, unknown>)
+              : null;
+            const requestId = typeof record?.requestId === 'number'
+              ? record.requestId
+              : typeof record?.request_id === 'number'
+                ? record.request_id
+                : typeof record?.id === 'number'
+                  ? record.id
+                  : undefined;
+            const threadId = typeof record?.threadId === 'string'
+              ? record.threadId
+              : typeof record?.thread_id === 'string'
+                ? record.thread_id
+                : '';
+
             if (threadId && requestId !== undefined) {
               set((state) => {
                 const existing = state.pendingServerRequestsByThreadId.get(threadId) || [];

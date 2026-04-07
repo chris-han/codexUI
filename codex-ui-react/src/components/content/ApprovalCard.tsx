@@ -65,8 +65,8 @@ function parseRequestUserInputQuestions(request: UiServerRequest): RequestUserIn
       id,
       header: typeof question.header === 'string' ? question.header : '',
       question: typeof question.question === 'string' ? question.question : '',
-      isOther: question.isOther === true,
-      isSecret: question.isSecret === true,
+      isOther: question.isOther === true || question.is_other === true,
+      isSecret: question.isSecret === true || question.is_secret === true,
       options,
     });
   }
@@ -86,7 +86,13 @@ export function ApprovalCard({ request, onRespond, onSendMessage }: ApprovalCard
   const reason = typeof params?.reason === 'string' ? params.reason : null;
   const isFileChange = request.method === 'item/fileChange/requestApproval';
   const isRequestUserInput = request.method === 'item/tool/requestUserInput';
-  const grantRoot = isFileChange && typeof params?.grantRoot === 'string' ? params.grantRoot : null;
+  const grantRoot = isFileChange
+    ? (typeof params?.grantRoot === 'string'
+        ? params.grantRoot
+        : typeof params?.grant_root === 'string'
+          ? params.grant_root
+          : null)
+    : null;
   const toolQuestions = parseRequestUserInputQuestions(request);
   const title = isRequestUserInput
     ? 'User input required'

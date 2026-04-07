@@ -1353,16 +1353,32 @@ function extractMessageText(item: { text?: string; content?: unknown }): string 
     .join('\n');
 }
 
-function normalizeServerRequest(request: unknown): UiServerRequest | null {
+export function normalizeServerRequest(request: unknown): UiServerRequest | null {
   if (!request || typeof request !== 'object') return null;
   const r = request as Record<string, unknown>;
+
+  const threadId = typeof r.threadId === 'string'
+    ? r.threadId
+    : typeof r.thread_id === 'string'
+      ? r.thread_id
+      : '';
+  const turnId = typeof r.turnId === 'string'
+    ? r.turnId
+    : typeof r.turn_id === 'string'
+      ? r.turn_id
+      : '';
+  const itemId = typeof r.itemId === 'string'
+    ? r.itemId
+    : typeof r.item_id === 'string'
+      ? r.item_id
+      : '';
 
   return {
     id: typeof r.id === 'number' ? r.id : 0,
     method: typeof r.method === 'string' ? r.method : '',
-    threadId: typeof r.threadId === 'string' ? r.threadId : '',
-    turnId: typeof r.turnId === 'string' ? r.turnId : '',
-    itemId: typeof r.itemId === 'string' ? r.itemId : '',
+    threadId,
+    turnId,
+    itemId,
     receivedAtIso: new Date().toISOString(),
     params: r.params,
   };
