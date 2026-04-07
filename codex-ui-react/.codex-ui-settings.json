@@ -1,4 +1,5 @@
 {
   "sandboxMode": "danger-full-access",
-  "networkAccess": true
+  "networkAccess": true,
+  "codexHome": "/home/chris/repo/codexUI/codex-ui-react/.codex"
 }
