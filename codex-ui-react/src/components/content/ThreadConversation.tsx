@@ -157,6 +157,10 @@ function ThreadConversation() {
     if (!threadId) return '';
     return state.liveCommandOutputByThreadId.get(threadId) || '';
   }, [threadId]));
+  const liveCommandLabel = useCodexStore(useCallback((state) => {
+    if (!threadId) return '';
+    return state.liveCommandLabelByThreadId.get(threadId) || '';
+  }, [threadId]));
   const isInProgress = useCodexStore(useCallback((state) => {
     if (!threadId) return false;
     return state.inProgressByThreadId.get(threadId) || false;
@@ -515,14 +519,21 @@ function ThreadConversation() {
             )}
 
             {/* Live command output */}
-            {liveCommandOutput && (
+            {(liveCommandLabel || liveCommandOutput) && (
               <div className="flex justify-start">
                 <div className="w-full max-w-[90%] bg-gray-900 border border-gray-700 rounded-xl px-4 py-3">
                   <div className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                    Terminal output
+                    Terminal
                   </div>
-                  <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto">{liveCommandOutput}</pre>
+                  {liveCommandLabel && (
+                    <div className="mb-2 font-mono text-xs text-green-400">
+                      <span className="text-gray-500">$</span> {liveCommandLabel}
+                    </div>
+                  )}
+                  {liveCommandOutput && (
+                    <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto">{liveCommandOutput}</pre>
+                  )}
                 </div>
               </div>
             )}

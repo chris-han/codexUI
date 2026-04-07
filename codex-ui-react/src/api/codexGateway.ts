@@ -1310,6 +1310,34 @@ function normalizeThreadItem(
         role: 'system' as const,
         text: extractMessageText(item),
       };
+    case 'commandExecution': {
+      const content = (item as Record<string, unknown>);
+      const command = typeof content.command === 'string' ? content.command : '';
+      const cwd = typeof content.cwd === 'string' ? content.cwd : null;
+      const status = typeof content.status === 'string' ? content.status : 'completed';
+      const aggregatedOutput = typeof content.aggregatedOutput === 'string' ? content.aggregatedOutput : (typeof content.aggregated_output === 'string' ? content.aggregated_output : '');
+      const exitCode = typeof content.exitCode === 'number' ? content.exitCode : (typeof content.exit_code === 'number' ? content.exit_code : null);
+      const statusMap: Record<string, 'inProgress' | 'completed' | 'failed' | 'declined' | 'interrupted'> = {
+        in_progress: 'inProgress',
+        inProgress: 'inProgress',
+        completed: 'completed',
+        failed: 'failed',
+        declined: 'declined',
+        interrupted: 'interrupted',
+      };
+      return {
+        ...base,
+        role: 'assistant' as const,
+        text: '',
+        commandExecution: {
+          command,
+          cwd,
+          status: statusMap[status] || 'completed',
+          aggregatedOutput,
+          exitCode,
+        },
+      };
+    }
     default:
       // Handle other item types as needed
       if (item.text) {

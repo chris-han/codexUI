@@ -7,7 +7,7 @@ import { WebSocketServer, type RawData } from 'ws';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 const KIMI_BASE_URL = 'https://api.kimi.com/coding/v1';
 const KIMI_API_KEY = process.env.KIMI_API_KEY || '';
@@ -1359,16 +1359,28 @@ app.get('/v1/models', (req, res) => {
 });
 
 app.post('/v1/responses', async (req, res) => {
+  if (!req.body || typeof req.body !== 'object') {
+    console.error('[proxy] /v1/responses: missing or unparsed request body. Content-Type:', req.headers['content-type'], 'Content-Length:', req.headers['content-length']);
+    res.status(400).json({ error: 'Request body missing or could not be parsed. Ensure Content-Type: application/json and body fits within size limit.' });
+    return;
+  }
+  const rawBodySize = JSON.stringify(req.body).length;
+  console.log('[proxy] /v1/responses body received', { bytes: rawBodySize, previous_response_id: req.body.previous_response_id ?? null });
   try {
     const { mergedBody, previousResponseId } = hydrateRequestBodyFromPreviousResponse(req.body);
+    const mergedInputCount = Array.isArray(mergedBody?.input) ? mergedBody.input.length : 0;
     console.log('[proxy] /v1/responses request', {
       model: mergedBody?.model,
       stream: mergedBody?.stream,
       inputType: Array.isArray(mergedBody?.input) ? 'array' : typeof mergedBody?.input,
       toolCount: Array.isArray(mergedBody?.tools) ? mergedBody.tools.length : 0,
       previousResponseId,
+      mergedInputCount,
     });
     const { chatBody, toolMapping } = convertToChatFormat(mergedBody);
+    const msgCount = Array.isArray(chatBody.messages) ? chatBody.messages.length : 0;
+    const approxMsgBytes = msgCount > 0 ? JSON.stringify(chatBody.messages).length : 0;
+    console.log('[proxy] chat messages built', { messageCount: msgCount, approxBytes: approxMsgBytes });
     if (chatBody.stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -1418,9 +1430,19 @@ app.post('/v1/responses', async (req, res) => {
 });
 
 async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('ws').WebSocket>, raw: RawData) {
+  const rawStr = raw.toString();
+  console.log('[proxy] ws message received', { bytes: rawStr.length });
   try {
-    const body = JSON.parse(raw.toString());
+    let body: any;
+    try {
+      body = JSON.parse(rawStr);
+    } catch (parseErr) {
+      console.error('[proxy] ws message JSON parse error', parseErr);
+      ws.send(JSON.stringify({ type: 'response.failed', error: { message: 'Invalid JSON in WebSocket message' } }));
+      return;
+    }
     const { mergedBody, previousResponseId } = hydrateRequestBodyFromPreviousResponse(body);
+    const mergedInputCount = Array.isArray(mergedBody?.input) ? mergedBody.input.length : 0;
     console.log('[proxy] ws /v1/responses request', {
       type: mergedBody?.type,
       model: mergedBody?.model,
@@ -1428,6 +1450,7 @@ async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('w
       inputType: Array.isArray(mergedBody?.input) ? 'array' : typeof mergedBody?.input,
       toolCount: Array.isArray(mergedBody?.tools) ? mergedBody.tools.length : 0,
       previousResponseId,
+      mergedInputCount,
     });
 
     const { chatBody, toolMapping } = convertToChatFormat(mergedBody);
@@ -1483,6 +1506,24 @@ async function handleWebSocketResponsesMessage(ws: InstanceType<typeof import('w
     );
   }
 }
+
+// Express error handler — catches body-parser errors (413, malformed JSON, etc.)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[proxy] Express middleware error', {
+    status: err.status,
+    type: err.type,
+    message: err.message,
+    contentLength: req.headers['content-length'],
+    contentType: req.headers['content-type'],
+    path: req.path,
+  });
+  const status = typeof err.status === 'number' ? err.status : 500;
+  res.status(status).json({
+    error: err.message || 'Proxy internal error',
+    type: err.type,
+  });
+});
 
 // Health check
 app.get('/health', (req, res) => {

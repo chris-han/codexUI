@@ -109,6 +109,7 @@ export interface CodexState {
   liveMessagesByThreadId: Map<string, string>; // streaming content
   liveReasoningByThreadId: Map<string, string>;
   liveActivityLabelByThreadId: Map<string, string>;
+  liveCommandLabelByThreadId: Map<string, string>;
   liveCommandOutputByThreadId: Map<string, string>;
   inProgressByThreadId: Map<string, boolean>;
   activeTurnIdByThreadId: Map<string, string>;
@@ -224,6 +225,7 @@ const getInitialState = (): CodexState => ({
   liveMessagesByThreadId: new Map(),
   liveReasoningByThreadId: new Map(),
   liveActivityLabelByThreadId: new Map(),
+  liveCommandLabelByThreadId: new Map(),
   liveCommandOutputByThreadId: new Map(),
   inProgressByThreadId: new Map(),
   activeTurnIdByThreadId: new Map(),
@@ -1011,6 +1013,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
                 liveCommandOutputByThreadId.delete(threadId);
                 state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
+                const liveCommandLabelByThreadId = new Map(state.liveCommandLabelByThreadId);
+                liveCommandLabelByThreadId.delete(threadId);
+                state.liveCommandLabelByThreadId = liveCommandLabelByThreadId;
               });
               get().loadThreads();
               // Reload messages for this thread
@@ -1064,11 +1069,12 @@ export const useCodexStore = create<CodexState & CodexActions>()(
               if (itemType === 'reasoning') label = 'Thinking';
               else if (itemType === 'agentmessage') label = 'Writing response';
               else if (itemType === 'commandexecution') {
-                // Truncate long commands for the header status label
-                const maxCmdLength = 40;
                 const cmd = item.command || '';
-                const displayCmd = cmd.length > maxCmdLength ? cmd.slice(0, maxCmdLength) + '...' : cmd;
-                label = displayCmd ? `Running: ${displayCmd}` : 'Running command';
+                label = 'Running command';
+                // Store full command for inline display
+                set((state) => {
+                  state.liveCommandLabelByThreadId = new Map(state.liveCommandLabelByThreadId).set(threadId, cmd);
+                });
               }
               else if (itemType === 'filechange') label = 'Applying changes';
               else if (itemType === 'webSearch' || itemType === 'websearch') label = 'Searching';
@@ -1088,6 +1094,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 const liveCommandOutputByThreadId = new Map(state.liveCommandOutputByThreadId);
                 liveCommandOutputByThreadId.delete(threadId);
                 state.liveCommandOutputByThreadId = liveCommandOutputByThreadId;
+                const liveCommandLabelByThreadId = new Map(state.liveCommandLabelByThreadId);
+                liveCommandLabelByThreadId.delete(threadId);
+                state.liveCommandLabelByThreadId = liveCommandLabelByThreadId;
               });
             }
             break;
