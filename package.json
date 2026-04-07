@@ -41,6 +41,7 @@
     "build:cli": "tsup",
     "build": "bun run build:frontend && bun run build:cli",
     "preview": "vite preview",
+    "skills:with-settings": "node ./codex-ui-react/scripts/run-skills-with-settings.mjs",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

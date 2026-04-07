@@ -337,6 +337,7 @@ function SettingsPane() {
   };
 
   const builtIn = settings?.builtInMarket;
+  const skillsWrapperCommand = 'bun run skills:with-settings -- npx <skills-cli> ...';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -443,6 +444,21 @@ function SettingsPane() {
                       Reset to default
                     </button>
                   ) : null}
+                </div>
+
+                <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-3 text-sm">
+                  <p className="font-medium text-blue-900">Run an external skills CLI with the saved Settings-page path</p>
+                  <p className="mt-1 text-xs text-blue-800">
+                    This wrapper reads <code className="rounded bg-white/80 px-1 py-0.5 text-[11px]">{settings?.settingsFile}</code> on each run and exports{' '}
+                    <code className="rounded bg-white/80 px-1 py-0.5 text-[11px]">CODEX_HOME</code> and{' '}
+                    <code className="rounded bg-white/80 px-1 py-0.5 text-[11px]">CODEXUI_SKILLS_DIR</code> for your command, so it does not require a server restart just to reuse the saved path.
+                  </p>
+                  <code className="mt-2 block break-all rounded bg-white/80 px-2 py-1.5 text-xs text-blue-900">
+                    {skillsWrapperCommand}
+                  </code>
+                  <p className="mt-2 text-[11px] text-blue-700">
+                    Current skills target: <span className="font-medium">{settings?.skillsDir}</span>
+                  </p>
                 </div>
               </>
             )}

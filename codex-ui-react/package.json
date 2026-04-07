@@ -7,7 +7,8 @@
     "proxy": "bun server/kimiProxy.ts",
     "server": "bun server/standalone.ts",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "skills:with-settings": "node ./scripts/run-skills-with-settings.mjs"
   },
   "dependencies": {
     "@codemirror/language": "^6.12.3",

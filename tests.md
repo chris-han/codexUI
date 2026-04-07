@@ -2353,6 +2353,31 @@ This file tracks manual regression and feature verification steps.
 - Delete `codex-ui-react/.codex-ui-settings.json` to revert to defaults.
 - Restart the server.
 
+### Feature: Skills CLI wrapper uses saved Settings-page path
+
+#### Prerequisites
+- `codex-ui-react/.codex-ui-settings.json` exists, or the default `codex-ui-react/.codex` directory is available.
+- `bun` is installed.
+
+#### Steps
+1. Open **Settings** and set a custom Codex Home override, then click **Save**.
+2. Without restarting the server, stay in the repo root and run:
+   `bun run skills:with-settings -- --print-config`
+3. Confirm the JSON output shows the same `codexHome` and `skillsDir` from the saved Settings-page values.
+4. In the UI, verify the Codex Home section now shows a blue helper box with the wrapper command:
+   `bun run skills:with-settings -- npx <skills-cli> ...`
+5. Optionally run a harmless command through the wrapper, for example:
+   `bun run skills:with-settings -- node -p "process.env.CODEX_HOME + '|' + process.env.CODEXUI_SKILLS_DIR"`
+
+#### Expected Results
+- The wrapper reads the saved settings file directly at runtime.
+- The command works without restarting the server.
+- `CODEX_HOME` and `CODEXUI_SKILLS_DIR` point at the saved Settings-page path, not `~/.agents/skills`.
+- The Settings page explains how to run an external skills CLI through the wrapper.
+
+#### Rollback/Cleanup
+- Remove the `skills:with-settings` package script(s) and `codex-ui-react/scripts/run-skills-with-settings.mjs` if the helper is no longer needed.
+
 ---
 
 ## Multi-Marketplace Support in Settings (React)
