@@ -32,7 +32,7 @@ This file tracks manual regression and feature verification steps.
 1. Ask the assistant for a response such as: `Render this returned HTML inline as a preview card in chat.`
 2. Confirm the assistant chooses the HTML preview-card format instead of returning only plain text or a generic code block.
 3. Verify the reply uses either an `:::html-card` / `:::html-preview` wrapper or a fenced `html` block that can render inline in chat.
-4. If the skill is shown in a skill list or chip UI, confirm it uses the Semantier logo from `semantier-logo.png` and is associated with `semantier.com`.
+4. If the skill is shown in a skill list or chip UI, confirm the small icon uses `semantier-logo-small.svg`, the large artwork uses `semantier-logo.png`, and the skill is associated with `semantier.com`.
 5. If sent into the React UI thread, confirm the response renders as the existing MDMA HTML preview card.
 
 ### Expected Results
