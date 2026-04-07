@@ -125,7 +125,7 @@ export class IMBridge {
       const method = n['method'] as string | undefined;
       const params = asRecord(n['params']);
 
-      if (method === 'item/added' || method === 'turn/updated') {
+      if (method === 'item/added' || method === 'item/completed' || method === 'turn/updated') {
         this.handleAgentMessage(params);
       }
 

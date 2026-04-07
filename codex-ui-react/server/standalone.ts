@@ -14,9 +14,9 @@ import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './rev
 import { IMBridge } from './im-bridge/index.js';
 import { config } from 'dotenv';
 
-config({ path: resolve(__dirname, '../.env') });
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+config({ path: resolve(__dirname, '../.env') });
 const distDir = join(__dirname, '..', 'dist');
 const DEFAULT_CODEX_HOME = join(__dirname, '..', '.codex');
 const DEFAULT_USER_FILES_PATH = join(__dirname, '..', 'user_files');
@@ -2735,7 +2735,7 @@ async function main() {
       appId: process.env.IM_FEISHU_APP_ID || '',
       appSecret: process.env.IM_FEISHU_APP_SECRET || '',
       domain: process.env.IM_FEISHU_DOMAIN,
-      allowedUsers: process.env.IM_FEISHU_ALLOWED_USERS?.split(','),
+      allowedUsers: process.env.IM_FEISHU_ALLOWED_USERS?.split(',').filter(Boolean),
     },
     defaultModel: process.env.IM_DEFAULT_MODEL,
     autoApprove: process.env.IM_AUTO_APPROVE === 'true',
@@ -2744,14 +2744,60 @@ async function main() {
   await imBridge.start();
   console.log('IM Bridge ready');
 
-  // ... server setup ...
+  const server = createServer(app);
 
-  // Cleanup
+  const wss = new WebSocketServer({ server, path: '/codex-api/ws' });
+
+  wss.on('connection', (ws) => {
+    console.log('WebSocket client connected');
+
+    ws.send(
+      JSON.stringify({
+        method: 'ready',
+        params: { ok: true },
+        atIso: new Date().toISOString(),
+      })
+    );
+
+    const unsubscribe = bridge.onNotification((notification) => {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify(notification));
+      }
+    });
+
+    ws.on('close', () => {
+      console.log('WebSocket client disconnected');
+      unsubscribe();
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      unsubscribe();
+    });
+  });
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use.`);
+      console.error(`Run: lsof -ti:${PORT} | xargs kill -9`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
+
+  server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+
   const shutdown = () => {
     console.log('Shutting down...');
-    imBridge.stop();
+    imBridge.stop().catch(() => {});
     bridge.stop();
-    server.close(() => process.exit(0));
+    server.close(() => {
+      process.exit(0);
+    });
   };
 
   process.on('SIGINT', shutdown);
