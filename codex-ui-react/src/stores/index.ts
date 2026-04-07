@@ -192,7 +192,7 @@ export interface CodexActions {
   loadPendingServerRequests: () => Promise<void>;
   respondToServerRequest: (
     requestId: number,
-    decision: string
+    result: unknown
   ) => Promise<void>;
 
   // Sync/Polling
@@ -928,9 +928,9 @@ export const useCodexStore = create<CodexState & CodexActions>()(
         }
       },
 
-      respondToServerRequest: async (requestId, decision) => {
+      respondToServerRequest: async (requestId, result) => {
         try {
-          await api.replyToServerRequest(requestId, decision);
+          await api.replyToServerRequest(requestId, result);
           // Remove from pending requests
           set((state) => {
             state.pendingServerRequestsByThreadId.forEach((requests, threadId) => {

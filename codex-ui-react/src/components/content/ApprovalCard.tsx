@@ -1,26 +1,98 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, MessageSquareDiff, ChevronDown, ChevronRight, Send, ShieldAlert } from 'lucide-react';
+import {
+  CheckCircle2,
+  XCircle,
+  MessageSquareDiff,
+  ChevronDown,
+  ChevronRight,
+  Send,
+  ShieldAlert,
+  ListChecks,
+} from 'lucide-react';
 import type { UiServerRequest, ThreadComposerSubmitPayload } from '../../types/codex';
 
 type ApprovalCardProps = {
   request: UiServerRequest;
-  onRespond: (id: number, decision: string) => void;
+  onRespond: (id: number, result: unknown) => void;
   onSendMessage: (payload: ThreadComposerSubmitPayload) => void;
 };
 
 type ActiveSection = 'approve' | 'reject' | 'instructions' | null;
 
+type RequestUserInputOption = {
+  label: string;
+  description: string;
+};
+
+type RequestUserInputQuestion = {
+  id: string;
+  header: string;
+  question: string;
+  isOther: boolean;
+  isSecret: boolean;
+  options: RequestUserInputOption[];
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function parseRequestUserInputQuestions(request: UiServerRequest): RequestUserInputQuestion[] {
+  const params = asRecord(request.params);
+  const questions = Array.isArray(params?.questions) ? params.questions : [];
+  const parsed: RequestUserInputQuestion[] = [];
+
+  for (const row of questions) {
+    const question = asRecord(row);
+    if (!question) continue;
+
+    const id = typeof question.id === 'string' ? question.id : '';
+    if (!id) continue;
+
+    const options = Array.isArray(question.options)
+      ? question.options
+          .map((option) => asRecord(option))
+          .map((option) => ({
+            label: typeof option?.label === 'string' ? option.label : '',
+            description: typeof option?.description === 'string' ? option.description : '',
+          }))
+          .filter((option) => option.label.length > 0)
+      : [];
+
+    parsed.push({
+      id,
+      header: typeof question.header === 'string' ? question.header : '',
+      question: typeof question.question === 'string' ? question.question : '',
+      isOther: question.isOther === true,
+      isSecret: question.isSecret === true,
+      options,
+    });
+  }
+
+  return parsed;
+}
+
 export function ApprovalCard({ request, onRespond, onSendMessage }: ApprovalCardProps) {
   const [activeSection, setActiveSection] = useState<ActiveSection>(null);
   const [instructions, setInstructions] = useState('');
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
+  const [otherAnswers, setOtherAnswers] = useState<Record<string, string>>({});
 
-  const params = request.params as Record<string, unknown> | null | undefined;
+  const params = asRecord(request.params);
   const command = typeof params?.command === 'string' ? params.command : null;
   const cwd = typeof params?.cwd === 'string' ? params.cwd : null;
   const reason = typeof params?.reason === 'string' ? params.reason : null;
   const isFileChange = request.method === 'item/fileChange/requestApproval';
+  const isRequestUserInput = request.method === 'item/tool/requestUserInput';
   const grantRoot = isFileChange && typeof params?.grantRoot === 'string' ? params.grantRoot : null;
-  const title = isFileChange ? 'File write approval required' : 'Command execution approval required';
+  const toolQuestions = parseRequestUserInputQuestions(request);
+  const title = isRequestUserInput
+    ? 'User input required'
+    : isFileChange
+      ? 'File write approval required'
+      : 'Command execution approval required';
 
   function toggleSection(section: ActiveSection) {
     setActiveSection((prev) => (prev === section ? null : section));
@@ -38,6 +110,157 @@ export function ApprovalCard({ request, onRespond, onSendMessage }: ApprovalCard
     if (!instructions.trim()) return;
     onRespond(request.id, 'decline');
     onSendMessage({ text: instructions.trim(), imageUrls: [], fileAttachments: [], skills: [] });
+  }
+
+  function readQuestionAnswer(question: RequestUserInputQuestion): string {
+    const saved = questionAnswers[question.id];
+    if (typeof saved === 'string' && saved.length > 0) return saved;
+    return question.options[0]?.label ?? '';
+  }
+
+  function readOtherAnswer(question: RequestUserInputQuestion): string {
+    return otherAnswers[question.id] ?? '';
+  }
+
+  function handleSubmitUserInput() {
+    const answers: Record<string, { answers: string[] }> = {};
+
+    for (const question of toolQuestions) {
+      const selected = readQuestionAnswer(question).trim();
+      const other = readOtherAnswer(question).trim();
+      const values = [selected, other].filter((value) => value.length > 0);
+
+      if (values.length === 0 && question.options[0]?.label) {
+        values.push(question.options[0].label);
+      }
+
+      answers[question.id] = { answers: values };
+    }
+
+    onRespond(request.id, { answers });
+  }
+
+  const isUserInputReady = !isRequestUserInput || toolQuestions.every((question) => {
+    const selected = readQuestionAnswer(question).trim();
+    const other = readOtherAnswer(question).trim();
+    return selected.length > 0 || other.length > 0;
+  });
+
+  if (isRequestUserInput) {
+    return (
+      <div className="flex justify-center my-4">
+        <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-md">
+          <div className="flex items-center gap-2.5 border-b border-sky-200 bg-sky-50 px-4 py-3">
+            <ListChecks className="h-4 w-4 shrink-0 text-sky-600" strokeWidth={2} />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight text-sky-800">{title}</p>
+              <p className="mt-0.5 text-xs text-sky-700">
+                {reason || 'The agent is waiting for your answer before it can continue.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 px-4 py-4">
+            {toolQuestions.map((question) => {
+              const selectedValue = readQuestionAnswer(question);
+              const otherValue = readOtherAnswer(question);
+
+              return (
+                <div key={`${request.id}:${question.id}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {question.header || question.question || 'Question'}
+                  </p>
+                  {question.header && question.question ? (
+                    <p className="mt-1 text-sm text-slate-600">{question.question}</p>
+                  ) : null}
+
+                  {question.options.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {question.options.map((option) => {
+                        const checked = selectedValue === option.label;
+                        return (
+                          <label
+                            key={`${request.id}:${question.id}:${option.label}`}
+                            className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                              checked
+                                ? 'border-sky-300 bg-sky-50'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`request-${request.id}-${question.id}`}
+                              className="mt-0.5 h-4 w-4 border-slate-300 text-sky-600 focus:ring-sky-500"
+                              checked={checked}
+                              onChange={() => {
+                                setQuestionAnswers((current) => ({
+                                  ...current,
+                                  [question.id]: option.label,
+                                }));
+                              }}
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-slate-800">{option.label}</span>
+                              {option.description ? (
+                                <span className="mt-0.5 block text-xs text-slate-500">{option.description}</span>
+                              ) : null}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <input
+                      type={question.isSecret ? 'password' : 'text'}
+                      value={selectedValue}
+                      onChange={(event) => {
+                        const { value } = event.target;
+                        setQuestionAnswers((current) => ({
+                          ...current,
+                          [question.id]: value,
+                        }));
+                      }}
+                      placeholder={question.isSecret ? 'Enter secret answer' : 'Enter your answer'}
+                      className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                    />
+                  )}
+
+                  {question.isOther ? (
+                    <input
+                      type={question.isSecret ? 'password' : 'text'}
+                      value={otherValue}
+                      onChange={(event) => {
+                        const { value } = event.target;
+                        setOtherAnswers((current) => ({
+                          ...current,
+                          [question.id]: value,
+                        }));
+                      }}
+                      placeholder={question.isSecret ? 'Other secret answer' : 'Other answer'}
+                      className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                This is a structured `request_user_input` / `AskUserQuestion` prompt.
+              </p>
+              <button
+                type="button"
+                onClick={handleSubmitUserInput}
+                disabled={!isUserInputReady}
+                className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Submit answers
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

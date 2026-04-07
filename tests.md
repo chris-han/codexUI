@@ -2523,4 +2523,27 @@ Configurable list of GitHub-based skill marketplaces with active/inactive toggle
 
 #### Rollback/Cleanup
 - Delete any test files created in the user files directory.
+
+---
+
+### Feature: React server-request card supports `request_user_input`
+
+#### Prerequisites
+- `codex-ui-react` is running locally.
+- A thread can trigger a structured prompt via `request_user_input` / `AskUserQuestion`.
+
+#### Steps
+1. Open a thread in the React UI and trigger a flow that asks for user input, such as the `claude-to-im` setup wizard.
+2. Wait for the assistant to pause on a question.
+3. Confirm the chat shows a `User input required` card instead of a generic approval-only card.
+4. If options are shown, select one of the provided answers.
+5. If a text or secret answer is requested, enter a value and submit.
+
+#### Expected Result
+- Structured `request_user_input` prompts render with the question text and any option descriptions.
+- Text-only questions accept typed input, and secret questions use a password-style field.
+- Clicking `Submit answers` sends the correct `result: { answers: ... }` payload, removing the pending request and allowing the agent to continue.
+
+#### Rollback/Cleanup
+- Interrupt the turn if you no longer want to continue the setup flow.
 - No server restart needed.

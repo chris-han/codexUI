@@ -834,11 +834,19 @@ export async function getPendingServerRequests(): Promise<UiServerRequest[]> {
 
 export async function replyToServerRequest(
   requestId: number,
-  decision: string
+  result: unknown
 ): Promise<void> {
+  if (typeof result === 'string') {
+    await respondServerRequest({
+      id: requestId,
+      result: { decision: result },
+    });
+    return;
+  }
+
   await respondServerRequest({
     id: requestId,
-    result: { decision },
+    result: result && typeof result === 'object' ? result : {},
   });
 }
 
