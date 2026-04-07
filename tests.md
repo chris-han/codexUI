@@ -211,6 +211,27 @@ This file tracks manual regression and feature verification steps.
 #### Rollback/Cleanup
 - Remove the test skill folder from `.codex/skills` if it was only added for verification.
 
+### Feature: Skills Hub shows bundled system skills separately
+
+#### Prerequisites
+- App server is running from `codex-ui-react`.
+- `.codex/skills/.system/` contains one or more bundled skills.
+- Open the `Skills Hub` view.
+
+#### Steps
+1. Open the `Skills Hub` page.
+2. Look below the regular `Installed` section.
+3. Confirm a separate `System Skills` section is shown.
+4. Open one of the system skill cards and check its detail modal.
+
+#### Expected Results
+- Bundled skills from `.codex/skills/.system` appear under `System Skills`, not mixed into regular installs.
+- The modal identifies them as bundled/local system skills.
+- System skills do not show the normal install or uninstall action.
+
+#### Rollback/Cleanup
+- No cleanup needed unless temporary system skills were added for testing.
+
 ### Feature: Dark theme for trending GitHub projects and local project dropdown
 
 #### Prerequisites

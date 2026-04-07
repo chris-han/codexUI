@@ -328,6 +328,7 @@ export type SkillMarketplaceInfo = {
   installed: boolean
   path?: string
   enabled?: boolean
+  scope?: 'user' | 'system'
   marketOwner?: string
   marketRepo?: string
 }

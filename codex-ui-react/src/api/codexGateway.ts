@@ -627,7 +627,7 @@ export async function getSkillsMarketplace(params?: {
   query?: string;
   limit?: number;
   sort?: 'date' | 'name';
-}): Promise<{ data: SkillMarketplaceInfo[]; installed: SkillMarketplaceInfo[]; total: number }> {
+}): Promise<{ data: SkillMarketplaceInfo[]; installed: SkillMarketplaceInfo[]; systemInstalled: SkillMarketplaceInfo[]; total: number }> {
   const search = new URLSearchParams();
   const query = params?.query?.trim() ?? '';
   if (query) {
@@ -648,6 +648,7 @@ export async function getSkillsMarketplace(params?: {
   return {
     data: normalizeSkillsMarketplaceEntries(record?.data),
     installed: normalizeSkillsMarketplaceEntries(record?.installed),
+    systemInstalled: normalizeSkillsMarketplaceEntries(record?.systemInstalled),
     total: typeof record?.total === 'number' ? record.total : 0,
   };
 }
@@ -1444,6 +1445,7 @@ function normalizeSkillsMarketplaceEntries(data: unknown): SkillMarketplaceInfo[
       installed: record.installed === true,
       path: typeof record.path === 'string' ? record.path : undefined,
       enabled: typeof record.enabled === 'boolean' ? record.enabled : undefined,
+      scope: record.scope === 'system' ? 'system' : record.scope === 'user' ? 'user' : undefined,
       marketOwner: typeof record.marketOwner === 'string' ? record.marketOwner : undefined,
       marketRepo: typeof record.marketRepo === 'string' ? record.marketRepo : undefined,
     });

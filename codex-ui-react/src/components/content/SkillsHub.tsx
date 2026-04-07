@@ -49,6 +49,10 @@ function isPseudoSkillOwner(owner: string): boolean {
 function getSkillSubtitle(skill: SkillMarketplaceInfo): string {
   const marketLabel = skill.marketOwner && skill.marketRepo ? `${skill.marketOwner}/${skill.marketRepo}` : '';
 
+  if (skill.scope === 'system') {
+    return 'System skill';
+  }
+
   if (skill.installed) {
     return isPseudoSkillOwner(skill.owner) ? 'Installed skill' : (skill.owner || 'Installed skill');
   }
@@ -238,18 +242,28 @@ function SkillDetailModal({
             />
           ) : null}
 
-          <a
-            className="mt-4 inline-flex text-sm text-primary hover:underline"
-            href={skill.url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View on GitHub
-          </a>
+          {skill.url ? (
+            <a
+              className="mt-4 inline-flex text-sm text-primary hover:underline"
+              href={skill.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View on GitHub
+            </a>
+          ) : skill.scope === 'system' ? (
+            <p className="mt-4 text-sm text-gray-500">
+              Bundled system skill from your local `.codex/skills/.system` folder.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex gap-3 border-t border-gray-100 px-6 py-4">
-          {skill.installed ? (
+          {skill.scope === 'system' ? (
+            <div className="flex-1 rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-600">
+              Bundled with the local app configuration.
+            </div>
+          ) : skill.installed ? (
             <button
               className="flex-1 rounded-lg bg-red-50 px-4 py-2 text-red-600 hover:bg-red-100"
               onClick={() => void onUninstall(skill)}
@@ -288,6 +302,7 @@ function SkillsHub() {
   const [sortMode, setSortMode] = useState<'date' | 'name'>('date');
   const [marketplaceSkills, setMarketplaceSkills] = useState<SkillMarketplaceInfo[]>([]);
   const [installedMarketSkills, setInstalledMarketSkills] = useState<SkillMarketplaceInfo[]>([]);
+  const [systemInstalledSkills, setSystemInstalledSkills] = useState<SkillMarketplaceInfo[]>([]);
   const [totalSkills, setTotalSkills] = useState(0);
   const [isLoadingMarketplace, setIsLoadingMarketplace] = useState(false);
   const [error, setError] = useState('');
@@ -335,6 +350,14 @@ function SkillsHub() {
       return leftTitle.localeCompare(rightTitle);
     });
   }, [installedMarketSkills]);
+
+  const visibleSystemSkills = useMemo(() => {
+    return [...systemInstalledSkills].sort((left, right) => {
+      const leftTitle = (left.displayName || left.name).toLowerCase();
+      const rightTitle = (right.displayName || right.name).toLowerCase();
+      return leftTitle.localeCompare(rightTitle);
+    });
+  }, [systemInstalledSkills]);
 
   const selectedMarketInfo = useMemo(() => {
     if (selectedMarket === 'all') return null;
@@ -390,6 +413,7 @@ function SkillsHub() {
       });
       setMarketplaceSkills(result.data);
       setInstalledMarketSkills(result.installed);
+      setSystemInstalledSkills(result.systemInstalled);
       setTotalSkills(result.total);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load skills marketplace');
@@ -485,6 +509,31 @@ function SkillsHub() {
                     onClick={() => {
                       setActionError(null);
                       setSelectedSkill({ ...skill, installed: true });
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {visibleSystemSkills.length > 0 ? (
+            <div className="mb-8">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  System Skills ({visibleSystemSkills.length})
+                </h2>
+                <span className="text-xs text-gray-400">
+                  Bundled from `.codex/skills/.system`
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {visibleSystemSkills.map((skill) => (
+                  <SkillCard
+                    key={`system-${skill.owner}-${skill.name}`}
+                    skill={{ ...skill, installed: true, scope: 'system' }}
+                    onClick={() => {
+                      setActionError(null);
+                      setSelectedSkill({ ...skill, installed: true, scope: 'system' });
                     }}
                   />
                 ))}

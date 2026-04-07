@@ -544,6 +544,8 @@ function resolveCodexInvocation(): CommandInvocation {
   );
 }
 
+type SkillScope = 'user' | 'system';
+
 type SkillHubEntry = {
   name: string;
   owner: string;           // skill author within the market tree
@@ -555,6 +557,7 @@ type SkillHubEntry = {
   installed: boolean;
   path?: string;
   enabled?: boolean;
+  scope?: SkillScope;
   marketOwner: string;     // which market repo this came from
   marketRepo: string;
 };
@@ -572,6 +575,7 @@ type InstalledSkillInfo = {
   name: string;
   path: string;
   enabled: boolean;
+  scope?: SkillScope;
   iconSmall?: string;
   iconLarge?: string;
   displayName?: string;
@@ -887,9 +891,12 @@ async function readSkillManifest(skillDir: string): Promise<SkillOpenAiYaml | nu
   }
 }
 
-async function scanInstalledSkillsOnDisk(installed: Map<string, InstalledSkillInfo>): Promise<void> {
-  const rootDir = getSkillsInstallDir();
-
+async function scanSkillsOnDisk(
+  rootDir: string,
+  installed: Map<string, InstalledSkillInfo>,
+  scope: SkillScope,
+  includeHiddenDirs = false,
+): Promise<void> {
   async function walk(dir: string): Promise<void> {
     if (dir !== rootDir) {
       const skillPath = join(dir, 'SKILL.md');
@@ -916,6 +923,7 @@ async function scanInstalledSkillsOnDisk(installed: Map<string, InstalledSkillIn
               name,
               path: skillPath,
               enabled: true,
+              scope,
               iconSmall: manifest?.interface?.icon_small,
               iconLarge: manifest?.interface?.icon_large,
               displayName,
@@ -932,7 +940,7 @@ async function scanInstalledSkillsOnDisk(installed: Map<string, InstalledSkillIn
     try {
       const rows = await readdir(dir, { withFileTypes: true });
       for (const row of rows) {
-        if (row.name.startsWith('.')) continue;
+        if (!includeHiddenDirs && row.name.startsWith('.')) continue;
         const nextDir = join(dir, row.name);
         if (row.isDirectory()) {
           await walk(nextDir);
@@ -983,6 +991,7 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
           name: skill.name,
           path: normalizedPath,
           enabled: skill.enabled !== false,
+          scope: 'user',
           iconSmall: manifest?.interface?.icon_small,
           iconLarge: manifest?.interface?.icon_large,
           displayName: manifest?.interface?.display_name,
@@ -994,7 +1003,13 @@ async function scanInstalledSkills(bridge: CodexBridge): Promise<Map<string, Ins
     // fall through to disk merge
   }
 
-  await scanInstalledSkillsOnDisk(installed);
+  await scanSkillsOnDisk(getSkillsInstallDir(), installed, 'user', false);
+  return installed;
+}
+
+async function scanSystemSkills(): Promise<Map<string, InstalledSkillInfo>> {
+  const installed = new Map<string, InstalledSkillInfo>();
+  await scanSkillsOnDisk(join(getSkillsInstallDir(), '.system'), installed, 'system', true);
   return installed;
 }
 
@@ -1183,13 +1198,64 @@ function buildSkillHubEntry(entry: SkillsTreeEntry): SkillHubEntry {
   };
 }
 
+function buildInstalledSkillEntry(skill: InstalledSkillInfo, allEntries: SkillsTreeEntry[]): SkillHubEntry {
+  const treeEntry = allEntries.find((entry) => entry.name === skill.name);
+
+  let localAvatarUrl = '';
+  if (skill.iconSmall) {
+    const assetPath = skill.iconSmall.replace(/^\.\//, '');
+    const skillsDir = getSkillsInstallDir();
+    let skillRelPath = skill.name;
+    if (skill.path) {
+      const skillDir = skill.path.endsWith('/SKILL.md')
+        ? skill.path.slice(0, -'/SKILL.md'.length)
+        : skill.path;
+      if (skillDir.startsWith(`${skillsDir}/`)) {
+        skillRelPath = skillDir.slice(skillsDir.length + 1);
+      }
+    }
+    localAvatarUrl = `/codex-api/skills/${skillRelPath.split('/').map(encodeURIComponent).join('/')}/assets/${assetPath}`;
+  }
+
+  const displayName = skill.displayName || (treeEntry ? undefined : '');
+  const description = skill.shortDescription || (treeEntry ? undefined : '');
+
+  const base = treeEntry
+    ? buildSkillHubEntry(treeEntry)
+    : {
+        name: skill.name,
+        owner: 'local',
+        description: description || '',
+        displayName: displayName || '',
+        publishedAt: 0,
+        avatarUrl: localAvatarUrl,
+        url: '',
+        installed: true,
+        marketOwner: '',
+        marketRepo: '',
+      };
+
+  return {
+    ...base,
+    installed: true,
+    path: skill.path,
+    enabled: skill.enabled,
+    scope: skill.scope ?? 'user',
+    avatarUrl: localAvatarUrl || base.avatarUrl,
+    displayName: displayName || base.displayName,
+    description: description || base.description,
+  };
+}
+
 function searchSkillsHub(entries: SkillsTreeEntry[], query: string, limit: number, sort: 'date' | 'name', installed: Map<string, InstalledSkillInfo>): SkillHubEntry[] {
   const normalizedQuery = query.trim().toLowerCase();
   const rows = entries
     .map((entry) => {
       const base = buildSkillHubEntry(entry);
       const installInfo = installed.get(entry.name);
-      return installInfo ? { ...base, installed: true, path: installInfo.path, enabled: installInfo.enabled } : base;
+      return installInfo
+        ? { ...base, installed: true, path: installInfo.path, enabled: installInfo.enabled, scope: installInfo.scope }
+        : base;
     })
     .filter((entry) => {
       if (!normalizedQuery) return true;
@@ -2071,9 +2137,10 @@ app.get('/codex-api/skills-hub', async (req, res) => {
   try {
     const activeMarkets = allMarkets.filter((m) => m.active);
 
-    const [treesResult, installedResult] = await Promise.allSettled([
+    const [treesResult, installedResult, systemInstalledResult] = await Promise.allSettled([
       Promise.allSettled(activeMarkets.map((m) => fetchSkillsTree(m.owner, m.repo))),
       scanInstalledSkills(bridge),
+      scanSystemSkills(),
     ]);
 
     // Merge entries from all active markets; first market wins on name collision
@@ -2093,69 +2160,16 @@ app.get('/codex-api/skills-hub', async (req, res) => {
     }
 
     const installed = installedResult.status === 'fulfilled' ? installedResult.value : new Map<string, InstalledSkillInfo>();
+    const systemInstalled = systemInstalledResult.status === 'fulfilled'
+      ? systemInstalledResult.value
+      : new Map<string, InstalledSkillInfo>();
 
     if (allEntries.length > 0) {
       await fetchMetaBatch(allEntries).catch(() => {});
     }
 
-    const installedEntries = Array.from(installed.values()).map((skill) => {
-      const treeEntry = allEntries.find((entry) => entry.name === skill.name);
-
-      // Build local avatar URL from iconSmall if available
-      let localAvatarUrl = '';
-      if (skill.iconSmall) {
-        // iconSmall is like "./assets/semantier-logo-small.svg" - remove leading ./
-        const assetPath = skill.iconSmall.replace(/^\.\//, '');
-        // Extract skill's relative path from skills directory
-        // skill.path might be: .../.codex/skills/semantier/html-preview-card/SKILL.md
-        // We need to extract: semantier/html-preview-card
-        const skillsDir = getSkillsInstallDir();
-        let skillRelPath = skill.name;
-        if (skill.path) {
-          const skillDir = skill.path.endsWith('/SKILL.md')
-            ? skill.path.slice(0, -'/SKILL.md'.length)
-            : skill.path;
-          if (skillDir.startsWith(`${skillsDir}/`)) {
-            skillRelPath = skillDir.slice(skillsDir.length + 1);
-          }
-        }
-        localAvatarUrl = `/codex-api/skills/${skillRelPath.split('/').map(encodeURIComponent).join('/')}/assets/${assetPath}`;
-      }
-
-      // Use display name from manifest if available
-      const displayName = skill.displayName || (treeEntry ? undefined : '');
-
-      // Use short description from manifest if available
-      const description = skill.shortDescription || (treeEntry ? undefined : '');
-
-      const base = treeEntry
-        ? buildSkillHubEntry(treeEntry)
-        : {
-            name: skill.name,
-            owner: 'local',
-            description: description || '',
-            displayName: displayName || '',
-            publishedAt: 0,
-            avatarUrl: localAvatarUrl,
-            url: '',
-            installed: true,
-            marketOwner: '',
-            marketRepo: '',
-          };
-
-      return {
-        ...base,
-        installed: true,
-        path: skill.path,
-        enabled: skill.enabled,
-        // Override with local avatar URL if skill has iconSmall and base doesn't have one
-        avatarUrl: localAvatarUrl || base.avatarUrl,
-        // Use display name from manifest if treeEntry didn't have one
-        displayName: displayName || base.displayName,
-        // Use description from manifest if treeEntry didn't have one
-        description: description || base.description,
-      };
-    });
+    const installedEntries = Array.from(installed.values()).map((skill) => buildInstalledSkillEntry(skill, allEntries));
+    const systemInstalledEntries = Array.from(systemInstalled.values()).map((skill) => buildInstalledSkillEntry(skill, allEntries));
 
     const partialErrors: string[] = [];
     if (treesResult.status === 'fulfilled') {
@@ -2173,6 +2187,7 @@ app.get('/codex-api/skills-hub', async (req, res) => {
     res.json({
       data: allEntries.length > 0 ? searchSkillsHub(allEntries, query, limit, sort, installed) : [],
       installed: installedEntries,
+      systemInstalled: systemInstalledEntries,
       total: allEntries.length,
       partialError: partialErrors.join('; ') || undefined,
     });
