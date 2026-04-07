@@ -265,7 +265,18 @@ export class FeishuAdapter implements IMAdapter {
         .trim();
     }
 
-    return content.replace(/([^\n])```/g, '$1\n```') || '*No content provided.*';
+    // Feishu Card JSON 2.0 `markdown` blocks do not support fenced code blocks.
+    // Convert them to a quoted plain-text section so content remains readable.
+    content = content.replace(/```(?:[^\n`]*)\n([\s\S]*?)```/g, (_match, code: string) => {
+      const quoted = String(code)
+        .trim()
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n');
+      return quoted ? `\n**Code**\n${quoted}\n` : '';
+    });
+
+    return content || '*No content provided.*';
   }
 
   private async sendCardMessage(chatId: string, response: IMResponse): Promise<void> {
