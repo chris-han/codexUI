@@ -11,6 +11,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import yaml from 'js-yaml';
 import { applyReviewAction, getReviewSnapshot, initializeReviewGit } from './reviewGit';
+import { IMBridge } from './im-bridge/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
@@ -2724,6 +2725,27 @@ async function main() {
   await bridge.start();
   console.log('Bridge ready');
 
+  // Start IM bridge if any channel is enabled
+  const imBridge = new IMBridge(
+    bridge,
+    {
+      feishu: {
+        enabled: process.env.CTI_FEISHU_ENABLED === 'true',
+        appId: process.env.CTI_FEISHU_APP_ID ?? '',
+        appSecret: process.env.CTI_FEISHU_APP_SECRET ?? '',
+        domain: process.env.CTI_FEISHU_DOMAIN,
+        allowedUsers: process.env.CTI_FEISHU_ALLOWED_USERS
+          ? process.env.CTI_FEISHU_ALLOWED_USERS.split(',')
+          : undefined,
+      },
+      defaultModel: process.env.CTI_DEFAULT_MODEL,
+      autoApprove: process.env.CTI_AUTO_APPROVE === 'true',
+    },
+    currentCodexHome,
+  );
+  await imBridge.start();
+  console.log('IM Bridge ready');
+
   const server = createServer(app);
 
   const wss = new WebSocketServer({ server, path: '/codex-api/ws' });
@@ -2773,6 +2795,7 @@ async function main() {
 
   const shutdown = () => {
     console.log('Shutting down...');
+    imBridge.stop().catch(() => {});
     bridge.stop();
     server.close(() => {
       process.exit(0);
