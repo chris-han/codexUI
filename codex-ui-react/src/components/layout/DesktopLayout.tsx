@@ -101,18 +101,6 @@ function DesktopLayout() {
     await updateWorkspaceRootsState(nextState);
   };
 
-  const handleHideProject = async (cwd: string) => {
-    const normalizedCwd = cwd.trim();
-    if (!normalizedCwd) return;
-    const nextLabels = { ...workspaceRootsState.labels };
-    delete nextLabels[normalizedCwd];
-    await updateWorkspaceRootsState({
-      order: workspaceRootsState.order.filter((item) => item !== normalizedCwd),
-      active: workspaceRootsState.active.filter((item) => item !== normalizedCwd),
-      labels: nextLabels,
-    });
-  };
-
   const handleDeleteProject = async (cwd: string) => {
     const normalizedCwd = cwd.trim();
     if (!normalizedCwd) return;
@@ -216,7 +204,6 @@ function DesktopLayout() {
           searchQuery={sidebarSearchQuery}
           onSelectThread={handleSelectThread}
           onRenameProject={handleRenameProject}
-          onHideProject={handleHideProject}
           onDeleteProject={handleDeleteProject}
           onRenameThread={handleRenameThread}
           onArchiveThread={handleArchiveThread}

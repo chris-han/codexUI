@@ -14,7 +14,6 @@ interface SidebarThreadTreeProps {
   searchQuery: string;
   onSelectThread: (threadId: string) => void;
   onRenameProject: (cwd: string, nextLabel: string) => void;
-  onHideProject: (cwd: string) => void;
   onDeleteProject: (cwd: string) => void;
   onRenameThread: (threadId: string, nextTitle: string) => void;
   onForkThread: (threadId: string) => void;
@@ -28,7 +27,6 @@ function SidebarThreadTree({
   searchQuery,
   onSelectThread,
   onRenameProject,
-  onHideProject,
   onDeleteProject,
   onRenameThread,
   onForkThread,
@@ -43,7 +41,6 @@ function SidebarThreadTree({
   const [openThreadMenu, setOpenThreadMenu] = useState<string | null>(null);
   const [projectRenameTarget, setProjectRenameTarget] = useState<ProjectEntry | null>(null);
   const [projectRenameDraft, setProjectRenameDraft] = useState('');
-  const [projectHideTarget, setProjectHideTarget] = useState<ProjectEntry | null>(null);
   const [projectDeleteTarget, setProjectDeleteTarget] = useState<ProjectEntry | null>(null);
   const [threadRenameTarget, setThreadRenameTarget] = useState<UiThread | null>(null);
   const [threadRenameDraft, setThreadRenameDraft] = useState('');
@@ -94,17 +91,6 @@ function SidebarThreadTree({
     onRenameProject(projectRenameTarget.cwd, projectRenameDraft);
     setProjectRenameTarget(null);
     setProjectRenameDraft('');
-  };
-
-  const handleHideProject = (entry: ProjectEntry) => {
-    setOpenProjectMenu(null);
-    setProjectHideTarget(entry);
-  };
-
-  const submitHideProject = () => {
-    if (!projectHideTarget) return;
-    onHideProject(projectHideTarget.cwd);
-    setProjectHideTarget(null);
   };
 
   const handleDeleteProject = (entry: ProjectEntry) => {
@@ -236,13 +222,6 @@ function SidebarThreadTree({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleHideProject(entry)}
-                    className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
-                  >
-                    Hide
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => handleDeleteProject(entry)}
                     className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
                   >
@@ -337,15 +316,6 @@ function SidebarThreadTree({
           setProjectRenameDraft('');
         }}
         confirmLabel="Save"
-      />
-      <ConfirmDialog
-        isOpen={projectHideTarget !== null}
-        title="Hide folder"
-        message={`Hide folder "${projectHideTarget?.label ?? ''}" from the sidebar and new-thread picker?`}
-        confirmLabel="Hide"
-        onConfirm={submitHideProject}
-        onClose={() => setProjectHideTarget(null)}
-        tone="danger"
       />
       <ConfirmDialog
         isOpen={projectDeleteTarget !== null}
