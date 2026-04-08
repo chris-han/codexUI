@@ -20,6 +20,7 @@ config({ path: resolve(__dirname, '../.env') });
 const distDir = join(__dirname, '..', 'dist');
 const DEFAULT_CODEX_HOME = join(__dirname, '..', '.codex');
 const DEFAULT_USER_FILES_PATH = join(__dirname, '..', 'user_files');
+const DEFAULT_USER_THREADS_PATH = join(__dirname, '..', 'user_threads');
 const SETTINGS_FILE = join(__dirname, '..', '.codex-ui-settings.json');
 const PROVIDER_MODELS_FETCH_TIMEOUT_MS = 5_000;
 
@@ -29,6 +30,7 @@ const DEFAULT_SANDBOX_MODE: SandboxModeSetting = 'workspace-write';
 type CodexUiSettings = {
   codexHome?: string;
   userFilesPath?: string;
+  userThreadsPath?: string;
   sandboxMode?: SandboxModeSetting;
   networkAccess?: boolean;
   excludeTmpdirEnvVar?: boolean;
@@ -85,8 +87,15 @@ function resolveUserFilesPath(): string {
   return DEFAULT_USER_FILES_PATH;
 }
 
+function resolveUserThreadsPath(): string {
+  const saved = readSettingsSync();
+  if (saved.userThreadsPath && saved.userThreadsPath.trim()) return saved.userThreadsPath.trim();
+  return DEFAULT_USER_THREADS_PATH;
+}
+
 let currentCodexHome = resolveCodexHome();
 let userFilesPath = resolveUserFilesPath();
+let userThreadsPath = resolveUserThreadsPath();
 
 function resolveSandboxMode(): SandboxModeSetting {
   const saved = readSettingsSync();
@@ -703,6 +712,7 @@ type RuntimeSettingsReloadSummary = {
   codexHome: string;
   skillsDir: string;
   userFilesPath: string;
+  userThreadsPath: string;
   codexHomeChanged: boolean;
   bridgeRestartRecommended: boolean;
 };
@@ -712,6 +722,7 @@ async function reloadRuntimeSettings(): Promise<RuntimeSettingsReloadSummary> {
 
   currentCodexHome = resolveCodexHome();
   userFilesPath = resolveUserFilesPath();
+  userThreadsPath = resolveUserThreadsPath();
   sandboxModeSetting = resolveSandboxMode();
   networkAccessSetting = resolveNetworkAccess();
   excludeTmpdirEnvVarSetting = resolveExcludeTmpdirEnvVar();
@@ -720,6 +731,7 @@ async function reloadRuntimeSettings(): Promise<RuntimeSettingsReloadSummary> {
 
   await ensureCodexSubdirectories(currentCodexHome);
   await ensureUserFilesDir(userFilesPath);
+  await ensureUserFilesDir(userThreadsPath);
 
   skillsTreeCacheMap.clear();
   metaCacheMap.clear();
@@ -729,6 +741,7 @@ async function reloadRuntimeSettings(): Promise<RuntimeSettingsReloadSummary> {
     codexHome: currentCodexHome,
     skillsDir: getSkillsInstallDir(),
     userFilesPath,
+    userThreadsPath,
     codexHomeChanged: previousCodexHome !== currentCodexHome,
     bridgeRestartRecommended: bridgeStartCodexHome !== currentCodexHome,
   };
@@ -767,6 +780,7 @@ async function getSubdirectoryInfo(basePath: string): Promise<SubdirectoryInfo[]
     { name: 'memories', getPath: getMemoriesDir },
     { name: 'sessions', getPath: getSessionsDir },
     { name: 'archived_sessions', getPath: getArchivedSessionsDir },
+    { name: 'user_threads', getPath: () => userThreadsPath },
   ];
 
   const results: SubdirectoryInfo[] = [];
@@ -1800,6 +1814,9 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
     ? activeMarketLabels.join(', ')
     : `${BUILTIN_MARKET_OWNER}/${BUILTIN_MARKET_REPO}`;
 
+  // Use threadCwd as the default file output path, fallback to userFilesPath if not available
+  const defaultOutputPath = threadCwd || userFilesPath;
+
   if (compact) {
     return [
       '<!-- SERVER-INJECTED CONFIGURATION — not from AGENTS.md -->',
@@ -1811,13 +1828,10 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
       `- Codex home fallback: \`${currentCodexHome}\``,
       `- Skills install directory fallback: \`${skillsDir}\``,
       `- Active skills marketplace fallback: \`${activeMarketsSummary}\``,
-      `- Configured file output fallback path for unspecified created files: \`${userFilesPath}\``,
-      '- The thread `cwd` may be different; do NOT confuse the cwd with the configured file path fallback.',
-      '- If the user asks about the configured/default file path, answer with the fallback path above, not the cwd.',
-      '- Bare relative filenames like `test.js`, `test.txt`, or `output.json` are NOT allowed for generic outputs; expand them to an absolute path under the fallback directory.',
-      '- When using file-writing tools for unspecified outputs, use an absolute path under that fallback directory rather than a bare relative filename.',
-      '- This overrides the usual tendency to save generic files in the repo/workspace cwd.',
-      '- Only use another location when the user explicitly provides a different config or the task is clearly modifying repository code.',
+      `- **Default file output path** (for unspecified created files): \`${defaultOutputPath}\``,
+      '- If the user asks about the configured/default file path, answer with the path above.',
+      '- When using file-writing tools for unspecified outputs, use an absolute path under that directory.',
+      '- Only use another location when the user explicitly provides a different config.',
     ].join('\n');
   }
 
@@ -1834,28 +1848,21 @@ function buildThreadDevInstructions(options: { threadCwd?: string | null; compac
     `- **Skills directory fallback** (installed skills live here): \`${skillsDir}\``,
     `- **Active skills marketplace fallback**: \`${activeMarketsSummary}\``,
     `- **Sandbox mode fallback**: \`${sandboxModeSetting}\``,
-    `- **User files directory fallback** (default output location for user-created files): \`${userFilesPath}\``,
-    `- **Thread fallback output path** (use this when the user does not specify a file path): \`${userFilesPath}\``,
+    `- **Default file output path** (use this when the user does not specify a file path): \`${defaultOutputPath}\``,
   ];
-
-  if (threadCwd && threadCwd !== userFilesPath) {
-    lines.push(`- **Workspace / repo cwd** (use this for code edits when the user is working on repo files): \`${threadCwd}\``);
-  }
 
   lines.push(
     '',
     'IMPORTANT THREAD FALLBACK RULES:',
     '1. All relevant Settings-page values above are thread fallback defaults: use them whenever the user has not explicitly requested a different config in the current chat.',
-    '2. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **Thread fallback output path / User files directory** above.',
-    '3. If the user asks about the configured/default file path, the correct answer is the configured **User files directory** above — not the thread cwd.',
+    '2. If the user asks you to create, save, export, or test-write a file and does not specify an exact target path, you MUST use the **Default file output path** above (which is the thread folder).',
+    '3. If the user asks about the configured/default file path, the correct answer is the **Default file output path** above.',
     '4. This rule is part of the system context for every thread and every turn; it applies even when the user does not mention the configured path explicitly.',
-    '5. This rule overrides the normal cwd default: do NOT place generic output files in the repo/workspace cwd just because it is the current directory.',
-    '6. Bare relative filenames like `test.js` are not acceptable for unspecified generic outputs; convert them to an absolute path under `${CODEXUI_USER_FILES_PATH}`.',
-    '7. When calling tools that accept a file path, prefer an absolute path under that directory (for example: `${CODEXUI_USER_FILES_PATH}/test_file.txt`) instead of a bare relative filename in the workspace cwd.',
-    '8. If you claim a file was created, moved, or corrected into that directory, you must actually perform the file operation and verify the resulting path before replying.',
-    '9. Only use different paths, sandbox behavior, or skill sources when the user explicitly requests them or the task is clearly editing repository code in the workspace.',
-    '10. Do NOT write user content into the skills directory or CODEX_HOME.',
-    'The env var `$CODEXUI_USER_FILES_PATH` also points to this directory.',
+    '5. Bare relative filenames like `test.js` are not acceptable for unspecified generic outputs; convert them to an absolute path under the default output directory.',
+    '6. When calling tools that accept a file path, prefer an absolute path under that directory instead of a bare relative filename.',
+    '7. If you claim a file was created, moved, or corrected into that directory, you must actually perform the file operation and verify the resulting path before replying.',
+    '8. Only use different paths, sandbox behavior, or skill sources when the user explicitly requests them.',
+    '9. Do NOT write user content into the skills directory or CODEX_HOME.',
   );
 
   return lines.join('\n');
@@ -2157,6 +2164,34 @@ app.post('/codex-api/project-root', async (req, res) => {
     res.json({ data: { path: normalizedPath } });
   } catch (error) {
     res.status(500).json({ error: getErrorMessage(error, 'Failed to open project root') });
+  }
+});
+
+app.delete('/codex-api/project', async (req, res) => {
+  try {
+    const record = asRecord(req.body);
+    const rawPath = typeof record?.path === 'string' ? record.path.trim() : '';
+    if (!rawPath) {
+      res.status(400).json({ error: 'Missing path' });
+      return;
+    }
+
+    const normalizedPath = isAbsolute(rawPath) ? rawPath : resolve(rawPath);
+    try {
+      const info = await stat(normalizedPath);
+      if (!info.isDirectory()) {
+        res.status(400).json({ error: 'Path is not a directory' });
+        return;
+      }
+    } catch {
+      res.status(404).json({ error: 'Directory does not exist' });
+      return;
+    }
+
+    await rm(normalizedPath, { recursive: true, force: true });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: getErrorMessage(error, 'Failed to delete project') });
   }
 });
 
@@ -2554,6 +2589,9 @@ app.get('/codex-api/settings', async (_req, res) => {
         userFilesPath,
         savedUserFilesPath: settings.userFilesPath ?? null,
         defaultUserFilesPath: DEFAULT_USER_FILES_PATH,
+        userThreadsPath,
+        savedUserThreadsPath: settings.userThreadsPath ?? null,
+        defaultUserThreadsPath: DEFAULT_USER_THREADS_PATH,
         sandboxMode: sandboxModeSetting,
         savedSandboxMode: settings.sandboxMode ?? null,
         defaultSandboxMode: DEFAULT_SANDBOX_MODE,
@@ -2578,6 +2616,7 @@ app.put('/codex-api/settings', async (req, res) => {
     }
     const nextSettings: CodexUiSettings = {};
     let requestedCodexHomeChange = false;
+    let requestedUserThreadsPathChange = false;
 
     if (typeof record.codexHome === 'string') {
       const trimmed = record.codexHome.trim();
@@ -2613,6 +2652,18 @@ app.put('/codex-api/settings', async (req, res) => {
         userFilesPath = DEFAULT_USER_FILES_PATH;
         await ensureUserFilesDir(DEFAULT_USER_FILES_PATH);
       }
+    }
+
+    if (typeof record.userThreadsPath === 'string') {
+      const trimmed = record.userThreadsPath.trim();
+      if (trimmed) {
+        const normalized = isAbsolute(trimmed) ? trimmed : resolve(trimmed);
+        await mkdir(normalized, { recursive: true, mode: 0o755 });
+        nextSettings.userThreadsPath = normalized;
+      } else {
+        nextSettings.userThreadsPath = '';
+      }
+      requestedUserThreadsPathChange = true;
     }
 
     if (typeof record.sandboxMode === 'string') {
@@ -2662,14 +2713,14 @@ app.put('/codex-api/settings', async (req, res) => {
 
     await writeSettingsAsync(nextSettings);
 
-    if (requestedCodexHomeChange) {
+    if (requestedCodexHomeChange || requestedUserThreadsPathChange) {
       const reloadSummary = await reloadRuntimeSettings();
 
-      let message = 'Skill path setting saved and hot-reloaded safely.';
-      if (process.env.CODEXUI_CODEX_HOME?.trim()) {
-        message = 'Skill path setting saved and server caches were refreshed safely, but a CODEXUI_CODEX_HOME environment override is still taking precedence over the saved path.';
+      let message = 'Settings saved and hot-reloaded safely.';
+      if (process.env.CODEXUI_CODEX_HOME?.trim() && requestedCodexHomeChange) {
+        message = 'Settings saved and server caches were refreshed safely, but a CODEXUI_CODEX_HOME environment override is still taking precedence over the saved path.';
       } else if (reloadSummary.bridgeRestartRecommended) {
-        message = 'Skill path setting saved and hot-reloaded safely for server caches and future installs. Existing running bridge work keeps its current configuration until restart.';
+        message = 'Settings saved and hot-reloaded safely for server caches and future installs. Existing running bridge work keeps its current configuration until restart.';
       }
 
       res.json({
@@ -2816,6 +2867,7 @@ async function main() {
     },
     defaultModel: process.env.IM_DEFAULT_MODEL,
     autoApprove: process.env.IM_AUTO_APPROVE === 'true',
+    userThreadsPath,
   });
 
   await imBridge.start();

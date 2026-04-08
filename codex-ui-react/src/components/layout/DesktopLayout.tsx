@@ -113,6 +113,27 @@ function DesktopLayout() {
     });
   };
 
+  const handleDeleteProject = async (cwd: string) => {
+    const normalizedCwd = cwd.trim();
+    if (!normalizedCwd) return;
+    try {
+      await fetch('/codex-api/project', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: normalizedCwd }),
+      });
+      const nextLabels = { ...workspaceRootsState.labels };
+      delete nextLabels[normalizedCwd];
+      await updateWorkspaceRootsState({
+        order: workspaceRootsState.order.filter((item) => item !== normalizedCwd),
+        active: workspaceRootsState.active.filter((item) => item !== normalizedCwd),
+        labels: nextLabels,
+      });
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+    }
+  };
+
   const handleNewThread = () => {
     if (isMobile) {
       setSidebarCollapsed(true);
@@ -196,6 +217,7 @@ function DesktopLayout() {
           onSelectThread={handleSelectThread}
           onRenameProject={handleRenameProject}
           onHideProject={handleHideProject}
+          onDeleteProject={handleDeleteProject}
           onRenameThread={handleRenameThread}
           onArchiveThread={handleArchiveThread}
           onForkThread={handleForkThread}

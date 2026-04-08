@@ -98,6 +98,7 @@ export interface CodexState {
   projectGroups: UiProjectGroup[];
   workspaceRootsState: WorkspaceRootsState;
   homeDirectory: string;
+  userThreadsPath: string;
   threadShellsById: Map<string, UiThread>;
   selectedThreadId: string | null;
   isLoadingThreads: boolean;
@@ -215,6 +216,7 @@ const getInitialState = (): CodexState => ({
   projectGroups: [],
   workspaceRootsState: { order: [], labels: {}, active: [] },
   homeDirectory: '',
+  userThreadsPath: '',
   threadShellsById: new Map(),
   selectedThreadId: loadFromStorage<string | null>(SELECTED_THREAD_STORAGE_KEY, null),
   isLoadingThreads: false,
@@ -437,19 +439,22 @@ export const useCodexStore = create<CodexState & CodexActions>()(
 
       loadWorkspaceRootsState: async () => {
         try {
-          const [workspaceRootsState, homeDirectory] = await Promise.all([
+          const [workspaceRootsState, homeDirectory, settings] = await Promise.all([
             api.getWorkspaceRootsState(),
             api.getHomeDirectory(),
+            api.getSettings(),
           ]);
           set((state) => {
             state.workspaceRootsState = workspaceRootsState;
             state.homeDirectory = homeDirectory;
+            state.userThreadsPath = settings.userThreadsPath;
           });
         } catch (error) {
           console.error('Failed to load workspace roots state:', error);
           set((state) => {
             state.workspaceRootsState = { order: [], labels: {}, active: [] };
             state.homeDirectory = '';
+            state.userThreadsPath = '';
             state.error = 'Failed to load project folders';
           });
         }

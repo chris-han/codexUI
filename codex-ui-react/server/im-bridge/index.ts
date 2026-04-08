@@ -1,5 +1,6 @@
 import type { IMAdapter, IMMessage, IMBridgeConfig } from './types.js';
 import { IMStore } from './store.js';
+import { join } from 'path';
 
 interface BridgeCaller {
   call(method: string, params?: unknown): Promise<unknown>;
@@ -31,6 +32,11 @@ export class IMBridge {
     if (codexHome) {
       this.store = new IMStore(codexHome);
     }
+  }
+
+  private getThreadCwd(channelType: string): string {
+    const basePath = this.config.userThreadsPath || process.cwd();
+    return join(basePath, channelType);
   }
 
   async start(): Promise<void> {
@@ -75,8 +81,9 @@ export class IMBridge {
 
     if (!session) {
       try {
+        const threadCwd = this.getThreadCwd(msg.channelType);
         const result = asRecord(await this.codexBridge.call('thread/start', {
-          cwd: process.cwd(),
+          cwd: threadCwd,
           model: this.config.defaultModel,
         }));
         const threadId = (asRecord(result['thread'])['id'] ?? result['id']) as string | undefined;

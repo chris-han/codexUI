@@ -50,4 +50,5 @@ export interface IMBridgeConfig {
   feishu?: FeishuConfig;
   defaultModel?: string;
   autoApprove?: boolean;
+  userThreadsPath?: string;
 }

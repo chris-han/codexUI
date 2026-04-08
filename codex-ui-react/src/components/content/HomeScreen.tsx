@@ -40,6 +40,7 @@ function HomeScreen() {
     projectGroups,
     workspaceRootsState,
     homeDirectory,
+    userThreadsPath,
     startNewThread,
     isSendingMessage,
     loadWorkspaceRootsState,
@@ -92,9 +93,10 @@ function HomeScreen() {
     const trimmed = createFolderDraft.trim();
     if (!trimmed) return;
 
+    const basePath = userThreadsPath || homeDirectory || '/';
     const nextPath = isAbsolutePath(trimmed)
       ? trimmed
-      : joinPath(homeDirectory || '/', trimmed);
+      : joinPath(basePath, trimmed);
     const nextLabel = getBaseName(nextPath.trim()) || trimmed;
 
     try {
@@ -256,7 +258,7 @@ function HomeScreen() {
             ? `Will be created at: ${
                 isAbsolutePath(createFolderDraft.trim())
                   ? createFolderDraft.trim()
-                  : joinPath(homeDirectory || '/', createFolderDraft.trim())
+                  : joinPath(userThreadsPath || homeDirectory || '/', createFolderDraft.trim())
               }`
             : undefined
         }
