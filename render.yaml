@@ -1,0 +1,73 @@
+services:
+  - type: web
+    name: codex-ui-react
+    runtime: node
+    plan: standard
+    buildCommand: |
+      # Install Bun
+      curl -fsSL https://bun.sh/install | bash
+      export PATH="$HOME/.bun/bin:$PATH"
+      # Install dependencies and build
+      bun install
+      bun run build
+    startCommand: |
+      export PATH="$HOME/.bun/bin:$PATH"
+      # Start both proxy and server
+      bun run proxy &
+      sleep 2
+      bun run server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: PROXY_PORT
+        value: 3456
+      # Required: Kimi API Key
+      - key: KIMI_API_KEY
+        sync: false
+      # Optional: Azure OpenAI Configuration
+      - key: AZURE_OPENAI_API_KEY
+        sync: false
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT_NAME
+        sync: false
+      - key: AZURE_OPENAI_CHAT_DEPLOYMENT_NAME
+        sync: false
+      - key: AZURE_OPENAI_API_VERSION
+        sync: false
+      # Optional: Feishu/Lark IM Integration
+      - key: IM_ENABLED_CHANNELS
+        value: feishu
+      - key: IM_FEISHU_ENABLED
+        value: false
+      - key: IM_FEISHU_APP_ID
+        sync: false
+      - key: IM_FEISHU_APP_SECRET
+        sync: false
+      - key: IM_FEISHU_DOMAIN
+        sync: false
+      - key: IM_FEISHU_ALLOWED_USERS
+        sync: false
+      - key: IM_RUNTIME
+        value: codex
+      - key: IM_DEFAULT_WORKDIR
+        value: /tmp/user-workdir
+      - key: IM_DEFAULT_MODE
+        value: ask
+      - key: IM_DEFAULT_MODEL
+        value: kimi-for-coding
+      - key: IM_AUTO_APPROVE
+        value: false
+      # Codex UI Paths (persisted on disk)
+      - key: CODEXUI_CODEX_HOME
+        value: /var/render/codex
+      - key: CODEXUI_USER_FILES_PATH
+        value: /var/render/user_files
+      - key: CODEXUI_USER_THREADS_PATH
+        value: /var/render/user_threads
+    disk:
+      name: codex-data
+      mountPath: /var/render
+      sizeGB: 5
