@@ -21,6 +21,7 @@ export class IMBridge {
   private sessions: Map<string, IMSession> = new Map();
   private store: IMStore | null = null;
   private unsubscribeNotifications?: () => void;
+  private pendingTurnWarnings = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly codexBridge: BridgeCaller,
@@ -52,6 +53,7 @@ export class IMBridge {
 
   async stop(): Promise<void> {
     this.unsubscribeNotifications?.();
+    this.clearAllTurnWarnings();
     for (const adapter of this.adapters.values()) {
       await adapter.stop();
     }
@@ -87,6 +89,7 @@ export class IMBridge {
         await this.store?.save(this.sessions);
       } catch (err) {
         console.error('[IMBridge] Failed to start thread:', err instanceof Error ? err.message : err);
+        await this.notifyChatError(msg.channelType, msg.chatId, 'AI 后端当前不可用，请稍后重试。');
         return;
       }
     }
@@ -97,8 +100,11 @@ export class IMBridge {
         input: this.buildInput(msg),
         approvalPolicy: this.config.autoApprove ? 'never' : undefined,
       });
+      this.armTurnWarning(session.threadId, msg.channelType, msg.chatId);
     } catch (err) {
       console.error('[IMBridge] Failed to start turn:', err instanceof Error ? err.message : err);
+      this.clearTurnWarning(session.threadId);
+      await this.notifyChatError(msg.channelType, msg.chatId, 'AI 后端当前不可用，请检查模型代理或账号状态后重试。');
     }
   }
 
@@ -132,13 +138,21 @@ export class IMBridge {
       if (method === 'server/request') {
         this.handlePermissionRequest(params);
       }
+
+      if (method === 'error') {
+        this.handleProtocolError(params);
+      }
+
+      if (method === 'backend/disconnected') {
+        this.handleBackendDisconnected(params);
+      }
     });
   }
 
   private handleAgentMessage(params: Record<string, unknown>): void {
     const threadId = params['threadId'] as string | undefined;
     const item = asRecord(params['item']);
-    if (!threadId || !item) return;
+    if (!threadId) return;
 
     const sessionEntry = Array.from(this.sessions.entries()).find(([, s]) => s.threadId === threadId);
     if (!sessionEntry) return;
@@ -149,17 +163,45 @@ export class IMBridge {
 
     const chatId = sessionKey.split(':').slice(1).join(':');
 
-    if (item['type'] === 'agentMessage' && item['text']) {
-      adapter.sendMessage(chatId, { text: String(item['text']) });
+    if (item) {
+      if (item['type'] === 'agentMessage' && item['text']) {
+        this.clearTurnWarning(threadId);
+        adapter.sendMessage(chatId, { text: String(item['text']) });
+        return;
+      }
+
+      if (item['type'] === 'commandExecution') {
+        this.clearTurnWarning(threadId);
+        const command = String(item['command'] ?? '');
+        const output = String(item['aggregatedOutput'] ?? item['aggregated_output'] ?? '');
+        adapter.sendMessage(chatId, {
+          text: `\`${command}\`\n\`\`\`\n${output.slice(0, 3000)}\n\`\`\``,
+          parseMode: 'markdown',
+        });
+        return;
+      }
+
+      if (item['type'] === 'error') {
+        this.clearTurnWarning(threadId);
+        const errorMessage = this.extractErrorMessage(item);
+        if (errorMessage) {
+          adapter.sendMessage(chatId, { text: `⚠️ ${errorMessage}` });
+        }
+        return;
+      }
     }
 
-    if (item['type'] === 'commandExecution') {
-      const command = String(item['command'] ?? '');
-      const output = String(item['aggregatedOutput'] ?? item['aggregated_output'] ?? '');
-      adapter.sendMessage(chatId, {
-        text: `\`${command}\`\n\`\`\`\n${output.slice(0, 3000)}\n\`\`\``,
-        parseMode: 'markdown',
-      });
+    const turn = asRecord(params['turn']);
+    const turnError = this.extractErrorMessage(turn?.['error']);
+    const turnStatus = typeof turn?.['status'] === 'string' ? turn['status'] : undefined;
+    if (turnError && turnStatus === 'failed') {
+      this.clearTurnWarning(threadId);
+      adapter.sendMessage(chatId, { text: `⚠️ ${turnError}` });
+      return;
+    }
+
+    if (turnStatus === 'completed') {
+      this.clearTurnWarning(threadId);
     }
   }
 
@@ -209,6 +251,101 @@ export class IMBridge {
       const adapter = this.adapters.get(sessionEntry[1].channelType);
       await adapter?.sendMessage(chatId, {
         text: buttonId === 'allow' ? '✅ Command approved' : '❌ Command denied',
+      });
+    }
+  }
+
+  private async notifyChatError(channelType: string, chatId: string, message: string): Promise<void> {
+    const adapter = this.adapters.get(channelType);
+    await adapter?.sendMessage(chatId, { text: `⚠️ ${message}` });
+  }
+
+  private armTurnWarning(threadId: string, channelType: string, chatId: string): void {
+    this.clearTurnWarning(threadId);
+    const timer = setTimeout(() => {
+      this.pendingTurnWarnings.delete(threadId);
+      void this.notifyChatError(channelType, chatId, 'AI 后端本轮响应超时，请检查模型代理或账号状态后重试。');
+    }, 45000);
+    this.pendingTurnWarnings.set(threadId, timer);
+  }
+
+  private clearTurnWarning(threadId: string | undefined): void {
+    if (!threadId) return;
+    const timer = this.pendingTurnWarnings.get(threadId);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingTurnWarnings.delete(threadId);
+    }
+  }
+
+  private clearAllTurnWarnings(): void {
+    for (const timer of this.pendingTurnWarnings.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingTurnWarnings.clear();
+  }
+
+  private extractErrorMessage(value: unknown): string | null {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+
+    const record = asRecord(value);
+    if (!record) return null;
+
+    const directMessage = record['message'];
+    if (typeof directMessage === 'string' && directMessage.trim()) {
+      return directMessage.trim();
+    }
+
+    const nestedError = asRecord(record['error']);
+    const nestedMessage = nestedError?.['message'];
+    if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+      return nestedMessage.trim();
+    }
+
+    return null;
+  }
+
+  private handleProtocolError(params: Record<string, unknown>): void {
+    const message = this.extractErrorMessage(params);
+    if (!message) return;
+
+    const threadId = typeof params['threadId'] === 'string' ? params['threadId'] : undefined;
+    this.clearTurnWarning(threadId);
+    if (threadId) {
+      const sessionEntry = Array.from(this.sessions.entries()).find(([, s]) => s.threadId === threadId);
+      if (sessionEntry) {
+        const [sessionKey, session] = sessionEntry;
+        const adapter = this.adapters.get(session.channelType);
+        if (adapter) {
+          const chatId = sessionKey.split(':').slice(1).join(':');
+          void adapter.sendMessage(chatId, { text: `⚠️ ${message}` });
+          return;
+        }
+      }
+    }
+
+    for (const [sessionKey, session] of this.sessions.entries()) {
+      const adapter = this.adapters.get(session.channelType);
+      if (!adapter) continue;
+
+      const chatId = sessionKey.split(':').slice(1).join(':');
+      void adapter.sendMessage(chatId, { text: `⚠️ ${message}` });
+    }
+  }
+
+  private handleBackendDisconnected(params: Record<string, unknown>): void {
+    this.clearAllTurnWarnings();
+    const message = String(params['message'] ?? 'AI backend disconnected unexpectedly');
+
+    for (const [sessionKey, session] of this.sessions.entries()) {
+      const adapter = this.adapters.get(session.channelType);
+      if (!adapter) continue;
+
+      const chatId = sessionKey.split(':').slice(1).join(':');
+      void adapter.sendMessage(chatId, {
+        text: `⚠️ AI 后端连接已中断：${message}。请检查模型代理或账号状态后重试。`,
       });
     }
   }

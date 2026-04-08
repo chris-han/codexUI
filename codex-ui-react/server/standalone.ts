@@ -1377,10 +1377,28 @@ class CodexBridge {
   private notificationListeners: ((notification: unknown) => void)[] = [];
   private buffer = '';
   private isReady = false;
+  private startPromise: Promise<void> | null = null;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopping = false;
 
   async start(): Promise<void> {
-    console.log('Starting codex app-server...');
-    console.log(`Using CODEX_HOME: ${currentCodexHome}`);
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+
+    if (this.process && this.isReady) {
+      return;
+    }
+
+    this.stopping = false;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+
+    this.startPromise = (async () => {
+      console.log('Starting codex app-server...');
+      console.log(`Using CODEX_HOME: ${currentCodexHome}`);
 
     const codexInvocation = resolveCodexInvocation();
     bridgeStartCodexHome = currentCodexHome;
@@ -1406,55 +1424,102 @@ class CodexBridge {
       CODEXUI_SKILLS_DIR: getSkillsInstallDir(),
     };
 
-    console.log('Proxy config:', {
-      PROVIDER: 'local-proxy',
-      OPENAI_BASE_URL: proxyEnv.OPENAI_BASE_URL,
-      OPENAI_API_KEY_SET: !!proxyEnv.OPENAI_API_KEY,
-      AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT || undefined,
-      CODEX_COMMAND: [codexInvocation.command, ...codexInvocation.args].join(' '),
-    });
+      console.log('Proxy config:', {
+        PROVIDER: 'local-proxy',
+        OPENAI_BASE_URL: proxyEnv.OPENAI_BASE_URL,
+        OPENAI_API_KEY_SET: !!proxyEnv.OPENAI_API_KEY,
+        AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT || undefined,
+        CODEX_COMMAND: [codexInvocation.command, ...codexInvocation.args].join(' '),
+      });
 
-    this.process = spawn(codexInvocation.command, [...codexInvocation.args, 'app-server'], {
+      try {
+        const proxyHealth = await fetch('http://localhost:3456/health');
+        if (!proxyHealth.ok) {
+          console.warn(`[CodexBridge] Local model proxy health check failed with status ${proxyHealth.status}. IM replies may stall until it is healthy.`);
+        }
+      } catch {
+        console.warn('[CodexBridge] Local model proxy is not reachable at http://localhost:3456/health. IM replies may stall until it is started.');
+      }
+
+      this.process = spawn(codexInvocation.command, [...codexInvocation.args, 'app-server'], {
       stdio: ['pipe', 'pipe', 'inherit'],
       env: proxyEnv,
     });
 
-    this.process.stdout.on('data', (data: Buffer) => {
-      this.buffer += data.toString();
-      this.processBuffer();
-    });
+      this.process.stdout.on('data', (data: Buffer) => {
+        this.buffer += data.toString();
+        this.processBuffer();
+      });
 
-    this.process.on('exit', (code) => {
-      console.log(`codex app-server exited with code ${code}`);
-      this.process = null;
-      this.isReady = false;
-    });
+      this.process.on('exit', (code, signal) => {
+        console.log(`codex app-server exited with code ${code}${signal ? `, signal ${signal}` : ''}`);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+        const error = new Error(`codex app-server exited unexpectedly${signal ? ` (${signal})` : ''}`);
+        for (const pending of this.pendingRequests.values()) {
+          pending.reject(error);
+        }
+        this.pendingRequests.clear();
+
+        this.process = null;
+        this.isReady = false;
+
+        for (const listener of this.notificationListeners) {
+          try {
+            listener({
+              method: 'backend/disconnected',
+              params: { code, signal, message: error.message },
+            });
+          } catch (listenerError) {
+            console.error('Notification listener error:', listenerError);
+          }
+        }
+
+        if (!this.stopping) {
+          this.restartTimer = setTimeout(() => {
+            this.start().catch((restartError) => {
+              console.error('Failed to restart codex app-server:', restartError);
+            });
+          }, 1000);
+        }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      try {
+        await this.rawCall('initialize', {
+          clientInfo: {
+            name: 'codex-ui-react',
+            version: '0.1.0',
+          },
+          capabilities: {
+            experimentalApi: true,
+          },
+        });
+        this.process.stdin.write(JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'initialized',
+        }) + '\n');
+        console.log('codex app-server initialized');
+        this.isReady = true;
+      } catch (error) {
+        console.warn('Could not initialize:', error);
+        this.isReady = true;
+      }
+    })();
 
     try {
-      await this.call('initialize', {
-        clientInfo: {
-          name: 'codex-ui-react',
-          version: '0.1.0',
-        },
-        capabilities: {
-          experimentalApi: true,
-        },
-      });
-      this.process.stdin.write(JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'initialized',
-      }) + '\n');
-      console.log('codex app-server initialized');
-      this.isReady = true;
-    } catch (error) {
-      console.warn('Could not initialize:', error);
-      this.isReady = true;
+      await this.startPromise;
+    } finally {
+      this.startPromise = null;
     }
   }
 
   stop() {
+    this.stopping = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     if (this.process) {
       this.process.kill();
       this.process = null;
@@ -1518,7 +1583,7 @@ class CodexBridge {
     }
   }
 
-  call(method: string, params?: unknown): Promise<unknown> {
+  private rawCall(method: string, params?: unknown): Promise<unknown> {
     if (!this.process) {
       return Promise.reject(new Error('codex app-server not running'));
     }
@@ -1537,6 +1602,18 @@ class CodexBridge {
         }
       }, 60000);
     });
+  }
+
+  async call(method: string, params?: unknown): Promise<unknown> {
+    if (!this.process || !this.isReady) {
+      await this.start();
+    }
+
+    if (!this.process) {
+      throw new Error('codex app-server not running');
+    }
+
+    return this.rawCall(method, params);
   }
 
   resolveServerRequest(id: number | string, result?: unknown, error?: { code?: number; message: string }) {

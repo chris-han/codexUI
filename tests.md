@@ -431,6 +431,9 @@ This file tracks manual regression and feature verification steps.
 3. Verify the card shows a `Codex` header and the response body content inside the card.
 4. Trigger a flow that returns approval buttons and confirm the buttons still render and remain clickable.
 5. Click one of the buttons and verify the callback is received and the bridge continues the approval flow.
+6. Stop the local model proxy on port `3456`, then send another message.
+7. Confirm the bot returns a visible backend-unavailable warning instead of silently hanging forever.
+8. Restart the proxy and confirm the bridge can recover for subsequent messages.
 
 #### Expected Results
 - Bot replies are sent with Feishu `msg_type: interactive` and render as card UI.
@@ -438,9 +441,11 @@ This file tracks manual regression and feature verification steps.
 - Markdown content such as lists, bold text, and inline code renders inside the card body correctly.
 - Fenced code blocks remain readable in the card output and are downgraded to Feishu-compatible quoted text when needed.
 - Approval buttons continue to work through `card.action.trigger` callbacks.
+- If the backend disappears, returns a provider error, or silently stalls, the user sees a warning instead of an unexplained timeout.
 
 #### Rollback/Cleanup
 - Revert `codex-ui-react/server/im-bridge/adapters/feishu.ts` if you need to restore the previous legacy card format.
+- Restart the proxy if you stopped it during verification.
 
 ### Feature: React bridge prefers repo-local Codex
 
