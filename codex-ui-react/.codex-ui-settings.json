@@ -1,5 +1,5 @@
 {
-  "sandboxMode": "danger-full-access",
+  "sandboxMode": "workspace-write",
   "networkAccess": true,
   "codexHome": "/home/chris/repo/codexUI/codex-ui-react/.codex"
 }

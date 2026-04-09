@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(API_URL=http://localhost:3458 bun test -- tests/regression/api-contract.test.ts)",
+      "Read(//events_handler/**)",
+      "Bash(CODEX_SKIP_VENDORED_BWRAP=1 cargo build -p codex-server)",
+      "Bash(CODEX_SKIP_VENDORED_BWRAP=1 CODEXUI_CODEX_HOME=/tmp/codex-rust CODEXUI_USER_FILES_PATH=/tmp/user_files_rust CODEXUI_USER_THREADS_PATH=/tmp/user_threads_rust PORT=3458 /home/chris/repo/codexUI/codex/codex-rs/target/debug/codex-server)",
+      "Bash(API_URL=http://localhost:3458 bun test -- tests/regression/)",
+      "Bash(./start-server.sh status:*)",
+      "Bash(./start-server.sh ts:*)",
+      "Bash(node /home/chris/repo/codexUI/codex-ui-react/scripts/show-backend.mjs)",
+      "Bash(./start-server.sh rust:*)",
+      "Bash(cargo build:*)",
+      "Bash(sed -i 's/^pub struct MetaMethodsResponse/#[allow\\(dead_code\\)]\\\\npub struct MetaMethodsResponse/' /home/chris/repo/codexUI/codex/codex-rs/codex-server/src/models.rs)",
+      "Bash(sed -i 's/^pub struct MetaNotificationsResponse/#[allow\\(dead_code\\)]\\\\npub struct MetaNotificationsResponse/' /home/chris/repo/codexUI/codex/codex-rs/codex-server/src/models.rs)",
+      "Bash(/usr/bin/grep -E \"^const bridge|^let bridge|^var bridge|^bridge\\\\s*=\" /home/chris/repo/codexUI/codex-ui-react/server/standalone.ts)",
+      "Bash(/usr/bin/grep -n \"class CodexBridge\\\\|CodexBridge\\\\s*=\" /home/chris/repo/codexUI/codex-ui-react/server/standalone.ts)",
+      "Bash(/usr/bin/grep -n \"getEmptyThreadDetailFromList\" /home/chris/repo/codexUI/codex-ui-react/src/api/codexGateway.ts)",
+      "Bash(/usr/bin/grep -n \"app\\\\\\\\.get\\\\\\\\|app\\\\\\\\.post\\\\\\\\|app\\\\\\\\.put\\\\\\\\|app\\\\\\\\.delete\" /home/chris/repo/codexUI/codex-ui-react/server/standalone.ts)",
+      "Bash(/usr/bin/grep -n \"\\\\.route\\\\|get\\(\\\\|post\\(\\\\|any\\(\" /home/chris/repo/codexUI/codex/codex-rs/app-server/src/transport/websocket.rs)",
+      "Bash(/usr/bin/grep -n \"thread/list\\\\|includeArchived\\\\|archived\" /home/chris/repo/codexUI/codex-ui-react/tests/regression/*.ts)",
+      "Bash(/usr/bin/find /home/chris/repo/codexUI/codex/codex-rs/codex-cli -name \"*.rs\" -type f)",
+      "Bash(/usr/bin/find /home/chris/repo/codexUI/codex/codex-rs -name \"main.rs\" -path \"*codex-cli*\")",
+      "Bash(/usr/bin/grep -n \"futures\" /home/chris/repo/codexUI/codex/codex-rs/codex-server/Cargo.toml)",
+      "Bash(/usr/bin/grep -n \"async fn chat_stream\" /home/chris/repo/codexUI/codex/codex-rs/codex-server/src/providers/kimi/provider.rs)",
+      "Bash(/usr/bin/grep -n \"async fn chat_stream\" /home/chris/repo/codexUI/codex/codex-rs/codex-server/src/providers/azure/provider.rs)",
+      "Read(//^#\\\\[async_trait\\\\]/{start=NR} /^impl.*\\\\{/{impl=NR} /^}$/**)"
+    ]
+  }
+}

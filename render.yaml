@@ -67,7 +67,39 @@ services:
         value: /var/render/user_files
       - key: CODEXUI_USER_THREADS_PATH
         value: /var/render/user_threads
+      # Backend Server Selection:
+      # - 3457: TypeScript/Express server (default, legacy)
+      # - 3458: Rust server (new, requires separate deployment)
+      - key: BRIDGE_PORT
+        value: 3457
     disk:
       name: codex-data
       mountPath: /var/render
       sizeGB: 5
+
+  # Optional: Deploy the Rust server instead of TypeScript
+  # To use: comment out the service above and uncomment this one
+  # - type: web
+  #   name: codex-ui-rust
+  #   runtime: rust
+  #   plan: standard
+  #   buildCommand: |
+  #     cd codex/codex-rs
+  #     cargo build --release -p codex-server
+  #   startCommand: |
+  #     ./codex/codex-rs/target/release/codex-server
+  #   envVars:
+  #     - key: RUST_LOG
+  #       value: info
+  #     - key: PORT
+  #       value: 10000
+  #     - key: CODEXUI_CODEX_HOME
+  #       value: /var/render/codex
+  #     - key: CODEXUI_USER_FILES_PATH
+  #       value: /var/render/user_files
+  #     - key: CODEXUI_USER_THREADS_PATH
+  #       value: /var/render/user_threads
+  #   disk:
+  #     name: codex-data
+  #     mountPath: /var/render
+  #     sizeGB: 5

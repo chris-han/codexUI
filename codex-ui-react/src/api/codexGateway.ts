@@ -213,7 +213,7 @@ function isThreadNotMaterializedYetError(error: unknown): boolean {
 
 // Thread management
 export async function getThreadGroups(): Promise<UiProjectGroup[]> {
-  const response = await rpcCall<ThreadListResponse>('thread/list', { includeArchived: false });
+  const response = await rpcCall<ThreadListResponse>('thread/list', { archived: false, limit: 50 });
   const threads = response.data || [];
   return normalizeThreadsToProjectGroups(threads);
 }
@@ -223,7 +223,7 @@ async function getEmptyThreadDetailFromList(threadId: string): Promise<{
   thread: UiThread | null;
 }> {
   try {
-    const response = await rpcCall<ThreadListResponse>('thread/list', { includeArchived: false });
+    const response = await rpcCall<ThreadListResponse>('thread/list', { archived: false, limit: 50 });
     const summary = (response.data || []).find((thread) => thread.id === threadId);
     return {
       messages: [],
@@ -260,8 +260,9 @@ export async function getThreadDetail(
         return await getEmptyThreadDetailFromList(threadId);
       }
       if (isMissingRolloutError(error) || isThreadNotFoundError(error)) {
-        // Fall through to thread/read below — thread exists but has no rollout yet
+        return await getEmptyThreadDetailFromList(threadId);
       }
+      throw error;
     }
   }
 
@@ -287,17 +288,21 @@ export async function getThreadDetail(
         if (isThreadNotMaterializedYetError(resumeError)) {
           return await getEmptyThreadDetailFromList(threadId);
         }
-        if (isMissingRolloutError(resumeError)) {
+        if (isMissingRolloutError(resumeError) || isThreadNotFoundError(resumeError)) {
           return await getEmptyThreadDetailFromList(threadId);
         }
         console.error('Failed to resume thread:', resumeError);
+        throw resumeError;
       }
     }
     if (isThreadNotMaterializedYetError(error)) {
       return await getEmptyThreadDetailFromList(threadId);
     }
+    if (isMissingRolloutError(error) || isThreadNotFoundError(error)) {
+      return await getEmptyThreadDetailFromList(threadId);
+    }
     console.error('Failed to load thread detail:', error);
-    return { messages: [], thread: null };
+    throw error;
   }
 }
 

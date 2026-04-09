@@ -387,6 +387,15 @@ function upsertThreadIntoGroups(state: CodexState, thread: UiThread): void {
   );
 }
 
+function removeThreadFromGroups(state: CodexState, threadId: string): void {
+  state.projectGroups = state.projectGroups
+    .map((group) => ({
+      ...group,
+      threads: group.threads.filter((thread) => thread.id !== threadId),
+    }))
+    .filter((group) => group.threads.length > 0);
+}
+
 // ==================== Store Creation ====================
 
 export const useCodexStore = create<CodexState & CodexActions>()(
@@ -535,6 +544,8 @@ export const useCodexStore = create<CodexState & CodexActions>()(
                 });
                 return;
               }
+              removeThreadFromGroups(state, threadId);
+              state.threadShellsById.delete(threadId);
               state.messagesByThreadId.delete(threadId);
               state.pendingTurnRequestsByThreadId.delete(threadId);
               state.hydratedThreadIds.delete(threadId);

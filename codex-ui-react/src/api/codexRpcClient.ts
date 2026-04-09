@@ -80,6 +80,16 @@ export async function rpcCall<T>(method: string, params?: unknown): Promise<T> {
   }
 
   const envelope = payload as RpcEnvelope<T> | null;
+  if (envelope && typeof envelope === 'object' && 'error' in envelope && envelope.error) {
+    throw new CodexApiError(
+      extractErrorMessage(envelope, `RPC ${method} returned an error`),
+      {
+        code: 'rpc_error',
+        method,
+        status: response.status,
+      }
+    );
+  }
   if (!envelope || typeof envelope !== 'object' || !('result' in envelope)) {
     throw new CodexApiError(`RPC ${method} returned malformed envelope`, {
       code: 'invalid_response',

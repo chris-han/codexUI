@@ -353,6 +353,61 @@ The server tries to find Codex CLI in this order:
 3. Global `codex` command
 4. `bunx @openai/codex`
 
+## Backend Server Selection
+
+Codex UI now supports two backend implementations:
+
+| Server | Port | Status | Use Case |
+|--------|------|--------|----------|
+| **TypeScript/Express** | 3457 | Legacy (default) | Stable, fully featured |
+| **Rust** | 3458 | New | Better performance, multi-tenant ready |
+
+### Switching Servers (Development)
+
+Use the provided script:
+```bash
+cd codex-ui-react
+
+# Switch to TypeScript server and start everything
+./start-server.sh ts
+
+# Switch to Rust server and start everything
+./start-server.sh rust
+
+# Check current configuration
+./start-server.sh status
+```
+
+Or manually set in `.env`:
+```bash
+# TypeScript server (default)
+BRIDGE_PORT=3457
+
+# Rust server
+BRIDGE_PORT=3458
+```
+
+### Running Both Servers
+
+**Terminal 1 - TypeScript Server:**
+```bash
+cd codex-ui-react
+bun run proxy &  # Port 3456 - Kimi proxy
+bun run server   # Port 3457 - Main API
+```
+
+**Terminal 1 - Rust Server:**
+```bash
+cd codex/codex-rs
+CODEX_SKIP_VENDORED_BWRAP=1 cargo run -p codex-server
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd codex-ui-react
+bun run dev  # Uses BRIDGE_PORT from .env
+```
+
 ## Scaling Considerations
 
 ### Vertical Scaling
