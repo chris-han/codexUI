@@ -520,6 +520,35 @@ This file tracks manual regression and feature verification steps.
 - Stop the local bridge process if it was started only for verification.
 - Restore the legacy proxy env wiring in `codex-ui-react/server/standalone.ts` only if you intentionally need to revert to the old `3456` path.
 
+---
+
+## Feature: LLM Provider Regression Tests (automated, port 3458)
+
+### Prerequisites
+- Rust `codex-server` built and running on port 3458
+- `KIMI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT_NAME` set in `codex-ui-react/.env`
+- `bun` installed in `codex-ui-react/`
+- Start server: `PORT=3458 source codex-ui-react/.env && /path/to/codex/codex-rs/target/debug/codex-server &`
+
+### Steps
+1. `cd codex-ui-react && bun test tests/regression/llm-provider.test.ts`
+2. Monitor test output.
+
+### Expected Results
+All 9 tests pass:
+- GET /v1/models returns available models
+- POST /v1/chat/completions with Kimi model (non-streaming)
+- POST /v1/chat/completions with streaming (eventCount > 0)
+- POST /v1/chat/completions with tools
+- gpt-4o routes to Azure provider
+- kimi-* models route to Kimi provider
+- Unknown model returns 404
+- Request with valid configuration succeeds
+- Response format matches OpenAI Chat Completions spec
+
+### Rollback/Cleanup
+- Kill server: `kill $(lsof -t -i :3458)`
+
 ## Rust backend critical logging
 
 - Prerequisites/setup:
