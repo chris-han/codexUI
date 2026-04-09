@@ -1417,18 +1417,23 @@ class CodexBridge {
     const codexInvocation = resolveCodexInvocation();
     bridgeStartCodexHome = currentCodexHome;
 
-    // Always point Codex at the local Responses-compatible proxy. The proxy decides
-    // whether to upstream to Kimi or Azure OpenAI based on model/env.
-    const proxyEnv = {
+    const hasInProcessProvider = Boolean(
+      process.env.KIMI_API_KEY ||
+      (process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY)
+    );
+
+    const bridgeEnv: NodeJS.ProcessEnv = {
       ...process.env,
       FORCE_COLOR: '0',
       CODEX_HOME: currentCodexHome,
       XDG_CONFIG_HOME: currentCodexHome,
-      OPENAI_BASE_URL: 'http://localhost:3456/v1',
-      OPENAI_API_KEY: process.env.KIMI_API_KEY || process.env.AZURE_OPENAI_API_KEY || 'sk-proxy',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY
+        || process.env.KIMI_API_KEY
+        || process.env.AZURE_OPENAI_API_KEY
+        || (hasInProcessProvider ? 'sk-in-process' : 'sk-proxy'),
       // Also try standard OpenAI env vars
       OPENAI_ORG_ID: '',
-      // Disable any other API keys to force proxy usage
+      // Disable any other API keys to force the configured provider path
       ANTHROPIC_API_KEY: '',
       GEMINI_API_KEY: '',
       // Skip the vendored bubblewrap build when using the repo-local Rust Codex source on Linux.
@@ -1438,26 +1443,36 @@ class CodexBridge {
       CODEXUI_SKILLS_DIR: getSkillsInstallDir(),
     };
 
-      console.log('Proxy config:', {
-        PROVIDER: 'local-proxy',
-        OPENAI_BASE_URL: proxyEnv.OPENAI_BASE_URL,
-        OPENAI_API_KEY_SET: !!proxyEnv.OPENAI_API_KEY,
+    if (hasInProcessProvider) {
+      delete bridgeEnv.OPENAI_BASE_URL;
+      bridgeEnv.CODEX_ENABLE_IN_PROCESS_LLM = '1';
+    } else {
+      bridgeEnv.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'http://localhost:3456/v1';
+      bridgeEnv.CODEX_ENABLE_IN_PROCESS_LLM = '0';
+    }
+
+      console.log('LLM bridge config:', {
+        PROVIDER: hasInProcessProvider ? 'in-process' : 'local-proxy',
+        OPENAI_BASE_URL: bridgeEnv.OPENAI_BASE_URL || '(default)',
+        OPENAI_API_KEY_SET: !!bridgeEnv.OPENAI_API_KEY,
         AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT || undefined,
         CODEX_COMMAND: [codexInvocation.command, ...codexInvocation.args].join(' '),
       });
 
-      try {
-        const proxyHealth = await fetch('http://localhost:3456/health');
-        if (!proxyHealth.ok) {
-          console.warn(`[CodexBridge] Local model proxy health check failed with status ${proxyHealth.status}. IM replies may stall until it is healthy.`);
+      if (!hasInProcessProvider) {
+        try {
+          const proxyHealth = await fetch('http://localhost:3456/health');
+          if (!proxyHealth.ok) {
+            console.warn(`[CodexBridge] Local model proxy health check failed with status ${proxyHealth.status}. IM replies may stall until it is healthy.`);
+          }
+        } catch {
+          console.warn('[CodexBridge] Local model proxy is not reachable at http://localhost:3456/health. IM replies may stall until it is started.');
         }
-      } catch {
-        console.warn('[CodexBridge] Local model proxy is not reachable at http://localhost:3456/health. IM replies may stall until it is started.');
       }
 
       this.process = spawn(codexInvocation.command, [...codexInvocation.args, 'app-server'], {
       stdio: ['pipe', 'pipe', 'inherit'],
-      env: proxyEnv,
+      env: bridgeEnv,
     });
 
       this.process.stdout.on('data', (data: Buffer) => {

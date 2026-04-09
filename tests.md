@@ -491,6 +491,35 @@ This file tracks manual regression and feature verification steps.
 - Startup logs clearly show the selected local command path.
 - The bridge still initializes successfully and remains reachable on port `3457`.
 
+### Feature: In-process LLM provider routing without local proxy
+
+#### Prerequisites
+- At least one upstream provider is configured in the environment:
+  - `KIMI_API_KEY`, or
+  - both `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY`
+- `codex-ui-react` dependencies are installed and the bridge can be started from `codex-ui-react/`
+- Port `3457` is free for the standalone bridge
+- Optional verification aid: stop anything listening on `localhost:3456` so the old proxy path is definitely unavailable
+
+#### Steps
+1. From `codex/codex-rs`, run `CODEX_SKIP_VENDORED_BWRAP=1 cargo test -p codex-client in_process_transport -- --nocapture`.
+2. Confirm the three in-process transport tests pass, including the `/v1/responses` SSE lifecycle check.
+3. From `codex-ui-react/`, start the bridge with `bun run server` or `bun run dev`.
+4. Watch the startup logs from `server/standalone.ts` and confirm the `LLM bridge config` block shows `PROVIDER: 'in-process'` when provider credentials are present.
+5. Leave `localhost:3456` stopped/unreachable and send a normal chat prompt through the UI.
+6. Confirm the request still completes and the chat does not depend on the retired proxy health check.
+7. Optional build smoke check: run `cd ../codex/codex-rs && CODEX_SKIP_VENDORED_BWRAP=1 cargo check -p codex-app-server -p codex-server`.
+
+#### Expected Results
+- The Rust transport tests pass and cover `/v1/responses`, `/v1/models`, and Reqwest short-circuit behavior.
+- When provider env vars are present, the standalone bridge prefers in-process routing and does not force `OPENAI_BASE_URL=http://localhost:3456/v1`.
+- Chat requests still succeed even if nothing is listening on port `3456`.
+- The Rust app-server and codex-server crates build successfully with the new in-process path.
+
+#### Rollback/Cleanup
+- Stop the local bridge process if it was started only for verification.
+- Restore the legacy proxy env wiring in `codex-ui-react/server/standalone.ts` only if you intentionally need to revert to the old `3456` path.
+
 ## Rust backend critical logging
 
 - Prerequisites/setup:
