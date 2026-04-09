@@ -21,6 +21,32 @@ This file tracks manual regression and feature verification steps.
 
 ---
 
+## Feature: Rust backend startup compatibility (`./start-server.sh rust`)
+
+### Prerequisites
+- From the repo root, the Rust-backed UI stack is started with `cd codex-ui-react && ./start-server.sh rust`
+- Chrome or Chromium can open `http://localhost:5173`
+- DevTools is available for checking Console and Network requests
+
+### Steps
+1. Run `cd codex-ui-react && ./start-server.sh rust`.
+2. Open `http://localhost:5173` in the browser and hard-refresh the page.
+3. Confirm the thread sidebar renders instead of showing a `Failed to load threads` banner.
+4. In DevTools `Network`, filter for `codex-api/rpc` and confirm the startup RPCs such as `thread/list` and `collaborationMode/list` return `200`.
+5. In DevTools `Console`, confirm there are no Rust-bridge startup errors for unknown RPC methods.
+6. Optional direct smoke test: from `codex/codex-rs`, run `CODEX_SKIP_VENDORED_BWRAP=1 CODEXUI_CODEX_HOME=/tmp/codex-rust CODEXUI_USER_FILES_PATH=/tmp/user_files_rust CODEXUI_USER_THREADS_PATH=/tmp/user_threads_rust PORT=3458 cargo run -p codex-server` and confirm it stays up without a `tokio-runtime-worker` stack overflow.
+
+### Expected Results
+- The app loads normally in Rust mode at `http://localhost:5173`.
+- Startup RPC calls return `200` with valid JSON payloads.
+- Existing threads appear in the sidebar and the new-thread screen stays usable.
+- No `Unknown method: thread/list` or `Unknown method: collaborationMode/list` errors appear.
+- A direct `cargo run -p codex-server` smoke test stays running without a `tokio-runtime-worker` stack overflow.
+
+### Rollback/Cleanup
+- Stop the tmux session with `tmux kill-session -t codex-ui` if you no longer need the local stack running.
+- Switch back to the TypeScript bridge with `cd codex-ui-react && ./start-server.sh ts` if needed.
+
 ## Feature: `/claude-to-im setup` interactive request card in React UI
 
 ### Prerequisites
@@ -464,6 +490,60 @@ This file tracks manual regression and feature verification steps.
 - The standalone React bridge prefers the repo-local Codex checkout before falling back to the globally installed CLI.
 - Startup logs clearly show the selected local command path.
 - The bridge still initializes successfully and remains reachable on port `3457`.
+
+## Rust backend critical logging
+
+- Prerequisites/setup:
+- The Rust bridge is available at `codex/codex-rs` and port `3458` is free.
+- If using the helper script, start from `codex-ui-react/` with `./start-server.sh rust`.
+
+1. Start the Rust backend and confirm it uses the default log filter by checking the backend terminal prints startup configuration lines after launch.
+2. Open `http://127.0.0.1:5173/` and trigger a settings or chat-related action that calls `/codex-api/rpc`.
+3. Watch the Rust backend terminal for one request cycle: HTTP request log, `RPC request received`, parse log, and either success or explicit error output.
+4. Trigger a known unsupported RPC method if needed and confirm the backend logs `Unknown RPC method received` together with the method name.
+
+- Expected result(s):
+- Startup logs include the configured paths and whether key credentials are present.
+- Each inbound backend request logs method name and a truncated params summary.
+- Failures now surface with explicit parse/client/request error messages instead of a generic silent failure.
+
+- Rollback/cleanup notes (if applicable):
+- Stop the tmux session with `tmux kill-session -t codex-ui` or terminate the standalone Rust process.
+
+## Rust thread list stale rollout filter
+
+- Prerequisites/setup:
+- Run the Rust backend on port `3458`.
+- Ensure there is at least one stale thread metadata entry whose `thread/list` summary points at a missing rollout file.
+
+1. Call `thread/list` through the Rust bridge before opening the UI and note whether any returned summaries reference missing `path` files.
+2. Open `http://127.0.0.1:5173/` and let the sidebar load threads.
+3. Confirm the Rust backend logs either no stale-summary filter activity or logs `Filtered stale thread summaries with missing rollout files` when stale paths exist.
+4. Verify the sidebar does not show threads whose rollout file is missing and no longer triggers repeated `thread/resume` failures for those entries.
+
+- Expected result(s):
+- `thread/list` responses exclude summaries for missing rollout files.
+- Stale sidebar entries disappear instead of producing repeated `thread not loaded` or `no rollout found` errors.
+
+- Rollback/cleanup notes (if applicable):
+- Remove any synthetic stale session entries created for the test.
+
+## Rust launcher environment contract
+
+- Prerequisites/setup:
+- Start the local stack from `codex-ui-react/`.
+
+1. Run `./start-server.sh rust`.
+2. Inspect the Rust backend pane or process command line after launch.
+3. Confirm the launcher only injects `PORT=3458` and does not prepend `CODEXUI_CODEX_HOME`, `CODEXUI_USER_FILES_PATH`, `CODEXUI_USER_THREADS_PATH`, `CODEX_SKIP_VENDORED_BWRAP`, or `RUST_LOG`.
+4. If additional runtime configuration is needed, provide it through the shell environment or the app's saved settings before launch rather than the launcher script.
+
+- Expected result(s):
+- The helper launcher only sets the Rust backend port.
+- All other backend configuration comes from ambient environment or persisted application settings.
+
+- Rollback/cleanup notes (if applicable):
+- Restore the old launch command in `codex-ui-react/start-server.sh` if you intentionally want hard-coded local overrides again.
 
 #### Rollback/Cleanup
 - Restore the old command-resolution order in `codex-ui-react/server/standalone.ts` if you need to revert to the global CLI.
@@ -1826,6 +1906,26 @@ This file tracks manual regression and feature verification steps.
 
 #### Rollback/Cleanup
 - Stop the dev processes after verification.
+
+### Feature: `./start-server.sh ts` resolves local `concurrently`
+
+#### Prerequisites
+- `codex-ui-react` dependencies are installed with `bun install`.
+- No global `concurrently` package is required.
+
+#### Steps
+1. Run `cd codex-ui-react && ./start-server.sh ts`.
+2. Watch the top tmux pane during startup.
+3. Confirm the proxy and TypeScript backend both launch instead of exiting with `bash: concurrently: command not found`.
+4. Open `http://127.0.0.1:5173` and confirm the app loads.
+
+#### Expected Results
+- The launcher resolves `concurrently` from the repo toolchain via Bun.
+- The top pane starts `bun run proxy` and `PORT=3457 bun run server` successfully.
+- The bottom pane starts Vite on `5173` without requiring a globally installed `concurrently` binary.
+
+#### Rollback/Cleanup
+- Detach from tmux or stop the session with `tmux kill-session -t codex-ui`.
 
 ### Feature: Model selection writes through supported app-server config RPCs
 
